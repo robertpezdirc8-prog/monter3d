@@ -286,13 +286,31 @@ export function estimateStairsMaterials(plan: StairsPlan, materials: {
 // Build cost estimate
 export function buildCostEstimate(
   materials: MaterialItem[],
-  labor?: { hours: number; rate: number },
-  taxRate: number = 0.22
+  labor: { hours: number; rate: number } | undefined,
+  taxRate: number,
+  measurements?: { status: 'verified' | 'warning' | 'invalid'; scaleSource: string }[]
 ): CostEstimate {
   const subtotal = materials.reduce((sum, m) => sum + m.totalPrice, 0);
   const laborTotal = labor ? labor.hours * labor.rate : 0;
   const beforeTax = subtotal + laborTotal;
   const tax = beforeTax * taxRate;
+
+  // Count measurement validity
+  let validMeasurements = 0;
+  let invalidMeasurements = 0;
+  let warningMeasurements = 0;
+  
+  if (measurements) {
+    for (const m of measurements) {
+      const validation = validateMeasurementForEstimate(m.status, m.scaleSource);
+      if (!validation.canInclude) {
+        if (m.status === 'invalid') invalidMeasurements++;
+        else warningMeasurements++;
+      } else {
+        validMeasurements++;
+      }
+    }
+  }
 
   return {
     materials,
@@ -302,9 +320,9 @@ export function buildCostEstimate(
     taxRate,
     total: beforeTax + tax,
     wastePercent: 7,
-    validMeasurements: 0,
-    invalidMeasurements: 0,
-    warningMeasurements: 0
+    validMeasurements,
+    invalidMeasurements,
+    warningMeasurements
   };
 }
 

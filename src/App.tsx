@@ -320,7 +320,8 @@ function App() {
     const costEstimate = buildCostEstimate(
       materialItems,
       { hours: laborHours, rate: laborRate },
-      taxRate / 100
+      taxRate / 100,
+      measurements.map(m => ({ status: m.status, scaleSource: m.scaleSource }))
     );
     setEstimate(costEstimate);
   }, [measurements, fenceConfig, laborHours, laborRate, taxRate]);
@@ -337,7 +338,7 @@ function App() {
   }, [stairsConfig]);
 
   // Export data
-  const exportData = useCallback((format: 'csv' | 'json' | 'pdf') => {
+  const exportData = useCallback((format: 'csv' | 'json') => {
     if (format === 'csv') {
       const data = measurements.map(m => ({
         id: m.id,
@@ -1588,7 +1589,7 @@ function EstimateView({ estimate, measurements, laborRate, laborHours, taxRate, 
 }
 
 function ExportView({ onExport, measurements, currentProject, fencePlan, stairsPlan, estimate, pixelToMeter }: {
-  onExport: (format: 'csv' | 'json' | 'pdf') => void;
+  onExport: (format: 'csv' | 'json') => void;
   measurements: Measurement[];
   currentProject: Project | null;
   fencePlan: FencePlan | null;
@@ -1612,7 +1613,7 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
 
       <div className="mt-4">
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <button
           onClick={() => onExport('csv')}
           className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-6 text-center transition-colors"
@@ -1629,14 +1630,12 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
           <p className="text-sm font-medium text-slate-200 mt-2">JSON</p>
           <p className="text-xs text-slate-400 mt-1">Celoten projekt</p>
         </button>
-        <button
-          onClick={() => onExport('pdf')}
-          className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-6 text-center transition-colors"
-        >
-          <span className="text-3xl">📄</span>
-          <p className="text-sm font-medium text-slate-200 mt-2">PDF</p>
-          <p className="text-xs text-slate-400 mt-1">Predračun za stranko</p>
-        </button>
+      </div>
+      
+      <div className="bg-amber-900/20 border border-amber-800 rounded-lg p-3 mb-4">
+        <p className="text-xs text-amber-300">
+          ⚠ PDF izvoz trenutno ni na voljo. Za tiskanje predračuna uporabite JSON izvoz in ga odprite v urejevalniku besedil.
+        </p>
       </div>
 
       <div className="bg-slate-800 rounded-lg p-4">

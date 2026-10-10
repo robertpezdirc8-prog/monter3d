@@ -288,22 +288,61 @@ export function estimateHomography(
   if (srcPoints.length < 4) return null;
   
   const n = srcPoints.length;
-  // Build A matrix for DLT
+  
+  // Normalize points for numerical stability
+  const srcMean = { x: 0, y: 0 };
+  const dstMean = { x: 0, y: 0 };
+  for (let i = 0; i < n; i++) {
+    srcMean.x += srcPoints[i].x;
+    srcMean.y += srcPoints[i].y;
+    dstMean.x += dstPoints[i].x;
+    dstMean.y += dstPoints[i].y;
+  }
+  srcMean.x /= n; srcMean.y /= n;
+  dstMean.x /= n; dstMean.y /= n;
+  
+  let srcScale = 0, dstScale = 0;
+  for (let i = 0; i < n; i++) {
+    srcScale += Math.sqrt((srcPoints[i].x - srcMean.x) ** 2 + (srcPoints[i].y - srcMean.y) ** 2);
+    dstScale += Math.sqrt((dstPoints[i].x - dstMean.x) ** 2 + (dstPoints[i].y - dstMean.y) ** 2);
+  }
+  srcScale = (srcScale > 0) ? (n * Math.SQRT2) / srcScale : 1;
+  dstScale = (dstScale > 0) ? (n * Math.SQRT2) / dstScale : 1;
+  
+  // Normalized points
+  const srcNorm = srcPoints.map(p => ({
+    x: (p.x - srcMean.x) * srcScale,
+    y: (p.y - srcMean.y) * srcScale
+  }));
+  const dstNorm = dstPoints.map(p => ({
+    x: (p.x - dstMean.x) * dstScale,
+    y: (p.y - dstMean.y) * dstScale
+  }));
+  
+  // Build A matrix for DLT (Ah = 0)
   const A: number[][] = [];
   for (let i = 0; i < n; i++) {
-    const x = srcPoints[i].x, y = srcPoints[i].y;
-    const u = dstPoints[i].x, v = dstPoints[i].y;
+    const x = srcNorm[i].x, y = srcNorm[i].y;
+    const u = dstNorm[i].x, v = dstNorm[i].y;
     A.push([-x, -y, -1, 0, 0, 0, u * x, u * y, u]);
     A.push([0, 0, 0, -x, -y, -1, v * x, v * y, v]);
   }
   
-  // SVD approximation (simplified - use least squares)
-  const h = solveLeastSquares(A);
+  // Solve Ah = 0 using eigenvalue decomposition of A^T * A
+  const h = solveHomogeneousSystem(A);
   if (!h) return null;
   
-  // Normalize
-  const scale = h[8] || 1;
-  const H = h.map(v => v / scale);
+  // Denormalize: H = T_dst^-1 * H_norm * T_src
+  const T_src = [srcScale, 0, -srcMean.x * srcScale, 0, srcScale, -srcMean.y * srcScale, 0, 0, 1];
+  const T_dst_inv = [1/dstScale, 0, dstMean.x, 0, 1/dstScale, dstMean.y, 0, 0, 1];
+  
+  const H_norm = h;
+  const H_temp = matMul3x3(T_dst_inv, H_norm);
+  const H = matMul3x3(H_temp, T_src);
+  
+  // Normalize so H[8] = 1
+  const scale = H[8] || 1;
+  const H_normalized = H.map((v: number) => v / scale);
   
   // Compute inliers
   const inliers: boolean[] = [];
@@ -313,9 +352,9 @@ export function estimateHomography(
   
   for (let i = 0; i < n; i++) {
     const x = srcPoints[i].x, y = srcPoints[i].y;
-    const w = H[6] * x + H[7] * y + H[8];
-    const u = (H[0] * x + H[1] * y + H[2]) / w;
-    const v = (H[3] * x + H[4] * y + H[5]) / w;
+    const w = H_normalized[6] * x + H_normalized[7] * y + H_normalized[8];
+    const u = (H_normalized[0] * x + H_normalized[1] * y + H_normalized[2]) / w;
+    const v = (H_normalized[3] * x + H_normalized[4] * y + H_normalized[5]) / w;
     const err = Math.sqrt((u - dstPoints[i].x) ** 2 + (v - dstPoints[i].y) ** 2);
     const isInlier = err < threshold;
     inliers.push(isInlier);
@@ -323,7 +362,64 @@ export function estimateHomography(
   }
   
   const rmse = inlierCount > 0 ? Math.sqrt(totalError / inlierCount) : Infinity;
-  return { matrix: H, inliers, rmse };
+  return { matrix: H_normalized, inliers, rmse };
+}
+
+// Solve homogeneous system Ah = 0 using power iteration on A^T * A
+function solveHomogeneousSystem(A: number[][]): number[] | null {
+  const m = A.length;
+  const n = A[0].length;
+  if (m < n) return null;
+  
+  // Compute A^T * A (n x n matrix)
+  const ATA: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      for (let k = 0; k < m; k++) {
+        ATA[i][j] += A[k][i] * A[k][j];
+      }
+    }
+  }
+  
+  // Find eigenvector with smallest eigenvalue using inverse power iteration
+  // Start with random vector
+  let v = new Array(n).fill(0).map(() => Math.random());
+  normalize(v);
+  
+  // Add small regularization to make it invertible
+  const reg = 1e-6;
+  for (let i = 0; i < n; i++) ATA[i][i] += reg;
+  
+  // Power iteration (find smallest eigenvalue)
+  for (let iter = 0; iter < 100; iter++) {
+    // Solve ATA * w = v using Gaussian elimination
+    const w = gaussianElimination(ATA, v);
+    if (!w) return null;
+    normalize(w);
+    v = w;
+  }
+  
+  return v;
+}
+
+function normalize(v: number[]): void {
+  let norm = 0;
+  for (const x of v) norm += x * x;
+  norm = Math.sqrt(norm);
+  if (norm > 0) for (let i = 0; i < v.length; i++) v[i] /= norm;
+}
+
+// Matrix multiplication for 3x3 matrices (stored as 9-element arrays)
+function matMul3x3(A: number[], B: number[]): number[] {
+  const C = new Array(9).fill(0);
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      for (let k = 0; k < 3; k++) {
+        C[i * 3 + j] += A[i * 3 + k] * B[k * 3 + j];
+      }
+    }
+  }
+  return C;
 }
 
 // Simple least squares solver

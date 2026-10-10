@@ -85,6 +85,12 @@ export function CoverageMapView({ photos, gridSize = 6 }: CoverageMapProps) {
         <h3 className="text-sm font-semibold text-slate-300">🗺️ Zemljevid pokritosti</h3>
         <span className="text-sm font-bold text-emerald-400">{coveragePercent}%</span>
       </div>
+      
+      <div className="bg-amber-900/20 border border-amber-800 rounded p-2 mb-3">
+        <p className="text-xs text-amber-300">
+          ⚠ Demonstracijski prikaz. Prava pokritost zahteva sledenje značilnic med slikami.
+        </p>
+      </div>
 
       {/* Grid visualization */}
       <div className="grid gap-0.5 mb-3" style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}>
