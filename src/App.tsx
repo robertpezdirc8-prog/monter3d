@@ -2,10 +2,11 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import type {
   Project, Photo, Measurement, WorkflowStep, ObjectType,
   MeasurementStatus, ScaleSource, FencePlan, StairsPlan,
-  CostEstimate, MaterialItem, ImageQuality
+  CostEstimate, MaterialItem, ImageQuality, FeaturePoint
 } from './types';
 import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetection } from './utils/cv';
 import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, formatMeasurement, exportMeasurementsCSV } from './utils/geometry';
+import { generatePDFReport } from './utils/pdfExport';
 import { v4 as uuidv4 } from 'uuid';
 import { FenceVisualization } from './components/FenceVisualization';
 import { CoverageMapView, CameraGuide } from './components/CoverageMap';
@@ -148,6 +149,22 @@ function App() {
       const gray = toGrayscale(imageData);
       const features = harrisCornerDetection(gray, canvas.width, canvas.height);
       const lines = houghLineDetection(gray, canvas.width, canvas.height);
+
+      // Store features in photo object for coverage calculation
+      const featurePoints: FeaturePoint[] = features.map(f => ({
+        x: f.point.x,
+        y: f.point.y,
+        response: f.response,
+        scale: f.scale,
+        angle: f.angle
+      }));
+      
+      // Update photo with detected features
+      setPhotos(prev => prev.map(p => 
+        p.id === photo.id 
+          ? { ...p, features: featurePoints, coverage: featurePoints.length }
+          : p
+      ));
 
       // Draw features on canvas
       if (canvasRef.current) {
@@ -338,7 +355,12 @@ function App() {
   }, [stairsConfig]);
 
   // Export data
-  const exportData = useCallback((format: 'csv' | 'json') => {
+  const exportData = useCallback((format: 'csv' | 'json' | 'pdf') => {
+    if (!currentProject) {
+      alert('Ni izbranega projekta za izvoz.');
+      return;
+    }
+    
     if (format === 'csv') {
       const data = measurements.map(m => ({
         id: m.id,
@@ -363,6 +385,8 @@ function App() {
         exportedAt: new Date().toISOString()
       };
       downloadFile(JSON.stringify(exportObj, null, 2), 'mera3d_project.json', 'application/json');
+    } else if (format === 'pdf') {
+      generatePDFReport(currentProject, measurements, fencePlan, stairsPlan, estimate);
     }
   }, [measurements, currentProject, photos, fencePlan, stairsPlan, estimate]);
 
@@ -1589,7 +1613,7 @@ function EstimateView({ estimate, measurements, laborRate, laborHours, taxRate, 
 }
 
 function ExportView({ onExport, measurements, currentProject, fencePlan, stairsPlan, estimate, pixelToMeter }: {
-  onExport: (format: 'csv' | 'json') => void;
+  onExport: (format: 'csv' | 'json' | 'pdf') => void;
   measurements: Measurement[];
   currentProject: Project | null;
   fencePlan: FencePlan | null;
@@ -1613,7 +1637,7 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
 
       <div className="mt-4">
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <button
           onClick={() => onExport('csv')}
           className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-6 text-center transition-colors"
@@ -1630,12 +1654,14 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
           <p className="text-sm font-medium text-slate-200 mt-2">JSON</p>
           <p className="text-xs text-slate-400 mt-1">Celoten projekt</p>
         </button>
-      </div>
-      
-      <div className="bg-amber-900/20 border border-amber-800 rounded-lg p-3 mb-4">
-        <p className="text-xs text-amber-300">
-          ⚠ PDF izvoz trenutno ni na voljo. Za tiskanje predračuna uporabite JSON izvoz in ga odprite v urejevalniku besedil.
-        </p>
+        <button
+          onClick={() => onExport('pdf')}
+          className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-6 text-center transition-colors"
+        >
+          <span className="text-3xl">📄</span>
+          <p className="text-sm font-medium text-slate-200 mt-2">PDF</p>
+          <p className="text-xs text-slate-400 mt-1">Predračun za stranko</p>
+        </button>
       </div>
 
       <div className="bg-slate-800 rounded-lg p-4">

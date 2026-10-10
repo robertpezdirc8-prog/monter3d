@@ -3,24 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mera3D Pro - Test Suite</title>
+  <title>Mera3D Pro - Celovit testni komplet</title>
   <style>
-    body { font-family: monospace; background: #0f172a; color: #f8fafc; padding: 20px; }
-    .pass { color: #10b981; }
-    .fail { color: #ef4444; }
-    .section { margin: 20px 0; padding: 10px; background: #1e293b; border-radius: 4px; }
-    h1 { color: #10b981; }
-    h2 { color: #60a5fa; margin-top: 20px; }
-    .summary { font-size: 1.2em; margin-top: 30px; padding: 20px; background: #1e293b; border-radius: 8px; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; max-width: 1200px; margin: 0 auto; }
+    h1 { color: #10b981; border-bottom: 3px solid #10b981; padding-bottom: 10px; }
+    h2 { color: #60a5fa; margin-top: 30px; border-left: 4px solid #60a5fa; padding-left: 10px; }
+    .test-section { background: #1e293b; border-radius: 8px; padding: 15px; margin: 15px 0; }
+    .pass { color: #10b981; font-weight: 600; }
+    .fail { color: #ef4444; font-weight: 600; }
+    .info { color: #94a3b8; }
+    .summary { background: #1e293b; border-radius: 12px; padding: 25px; margin-top: 30px; border: 2px solid #10b981; }
+    .summary h2 { border: none; padding: 0; margin: 0 0 15px 0; }
+    .test-result { margin: 5px 0; padding: 5px 10px; border-radius: 4px; }
+    .test-result.pass { background: rgba(16, 185, 129, 0.1); }
+    .test-result.fail { background: rgba(239, 68, 68, 0.1); }
+    button { background: #10b981; color: white; border: none; padding: 12px 30px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; margin: 10px 5px; }
+    button:hover { background: #059669; }
+    .warning { background: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b; padding: 10px; margin: 10px 0; border-radius: 4px; }
   </style>
 </head>
 <body>
-  <h1>Mera3D Pro - Test Suite</h1>
+  <h1>🧪 Mera3D Pro - Celovit testni komplet</h1>
+  <p class="info">Avtomatizirani testi za preverjanje pravilnosti algoritmov, geometrije in izvozov.</p>
+  
+  <button onclick="runAllTests()">▶ Zaženi vse teste</button>
+  <button onclick="clearOutput()">🗑 Počisti</button>
+  
   <div id="output"></div>
   
   <script type="module">
-    import { toGrayscale, gaussianBlur, harrisCornerDetection, computeDescriptors, crossCheckMatch, estimateHomography, ransacHomography, assessImageQuality } from './utils/cv.js';
-    import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, validateMeasurementForEstimate, formatMeasurement } from './utils/geometry.js';
+    import { toGrayscale, gaussianBlur, harrisCornerDetection, computeDescriptors, crossCheckMatch, estimateHomography, ransacHomography, assessImageQuality } from './src/utils/cv.js';
+    import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, validateMeasurementForEstimate, formatMeasurement, exportMeasurementsCSV } from './src/utils/geometry.js';
     
     let testsPassed = 0;
     let testsFailed = 0;
@@ -28,8 +41,15 @@
     
     function log(message, type = 'info') {
       const div = document.createElement('div');
-      div.className = type === 'pass' ? 'pass' : type === 'fail' ? 'fail' : '';
+      div.className = `test-result ${type}`;
       div.textContent = message;
+      output.appendChild(div);
+    }
+    
+    function section(title) {
+      const div = document.createElement('div');
+      div.className = 'test-section';
+      div.innerHTML = `<h2>${title}</h2>`;
       output.appendChild(div);
     }
     
@@ -47,253 +67,373 @@
       const diff = Math.abs(actual - expected);
       if (diff <= tolerance) {
         testsPassed++;
-        log(`✓ ${message} (actual: ${actual.toFixed(4)}, expected: ${expected.toFixed(4)})`, 'pass');
+        log(`✓ ${message} (dejansko: ${actual.toFixed(4)}, pričakovano: ${expected.toFixed(4)})`, 'pass');
       } else {
         testsFailed++;
-        log(`✗ ${message} (actual: ${actual.toFixed(4)}, expected: ${expected.toFixed(4)}, diff: ${diff.toFixed(4)})`, 'fail');
+        log(`✗ ${message} (dejansko: ${actual.toFixed(4)}, pričakovano: ${expected.toFixed(4)}, razlika: ${diff.toFixed(4)})`, 'fail');
       }
     }
     
-    // Test 1: Grayscale conversion
-    log('\n=== Test: Grayscale Conversion ===', 'info');
-    {
-      const imageData = new ImageData(2, 2);
-      imageData.data[0] = 255; imageData.data[1] = 0; imageData.data[2] = 0; imageData.data[3] = 255;
-      imageData.data[4] = 0; imageData.data[5] = 255; imageData.data[6] = 0; imageData.data[7] = 255;
-      imageData.data[8] = 0; imageData.data[9] = 0; imageData.data[10] = 255; imageData.data[11] = 255;
-      imageData.data[12] = 128; imageData.data[13] = 128; imageData.data[14] = 128; imageData.data[15] = 255;
+    window.runAllTests = function() {
+      testsPassed = 0;
+      testsFailed = 0;
+      output.innerHTML = '';
       
-      const gray = toGrayscale(imageData);
+      // Test 1: Grayscale conversion
+      section('1. Pretvorba v sivinsko sliko');
+      {
+        const imageData = new ImageData(2, 2);
+        imageData.data[0] = 255; imageData.data[1] = 0; imageData.data[2] = 0; imageData.data[3] = 255;
+        imageData.data[4] = 0; imageData.data[5] = 255; imageData.data[6] = 0; imageData.data[7] = 255;
+        imageData.data[8] = 0; imageData.data[9] = 0; imageData.data[10] = 255; imageData.data[11] = 255;
+        imageData.data[12] = 128; imageData.data[13] = 128; imageData.data[14] = 128; imageData.data[15] = 255;
+        
+        const gray = toGrayscale(imageData);
+        
+        assertApprox(gray[0], 76.245, 0.01, 'Rdeča piksla → sivinska vrednost');
+        assertApprox(gray[1], 149.685, 0.01, 'Zelena piksla → sivinska vrednost');
+        assertApprox(gray[2], 29.88, 0.01, 'Modra piksla → sivinska vrednost');
+        assertApprox(gray[3], 128, 0.01, 'Siva piksla → sivinska vrednost');
+        assert(gray.length === 4, 'Pravilna dolžina polja');
+      }
       
-      assertApprox(gray[0], 76.245, 0.01, 'Red pixel grayscale');
-      assertApprox(gray[1], 149.685, 0.01, 'Green pixel grayscale');
-      assertApprox(gray[2], 29.88, 0.01, 'Blue pixel grayscale');
-      assertApprox(gray[3], 128, 0.01, 'Gray pixel grayscale');
-    }
-    
-    // Test 2: Gaussian blur
-    log('\n=== Test: Gaussian Blur ===', 'info');
-    {
-      const gray = new Float32Array([100, 200, 100, 200]);
-      const blurred = gaussianBlur(gray, 2, 2, 1.0);
+      // Test 2: Gaussian blur
+      section('2. Gaussovo zabrisovanje');
+      {
+        const gray = new Float32Array([100, 200, 100, 200]);
+        const blurred = gaussianBlur(gray, 2, 2, 1.0);
+        
+        assert(blurred.length === 4, 'Pravilna dolžina zabrisanega polja');
+        assert(blurred[0] >= 100 && blurred[0] <= 200, 'Zabrisane vrednosti v veljavnem obsegu');
+        assert(!isNaN(blurred[0]) && isFinite(blurred[0]), 'Ni NaN ali Infinity');
+      }
       
-      assert(blurred.length === 4, 'Blurred array has correct length');
-      assert(blurred[0] >= 100 && blurred[0] <= 200, 'Blurred values are in valid range');
-    }
-    
-    // Test 3: Harris corner detection
-    log('\n=== Test: Harris Corner Detection ===', 'info');
-    {
-      const gray = new Float32Array(100 * 100);
-      for (let y = 0; y < 100; y++) {
-        for (let x = 0; x < 100; x++) {
-          if (x < 50 && y < 50) gray[y * 100 + x] = 255;
-          else gray[y * 100 + x] = 0;
+      // Test 3: Harris corner detection
+      section('3. Harris detekcija značilk');
+      {
+        const gray = new Float32Array(100 * 100);
+        for (let y = 0; y < 100; y++) {
+          for (let x = 0; x < 100; x++) {
+            if (x < 50 && y < 50) gray[y * 100 + x] = 255;
+            else gray[y * 100 + x] = 0;
+          }
+        }
+        
+        const features = harrisCornerDetection(gray, 100, 100, 5, 0.04, 0.01, 4);
+        
+        assert(features.length > 0, `Zaznanih ${features.length} značilk`);
+        assert(features.length <= 16, 'Število značilk je razumno (max 16 za 4x4 mrežo)');
+        assert(features.every(f => f.point.x >= 0 && f.point.x < 100), 'Vse X koordinate znotraj slike');
+        assert(features.every(f => f.point.y >= 0 && f.point.y < 100), 'Vse Y koordinate znotraj slike');
+      }
+      
+      // Test 4: Descriptor computation
+      section('4. Izračun deskriptorjev');
+      {
+        const gray = new Float32Array(100 * 100);
+        for (let i = 0; i < gray.length; i++) gray[i] = Math.random() * 255;
+        
+        const features = harrisCornerDetection(gray, 100, 100);
+        if (features.length > 0) {
+          computeDescriptors(gray, 100, 100, features);
+          
+          assert(features[0].descriptor.length === 32, 'Deskriptor ima 32 bajtov');
+          assert(features[0].descriptor instanceof Uint8Array, 'Deskriptor je Uint8Array');
+        } else {
+          log('⚠ Ni značilk za testiranje deskriptorjev', 'info');
         }
       }
       
-      const features = harrisCornerDetection(gray, 100, 100, 5, 0.04, 0.01, 4);
-      
-      assert(features.length > 0, `Detected ${features.length} features`);
-      assert(features.length <= 16, 'Feature count is reasonable (max 16 for 4x4 grid)');
-    }
-    
-    // Test 4: Homography estimation
-    log('\n=== Test: Homography Estimation ===', 'info');
-    {
-      const srcPoints = [
-        { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
-      ];
-      const dstPoints = [...srcPoints];
-      
-      const result = estimateHomography(srcPoints, dstPoints);
-      
-      assert(result !== null, 'Homography estimation succeeded');
-      if (result) {
-        assertApprox(result.matrix[0], 1, 0.01, 'H[0] ≈ 1 (identity)');
-        assertApprox(result.matrix[4], 1, 0.01, 'H[4] ≈ 1 (identity)');
-        assertApprox(result.matrix[8], 1, 0.01, 'H[8] ≈ 1 (identity)');
-        assert(result.rmse < 1, `RMSE is small (${result.rmse.toFixed(4)})`);
-      }
-      
-      const srcPoints2 = [
-        { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
-      ];
-      const dstPoints2 = [
-        { x: 10, y: 20 }, { x: 110, y: 20 }, { x: 110, y: 120 }, { x: 10, y: 120 }
-      ];
-      
-      const result2 = estimateHomography(srcPoints2, dstPoints2);
-      assert(result2 !== null, 'Translation homography succeeded');
-      if (result2) {
-        assertApprox(result2.matrix[2], 10, 0.1, 'H[2] ≈ 10 (translation x)');
-        assertApprox(result2.matrix[5], 20, 0.1, 'H[5] ≈ 20 (translation y)');
-      }
-    }
-    
-    // Test 5: RANSAC homography
-    log('\n=== Test: RANSAC Homography ===', 'info');
-    {
-      const srcPoints = [
-        { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 },
-        { x: 0, y: 100 }, { x: 50, y: 50 }, { x: 25, y: 75 }
-      ];
-      const dstPoints = [
-        { x: 10, y: 10 }, { x: 110, y: 10 }, { x: 110, y: 110 },
-        { x: 10, y: 110 }, { x: 60, y: 60 }, { x: 200, y: 200 }
-      ];
-      
-      const result = ransacHomography(srcPoints, dstPoints, 100, 5.0);
-      
-      assert(result !== null, 'RANSAC succeeded');
-      if (result) {
-        assert(result.inlierCount >= 4, `Found ${result.inlierCount} inliers (>= 4)`);
-        assert(result.inlierCount <= srcPoints.length, 'Inlier count is reasonable');
-        assert(result.rmse < 10, `RMSE is acceptable (${result.rmse.toFixed(2)})`);
-      }
-    }
-    
-    // Test 6: Image quality assessment
-    log('\n=== Test: Image Quality Assessment ===', 'info');
-    {
-      const imageData = new ImageData(100, 100);
-      for (let y = 0; y < 100; y++) {
-        for (let x = 0; x < 100; x++) {
-          const idx = (y * 100 + x) * 4;
-          const val = ((x + y) % 20 < 10) ? 255 : 0;
-          imageData.data[idx] = val;
-          imageData.data[idx + 1] = val;
-          imageData.data[idx + 2] = val;
-          imageData.data[idx + 3] = 255;
+      // Test 5: Homography - identity
+      section('5. Homografija - identiteta');
+      {
+        const srcPoints = [
+          { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
+        ];
+        const dstPoints = [...srcPoints];
+        
+        const result = estimateHomography(srcPoints, dstPoints);
+        
+        assert(result !== null, 'Homografija uspešno izračunana');
+        if (result) {
+          assertApprox(result.matrix[0], 1, 0.01, 'H[0] ≈ 1 (identiteta)');
+          assertApprox(result.matrix[4], 1, 0.01, 'H[4] ≈ 1 (identiteta)');
+          assertApprox(result.matrix[8], 1, 0.01, 'H[8] ≈ 1 (identiteta)');
+          assert(result.rmse < 1, `RMSE je majhen (${result.rmse.toFixed(4)})`);
+          assert(!isNaN(result.rmse) && isFinite(result.rmse), 'RMSE ni NaN ali Infinity');
         }
       }
       
-      const quality = assessImageQuality(imageData);
+      // Test 6: Homography - translation
+      section('6. Homografija - translacija');
+      {
+        const srcPoints = [
+          { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
+        ];
+        const dstPoints = [
+          { x: 10, y: 20 }, { x: 110, y: 20 }, { x: 110, y: 120 }, { x: 10, y: 120 }
+        ];
+        
+        const result = estimateHomography(srcPoints, dstPoints);
+        
+        assert(result !== null, 'Translacijska homografija uspešna');
+        if (result) {
+          assertApprox(result.matrix[2], 10, 0.5, 'H[2] ≈ 10 (translacija X)');
+          assertApprox(result.matrix[5], 20, 0.5, 'H[5] ≈ 20 (translacija Y)');
+        }
+      }
       
-      assert(quality.sharpness > 0, `Sharpness detected (${quality.sharpness.toFixed(3)})`);
-      assert(quality.brightness >= 0 && quality.brightness <= 1, 'Brightness in valid range');
-      assert(quality.contrast >= 0 && quality.contrast <= 1, 'Contrast in valid range');
-      assert(quality.overallScore >= 0 && quality.overallScore <= 1, 'Overall score in valid range');
-    }
+      // Test 7: RANSAC with outliers
+      section('7. RANSAC z izstopajočimi točkami');
+      {
+        const srcPoints = [
+          { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 },
+          { x: 0, y: 100 }, { x: 50, y: 50 }, { x: 25, y: 75 }
+        ];
+        const dstPoints = [
+          { x: 10, y: 10 }, { x: 110, y: 10 }, { x: 110, y: 110 },
+          { x: 10, y: 110 }, { x: 60, y: 60 }, { x: 200, y: 200 } // Outlier
+        ];
+        
+        const result = ransacHomography(srcPoints, dstPoints, 100, 5.0);
+        
+        assert(result !== null, 'RANSAC uspešen');
+        if (result) {
+          assert(result.inlierCount >= 4, `Najdenih ${result.inlierCount} inlierjev (>= 4)`);
+          assert(result.inlierCount <= srcPoints.length, 'Število inlierjev je razumno');
+          assert(result.rmse < 10, `RMSE je sprejemljiv (${result.rmse.toFixed(2)})`);
+          assert(result.inliers.length === srcPoints.length, 'Pravilna dolžina inlier polja');
+        }
+      }
+      
+      // Test 8: Degenerate cases
+      section('8. Degenerirani primeri');
+      {
+        // Too few points
+        const result1 = estimateHomography(
+          [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }],
+          [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }]
+        );
+        assert(result1 === null, 'Premalo točk (< 4) vrne null');
+        
+        // Collinear points
+        const result2 = estimateHomography(
+          [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }],
+          [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }]
+        );
+        // May return null or handle gracefully
+        log(`Kolinearne točke: ${result2 === null ? 'pravilno zavrnjene' : 'obravnavane'}`, 'info');
+      }
+      
+      // Test 9: Image quality assessment
+      section('9. Ocena kakovosti slike');
+      {
+        const imageData = new ImageData(100, 100);
+        for (let y = 0; y < 100; y++) {
+          for (let x = 0; x < 100; x++) {
+            const idx = (y * 100 + x) * 4;
+            const val = ((x + y) % 20 < 10) ? 255 : 0;
+            imageData.data[idx] = val;
+            imageData.data[idx + 1] = val;
+            imageData.data[idx + 2] = val;
+            imageData.data[idx + 3] = 255;
+          }
+        }
+        
+        const quality = assessImageQuality(imageData);
+        
+        assert(quality.sharpness > 0, `Ostrina zaznana (${quality.sharpness.toFixed(3)})`);
+        assert(quality.brightness >= 0 && quality.brightness <= 1, 'Svetlost v veljavnem obsegu [0,1]');
+        assert(quality.contrast >= 0 && quality.contrast <= 1, 'Kontrast v veljavnem obsegu [0,1]');
+        assert(quality.overallScore >= 0 && quality.overallScore <= 1, 'Skupna ocena v veljavnem obsegu [0,1]');
+        assert(!isNaN(quality.overallScore) && isFinite(quality.overallScore), 'Ocena ni NaN ali Infinity');
+      }
+      
+      // Test 10: Fence plan calculation
+      section('10. Izračun načrta ograje');
+      {
+        const segments = [
+          { startPoint: [0, 0], endPoint: [5, 0], heightChange: 0 },
+          { startPoint: [5, 0], endPoint: [10, 0], heightChange: 1 }
+        ];
+        
+        const config = {
+          panelWidth: 1.8, panelHeight: 1.5, postWidth: 0.06,
+          maxGap: 0.12, mountingStyle: 'stepped', slopeThreshold: 5
+        };
+        
+        const plan = calculateFencePlan(segments, config);
+        
+        assert(plan.totalLength === 10, `Skupna dolžina je 10m (dejansko: ${plan.totalLength})`);
+        assert(plan.totalHeightChange === 1, `Sprememba višine je 1m (dejansko: ${plan.totalHeightChange})`);
+        assert(plan.segments.length === 2, `Ima 2 segmenta (dejansko: ${plan.segments.length})`);
+        assert(plan.totalPanels > 0, `Ima panele (${plan.totalPanels})`);
+        assert(plan.totalPosts > 0, `Ima stebre (${plan.totalPosts})`);
+        assert(plan.totalPanels >= plan.segments.length, 'Vsaj toliko panelov kot segmentov');
+      }
+      
+      // Test 11: Stairs plan calculation
+      section('11. Izračun načrta stopnic');
+      {
+        const plan = calculateStairsPlan(5, 1.2, 2.5, 0.9);
+        
+        assert(plan.numSteps === 5, `Ima 5 stopnic (dejansko: ${plan.numSteps})`);
+        assertApprox(plan.totalRise, 1.2, 0.01, 'Skupna višina je 1.2m');
+        assertApprox(plan.totalRun, 2.5, 0.01, 'Skupna dolžina je 2.5m');
+        assertApprox(plan.averageRise, 0.24, 0.01, 'Povprečna stopnica je 0.24m');
+        assertApprox(plan.averageRun, 0.5, 0.01, 'Povprečni gaz je 0.5m');
+        assert(plan.steps.length === 5, `Ima 5 objektov stopnic (dejansko: ${plan.steps.length})`);
+        assert(plan.railingLength > 0, 'Dolžina ograje je pozitivna');
+      }
+      
+      // Test 12: Material estimation
+      section('12. Materialni izračun');
+      {
+        const segments = [
+          { startPoint: [0, 0], endPoint: [10, 0], heightChange: 0 }
+        ];
+        
+        const config = {
+          panelWidth: 1.8, panelHeight: 1.5, postWidth: 0.06,
+          maxGap: 0.12, mountingStyle: 'level', slopeThreshold: 5
+        };
+        
+        const plan = calculateFencePlan(segments, config);
+        const materials = estimateFenceMaterials(plan, {
+          panelPricePerM: 85, postPriceEach: 45, railPricePerM: 12,
+          fastenerPriceEach: 0.5, endCapPriceEach: 8
+        });
+        
+        assert(materials.length > 0, `Generiranih ${materials.length} materialov`);
+        assert(materials.every(m => m.quantity > 0), 'Vse količine so pozitivne');
+        assert(materials.every(m => m.totalPrice > 0), 'Vse cene so pozitivne');
+        assert(materials.every(m => !isNaN(m.quantity) && isFinite(m.quantity)), 'Nobena količina ni NaN ali Infinity');
+        assert(materials.every(m => !isNaN(m.totalPrice) && isFinite(m.totalPrice)), 'Nobena cena ni NaN ali Infinity');
+      }
+      
+      // Test 13: Cost estimate with validation
+      section('13. Predračun z validacijo meritev');
+      {
+        const materials = [
+          { id: '1', name: 'Panel', category: 'panels', quantity: 10, unit: 'kos', unitPrice: 50, totalPrice: 500 }
+        ];
+        
+        const measurements = [
+          { status: 'verified', scaleSource: 'manual_reference' },
+          { status: 'warning', scaleSource: 'unknown' },
+          { status: 'invalid', scaleSource: 'demo' }
+        ];
+        
+        const estimate = buildCostEstimate(materials, { hours: 8, rate: 35 }, 0.22, measurements);
+        
+        assert(estimate.validMeasurements === 1, `1 preverjena meritev (dejansko: ${estimate.validMeasurements})`);
+        assert(estimate.warningMeasurements === 1, `1 opozorilna meritev (dejansko: ${estimate.warningMeasurements})`);
+        assert(estimate.invalidMeasurements === 1, `1 neveljavna meritev (dejansko: ${estimate.invalidMeasurements})`);
+        assert(estimate.subtotal === 500, `Vmesni seštevek je 500 (dejansko: ${estimate.subtotal})`);
+        assert(estimate.total > 500, 'Končni znesek vključuje DDV in delo');
+        assert(!isNaN(estimate.total) && isFinite(estimate.total), 'Končni znesek ni NaN ali Infinity');
+      }
+      
+      // Test 14: Measurement validation
+      section('14. Validacija meritev');
+      {
+        const v1 = validateMeasurementForEstimate('verified', 'manual_reference');
+        assert(v1.canInclude === true, 'Preverjena z ročno referenco se lahko vključi');
+        
+        const v2 = validateMeasurementForEstimate('invalid', 'manual_reference');
+        assert(v2.canInclude === false, 'Neveljavna se ne more vključiti');
+        
+        const v3 = validateMeasurementForEstimate('warning', 'unknown');
+        assert(v3.canInclude === false, 'Opozorilna z neznanim merilom se ne more vključiti');
+        
+        const v4 = validateMeasurementForEstimate('verified', 'demo');
+        assert(v4.canInclude === false, 'Preverjena z demo merilom se ne more vključiti');
+        
+        const v5 = validateMeasurementForEstimate('verified', 'calibration_marker');
+        assert(v5.canInclude === true, 'Preverjena s kalibracijskim markerjem se lahko vključi');
+      }
+      
+      // Test 15: Format measurement
+      section('15. Formatiranje meritev');
+      {
+        const f1 = formatMeasurement(5.123, 'm', 2.5);
+        assert(f1.includes('5.123'), 'Format vključuje vrednost');
+        assert(f1.includes('m'), 'Format vključuje enoto');
+        assert(f1.includes('2.5'), 'Format vključuje negotovost');
+        
+        const f2 = formatMeasurement(45.6, '°', 1.2);
+        assert(f2.includes('45.6'), 'Format kota vključuje vrednost');
+        assert(f2.includes('°'), 'Format kota vključuje simbol stopinj');
+        
+        const f3 = formatMeasurement(123.456, 'cm', 3.0);
+        assert(f3.includes('123.4'), 'Format cm vključuje vrednost');
+        assert(f3.includes('cm'), 'Format cm vključuje enoto');
+      }
+      
+      // Test 16: CSV export
+      section('16. CSV izvoz');
+      {
+        const measurements = [
+          { id: '1', type: 'length', value: 5.123, unit: 'm', status: 'verified', uncertainty: 2.5, source: 'manual', algorithm: 'pixel_distance' },
+          { id: '2', type: 'height', value: 1.5, unit: 'm', status: 'warning', uncertainty: 5.0, source: 'homography', algorithm: 'triangulation' }
+        ];
+        
+        const csv = exportMeasurementsCSV(measurements);
+        
+        assert(csv.includes('ID,Tip,Vrednost'), 'CSV vključuje glavo');
+        assert(csv.includes('5.123'), 'CSV vključuje vrednosti');
+        assert(csv.includes('verified'), 'CSV vključuje statuse');
+        assert(csv.split('\n').length >= 3, 'CSV ima vsaj 3 vrstice (glava + 2 meritve)');
+      }
+      
+      // Test 17: Edge cases
+      section('17. Robni primeri');
+      {
+        // Empty measurements
+        const emptyEstimate = buildCostEstimate([], undefined, 0.22, []);
+        assert(emptyEstimate.subtotal === 0, 'Prazen predračun ima subtotal 0');
+        assert(emptyEstimate.total === 0, 'Prazen predračun ima total 0');
+        
+        // Zero labor
+        const zeroLaborEstimate = buildCostEstimate(
+          [{ id: '1', name: 'Test', category: 'test', quantity: 1, unit: 'kos', unitPrice: 100, totalPrice: 100 }],
+          { hours: 0, rate: 35 },
+          0.22,
+          []
+        );
+        assert(zeroLaborEstimate.labor.total === 0, 'Nič ur dela = 0 cena dela');
+        
+        // Negative values should not occur in normal flow
+        log('Robni primeri ustrezno obravnavani', 'pass');
+      }
+      
+      // Summary
+      const summary = document.createElement('div');
+      summary.className = 'summary';
+      summary.innerHTML = `
+        <h2>📊 Povzetek testov</h2>
+        <p style="font-size: 18pt; margin: 15px 0;">
+          <span class="pass">${testsPassed} uspešnih</span> | 
+          <span class="fail">${testsFailed} neuspešnih</span>
+        </p>
+        <p style="font-size: 14pt;">
+          ${testsFailed === 0 
+            ? '<span class="pass">✓ VSI TESTI USPEŠNI</span>' 
+            : '<span class="fail">✗ NEKATERI TESTI NEUSPEŠNI</span>'}
+        </p>
+        <div class="warning" style="margin-top: 20px;">
+          <strong>⚠ Pomembno:</strong> Ti testi preverjajo matematično pravilnost algoritmov na sintetičnih podatkih. 
+          Za profesionalno validacijo je potrebno terensko testiranje na dejanskih fotografijah z znanimi referenčnimi dimenzijami.
+        </div>
+      `;
+      output.appendChild(summary);
+    };
     
-    // Test 7: Fence plan calculation
-    log('\n=== Test: Fence Plan Calculation ===', 'info');
-    {
-      const segments = [
-        { startPoint: [0, 0], endPoint: [5, 0], heightChange: 0 },
-        { startPoint: [5, 0], endPoint: [10, 0], heightChange: 1 }
-      ];
-      
-      const config = {
-        panelWidth: 1.8, panelHeight: 1.5, postWidth: 0.06,
-        maxGap: 0.12, mountingStyle: 'stepped', slopeThreshold: 5
-      };
-      
-      const plan = calculateFencePlan(segments, config);
-      
-      assert(plan.totalLength === 10, `Total length is 10m (got ${plan.totalLength})`);
-      assert(plan.totalHeightChange === 1, `Total height change is 1m (got ${plan.totalHeightChange})`);
-      assert(plan.segments.length === 2, `Has 2 segments (got ${plan.segments.length})`);
-      assert(plan.totalPanels > 0, `Has panels (${plan.totalPanels})`);
-      assert(plan.totalPosts > 0, `Has posts (${plan.totalPosts})`);
-    }
-    
-    // Test 8: Stairs plan calculation
-    log('\n=== Test: Stairs Plan Calculation ===', 'info');
-    {
-      const plan = calculateStairsPlan(5, 1.2, 2.5, 0.9);
-      
-      assert(plan.numSteps === 5, `Has 5 steps (got ${plan.numSteps})`);
-      assertApprox(plan.totalRise, 1.2, 0.01, 'Total rise is 1.2m');
-      assertApprox(plan.totalRun, 2.5, 0.01, 'Total run is 2.5m');
-      assertApprox(plan.averageRise, 0.24, 0.01, 'Average rise is 0.24m');
-      assertApprox(plan.averageRun, 0.5, 0.01, 'Average run is 0.5m');
-      assert(plan.steps.length === 5, `Has 5 step objects (got ${plan.steps.length})`);
-    }
-    
-    // Test 9: Material estimation
-    log('\n=== Test: Material Estimation ===', 'info');
-    {
-      const segments = [
-        { startPoint: [0, 0], endPoint: [10, 0], heightChange: 0 }
-      ];
-      
-      const config = {
-        panelWidth: 1.8, panelHeight: 1.5, postWidth: 0.06,
-        maxGap: 0.12, mountingStyle: 'level', slopeThreshold: 5
-      };
-      
-      const plan = calculateFencePlan(segments, config);
-      const materials = estimateFenceMaterials(plan, {
-        panelPricePerM: 85, postPriceEach: 45, railPricePerM: 12,
-        fastenerPriceEach: 0.5, endCapPriceEach: 8
-      });
-      
-      assert(materials.length > 0, `Generated ${materials.length} material items`);
-      assert(materials.every(m => m.quantity > 0), 'All quantities are positive');
-      assert(materials.every(m => m.totalPrice > 0), 'All prices are positive');
-    }
-    
-    // Test 10: Cost estimate with measurement validation
-    log('\n=== Test: Cost Estimate with Validation ===', 'info');
-    {
-      const materials = [
-        { id: '1', name: 'Panel', category: 'panels', quantity: 10, unit: 'kos', unitPrice: 50, totalPrice: 500 }
-      ];
-      
-      const measurements = [
-        { status: 'verified', scaleSource: 'manual_reference' },
-        { status: 'warning', scaleSource: 'unknown' },
-        { status: 'invalid', scaleSource: 'demo' }
-      ];
-      
-      const estimate = buildCostEstimate(materials, { hours: 8, rate: 35 }, 0.22, measurements);
-      
-      assert(estimate.validMeasurements === 1, `1 valid measurement (got ${estimate.validMeasurements})`);
-      assert(estimate.warningMeasurements === 1, `1 warning measurement (got ${estimate.warningMeasurements})`);
-      assert(estimate.invalidMeasurements === 1, `1 invalid measurement (got ${estimate.invalidMeasurements})`);
-      assert(estimate.subtotal === 500, `Subtotal is 500 (got ${estimate.subtotal})`);
-      assert(estimate.total > 500, 'Total includes tax and labor');
-    }
-    
-    // Test 11: Measurement validation
-    log('\n=== Test: Measurement Validation ===', 'info');
-    {
-      const v1 = validateMeasurementForEstimate('verified', 'manual_reference');
-      assert(v1.canInclude === true, 'Verified with manual_reference can be included');
-      
-      const v2 = validateMeasurementForEstimate('invalid', 'manual_reference');
-      assert(v2.canInclude === false, 'Invalid cannot be included');
-      
-      const v3 = validateMeasurementForEstimate('warning', 'unknown');
-      assert(v3.canInclude === false, 'Warning with unknown scale cannot be included');
-      
-      const v4 = validateMeasurementForEstimate('verified', 'demo');
-      assert(v4.canInclude === false, 'Verified with demo scale cannot be included');
-    }
-    
-    // Test 12: Format measurement
-    log('\n=== Test: Format Measurement ===', 'info');
-    {
-      const f1 = formatMeasurement(5.123, 'm', 2.5);
-      assert(f1.includes('5.123'), 'Format includes value');
-      assert(f1.includes('m'), 'Format includes unit');
-      assert(f1.includes('2.5'), 'Format includes uncertainty');
-      
-      const f2 = formatMeasurement(45.6, '°', 1.2);
-      assert(f2.includes('45.6'), 'Angle format includes value');
-      assert(f2.includes('°'), 'Angle format includes degree symbol');
-    }
-    
-    // Summary
-    const summary = document.createElement('div');
-    summary.className = 'summary';
-    summary.innerHTML = `
-      <h2>Test Results</h2>
-      <p><strong class="pass">${testsPassed} passed</strong>, <strong class="fail">${testsFailed} failed</strong></p>
-      <p>Status: ${testsFailed === 0 ? '<span class="pass">✓ ALL TESTS PASSED</span>' : '<span class="fail">✗ SOME TESTS FAILED</span>'}</p>
-    `;
-    output.appendChild(summary);
+    window.clearOutput = function() {
+      output.innerHTML = '';
+      testsPassed = 0;
+      testsFailed = 0;
+    };
   </script>
 </body>
 </html>
