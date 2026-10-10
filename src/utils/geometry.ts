@@ -3,6 +3,10 @@
 import type { FenceSegment, FencePlan, StairsPlan, StairStep, TerrainPlan, TerrainSegment, CostEstimate, MaterialItem } from '../types';
 
 // Calculate fence plan from segments
+// NOTE: This function requires segments with explicit coordinates (startPoint, endPoint).
+// If only lengths are provided (without directions/angles), the geometry is incomplete.
+// The caller must ensure segments are properly connected and oriented.
+// Without direction data, corners and angles cannot be determined.
 export function calculateFencePlan(
   segments: { startPoint: [number, number]; endPoint: [number, number]; heightChange: number }[],
   config: {

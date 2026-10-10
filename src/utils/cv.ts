@@ -340,8 +340,12 @@ export function estimateHomography(
   const H_temp = matMul3x3(T_dst_inv, H_norm);
   const H = matMul3x3(H_temp, T_src);
   
-  // Normalize so H[8] = 1
-  const scale = H[8] || 1;
+  // Normalize so H[8] = 1, but check for near-zero values
+  if (Math.abs(H[8]) < 1e-10) {
+    // H[8] is too small - this indicates a degenerate or invalid solution
+    return null;
+  }
+  const scale = H[8];
   const H_normalized = H.map((v: number) => v / scale);
   
   // Compute inliers and RMSE
@@ -431,24 +435,32 @@ function solveHomogeneousSystem(A: number[][]): number[] | null {
   for (let i = 0; i < n; i++) ATA[i][i] += reg;
   
   // Inverse power iteration (find eigenvector with smallest eigenvalue)
-  let prevNorm = 0;
+  let prevV = [...v];
   let converged = false;
   for (let iter = 0; iter < 300; iter++) {
     // Solve ATA * w = v using Gaussian elimination
     const w = gaussianElimination(ATA, v);
     if (!w) return null;
     
-    // Check for convergence
+    // Normalize
     const currentNorm = vectorNorm(w);
     if (!isFinite(currentNorm) || currentNorm < 1e-15) return null;
     
-    if (iter > 20 && Math.abs(currentNorm - prevNorm) < 1e-12) {
+    for (let i = 0; i < n; i++) w[i] /= currentNorm;
+    
+    // Check convergence: change in direction (not magnitude)
+    // Use dot product to measure angle between consecutive vectors
+    let dotProduct = 0;
+    for (let i = 0; i < n; i++) dotProduct += prevV[i] * w[i];
+    const angleChange = Math.acos(Math.min(1, Math.max(-1, Math.abs(dotProduct))));
+    
+    if (iter > 20 && angleChange < 1e-10) {
       converged = true;
+      v = w;
       break;
     }
-    prevNorm = currentNorm;
     
-    normalize(w);
+    prevV = [...w];
     v = w;
   }
   
@@ -613,12 +625,53 @@ export function ransacHomography(
   const inlierDst = dstPoints.filter((_, i) => bestInliers[i]);
   const refined = estimateHomography(inlierSrc, inlierDst);
   
-  if (refined) {
-    bestMatrix = refined.matrix;
-    bestRMSE = refined.rmse;
+  if (!refined) {
+    // Refinement failed, return best model from RANSAC iterations
+    return { matrix: bestMatrix, inliers: bestInliers, inlierCount: bestCount, rmse: bestRMSE };
   }
   
-  return { matrix: bestMatrix, inliers: bestInliers, inlierCount: bestCount, rmse: bestRMSE };
+  // After refinement, recompute inliers, count, and RMSE for the final model
+  bestMatrix = refined.matrix;
+  const finalInliers: boolean[] = [];
+  let finalCount = 0;
+  let finalSumSquaredError = 0;
+  
+  for (let i = 0; i < srcPoints.length; i++) {
+    const x = srcPoints[i].x, y = srcPoints[i].y;
+    const w = bestMatrix[6] * x + bestMatrix[7] * y + bestMatrix[8];
+    
+    if (Math.abs(w) < 1e-10 || !isFinite(w)) {
+      finalInliers.push(false);
+      continue;
+    }
+    
+    const u = (bestMatrix[0] * x + bestMatrix[1] * y + bestMatrix[2]) / w;
+    const v = (bestMatrix[3] * x + bestMatrix[4] * y + bestMatrix[5]) / w;
+    
+    if (!isFinite(u) || !isFinite(v)) {
+      finalInliers.push(false);
+      continue;
+    }
+    
+    const err = Math.sqrt((u - dstPoints[i].x) ** 2 + (v - dstPoints[i].y) ** 2);
+    const isInlier = err < threshold;
+    finalInliers.push(isInlier);
+    
+    if (isInlier) {
+      finalSumSquaredError += err * err;
+      finalCount++;
+    }
+  }
+  
+  const finalRMSE = finalCount > 0 ? Math.sqrt(finalSumSquaredError / finalCount) : Infinity;
+  
+  // All returned values now describe the same final refined model
+  return { 
+    matrix: bestMatrix, 
+    inliers: finalInliers, 
+    inlierCount: finalCount, 
+    rmse: finalRMSE 
+  };
 }
 
 // Image quality assessment
