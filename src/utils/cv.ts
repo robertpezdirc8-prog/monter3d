@@ -344,32 +344,64 @@ export function estimateHomography(
   const scale = H[8] || 1;
   const H_normalized = H.map((v: number) => v / scale);
   
-  // Compute inliers
+  // Compute inliers and RMSE
   const inliers: boolean[] = [];
-  let totalError = 0;
+  let sumSquaredError = 0;
   let inlierCount = 0;
   const threshold = 3.0;
   
   for (let i = 0; i < n; i++) {
     const x = srcPoints[i].x, y = srcPoints[i].y;
     const w = H_normalized[6] * x + H_normalized[7] * y + H_normalized[8];
+    
+    // Check for division by zero or invalid w
+    if (Math.abs(w) < 1e-10 || !isFinite(w)) {
+      inliers.push(false);
+      continue;
+    }
+    
     const u = (H_normalized[0] * x + H_normalized[1] * y + H_normalized[2]) / w;
     const v = (H_normalized[3] * x + H_normalized[4] * y + H_normalized[5]) / w;
+    
+    // Check for invalid projected coordinates
+    if (!isFinite(u) || !isFinite(v)) {
+      inliers.push(false);
+      continue;
+    }
+    
     const err = Math.sqrt((u - dstPoints[i].x) ** 2 + (v - dstPoints[i].y) ** 2);
     const isInlier = err < threshold;
     inliers.push(isInlier);
-    if (isInlier) { totalError += err; inlierCount++; }
+    
+    // RMSE: sum of squared errors, then divide, then sqrt
+    if (isInlier) {
+      sumSquaredError += err * err;
+      inlierCount++;
+    }
   }
   
-  const rmse = inlierCount > 0 ? Math.sqrt(totalError / inlierCount) : Infinity;
+  // RMSE = sqrt(mean(squared_errors))
+  const rmse = inlierCount > 0 ? Math.sqrt(sumSquaredError / inlierCount) : Infinity;
   return { matrix: H_normalized, inliers, rmse };
 }
 
-// Solve homogeneous system Ah = 0 using power iteration on A^T * A
+// Solve homogeneous system Ah = 0 using inverse power iteration on A^T * A
+// For homography with 4 points: m=8 rows, n=9 columns (valid minimal case)
 function solveHomogeneousSystem(A: number[][]): number[] | null {
   const m = A.length;
   const n = A[0].length;
-  if (m < n) return null;
+  
+  // For homography: need at least 4 points = 8 equations, 9 unknowns
+  // m can be less than n (underdetermined system) - this is normal for DLT
+  if (m < 4) return null; // Need at least 4 equations
+  if (n !== 9) return null; // Homography has 9 parameters
+  
+  // Check for invalid values
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < n; j++) {
+      if (!isFinite(A[i][j])) return null;
+    }
+  }
   
   // Compute A^T * A (n x n matrix)
   const ATA: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
@@ -382,24 +414,44 @@ function solveHomogeneousSystem(A: number[][]): number[] | null {
   }
   
   // Find eigenvector with smallest eigenvalue using inverse power iteration
-  // Start with random vector
-  let v = new Array(n).fill(0).map(() => Math.random());
+  // Start with deterministic initial vector (not random for reproducibility)
+  let v = new Array(n).fill(0);
+  v[0] = 1; // Start with [1, 0, 0, ...]
   normalize(v);
   
-  // Add small regularization to make it invertible
-  const reg = 1e-6;
+  // Add small regularization to make ATA invertible
+  // This is necessary because ATA is singular for exact solutions
+  const reg = 1e-8;
   for (let i = 0; i < n; i++) ATA[i][i] += reg;
   
-  // Power iteration (find smallest eigenvalue)
-  for (let iter = 0; iter < 100; iter++) {
+  // Inverse power iteration (find eigenvector with smallest eigenvalue)
+  let prevNorm = 0;
+  for (let iter = 0; iter < 200; iter++) {
     // Solve ATA * w = v using Gaussian elimination
     const w = gaussianElimination(ATA, v);
     if (!w) return null;
+    
+    // Check for convergence
+    const currentNorm = vectorNorm(w);
+    if (iter > 10 && Math.abs(currentNorm - prevNorm) < 1e-10) {
+      break;
+    }
+    prevNorm = currentNorm;
+    
     normalize(w);
     v = w;
   }
   
+  // Verify result is valid
+  if (!v || v.some(x => !isFinite(x))) return null;
+  
   return v;
+}
+
+function vectorNorm(v: number[]): number {
+  let sum = 0;
+  for (const x of v) sum += x * x;
+  return Math.sqrt(sum);
 }
 
 function normalize(v: number[]): void {

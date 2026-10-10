@@ -312,14 +312,28 @@ function App() {
 
   // Calculate fence plan
   const calculateFence = useCallback(() => {
-    const validMeasurements = measurements.filter(m => m.status === 'verified' && m.unit === 'm');
-    if (validMeasurements.length < 1) return;
+    // Only use verified measurements with metric units
+    const validMeasurements = measurements.filter(m => 
+      m.status === 'verified' && 
+      m.unit === 'm' && 
+      m.scaleSource !== 'unknown' && 
+      m.scaleSource !== 'demo' &&
+      m.scaleSource !== 'normalized'
+    );
+    
+    if (validMeasurements.length < 1) {
+      // No valid measurements - cannot calculate fence
+      setFencePlan(null);
+      setEstimate(null);
+      return;
+    }
 
-    // Use measurements to create segments
+    // Use ONLY valid measurements to create segments
     const segments = validMeasurements.map((m, i) => ({
       startPoint: [i * 2, 0] as [number, number],
       endPoint: [i * 2 + m.value, 0] as [number, number],
-      heightChange: i === 0 ? 0 : (measurements[i]?.value || 0) * 0.1
+      // Height change only from valid measurements
+      heightChange: i === 0 ? 0 : (validMeasurements[i]?.value || 0) * 0.1
     }));
 
     const plan = calculateFencePlan(segments, fenceConfig);

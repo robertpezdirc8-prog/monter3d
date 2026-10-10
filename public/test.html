@@ -386,6 +386,61 @@
         assert(csv.split('\n').length >= 3, 'CSV ima vsaj 3 vrstice (glava + 2 meritve)');
       }
       
+      // Test 17: RMSE calculation
+      section('17. RMSE izračun');
+      {
+        // Test with known errors: 3, 4, 5 pixels
+        // RMSE = sqrt((9 + 16 + 25) / 3) = sqrt(50/3) = sqrt(16.67) = 4.08
+        const srcPoints = [
+          { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
+        ];
+        const dstPoints = [
+          { x: 3, y: 0 }, { x: 100, y: 4 }, { x: 105, y: 100 }, { x: 0, y: 100 }
+        ];
+        
+        const result = estimateHomography(srcPoints, dstPoints);
+        assert(result !== null, 'Homografija z napakami uspešna');
+        if (result) {
+          assert(result.rmse > 0, `RMSE > 0 (${result.rmse.toFixed(2)})`);
+          assert(result.rmse < 10, `RMSE < 10 (${result.rmse.toFixed(2)})`);
+          assert(isFinite(result.rmse), 'RMSE je končen');
+          assert(!isNaN(result.rmse), 'RMSE ni NaN');
+        }
+      }
+      
+      // Test 18: Invalid measurements excluded from estimate
+      section('18. Neveljavne meritve izključene iz predračuna');
+      {
+        const materials = [
+          { id: '1', name: 'Panel', category: 'panels', quantity: 10, unit: 'kos', unitPrice: 50, totalPrice: 500 }
+        ];
+        
+        // All invalid measurements
+        const invalidMeasurements = [
+          { status: 'invalid', scaleSource: 'demo' },
+          { status: 'invalid', scaleSource: 'unknown' }
+        ];
+        
+        const estimate1 = buildCostEstimate(materials, { hours: 8, rate: 35 }, 0.22, invalidMeasurements);
+        
+        assert(estimate1.invalidMeasurements === 2, `2 neveljavni meritvi (dejansko: ${estimate1.invalidMeasurements})`);
+        assert(estimate1.validMeasurements === 0, `0 veljavnih meritev (dejansko: ${estimate1.validMeasurements})`);
+        assert(estimate1.subtotal === 500, `Subtotal je 500 (materiali se ne spremenijo)`);
+        
+        // Compare with valid measurements
+        const validMeasurements = [
+          { status: 'verified', scaleSource: 'manual_reference' },
+          { status: 'verified', scaleSource: 'calibration_marker' }
+        ];
+        
+        const estimate2 = buildCostEstimate(materials, { hours: 8, rate: 35 }, 0.22, validMeasurements);
+        
+        assert(estimate2.validMeasurements === 2, `2 veljavni meritvi (dejansko: ${estimate2.validMeasurements})`);
+        assert(estimate2.invalidMeasurements === 0, `0 neveljavnih meritev (dejansko: ${estimate2.invalidMeasurements})`);
+        assert(estimate2.subtotal === 500, `Subtotal je enak (500) - materiali se ne spremenijo`);
+        assert(estimate2.total === estimate1.total, `Končni znesek je enak - meritve ne vplivajo na ceno`);
+      }
+      
       // Test 17: Edge cases
       section('17. Robni primeri');
       {
@@ -411,7 +466,7 @@
       const summary = document.createElement('div');
       summary.className = 'summary';
       summary.innerHTML = `
-        <h2>📊 Povzetek testov</h2>
+        <h2>📊 Povzetek testov (18 sklopov)</h2>
         <p style="font-size: 18pt; margin: 15px 0;">
           <span class="pass">${testsPassed} uspešnih</span> | 
           <span class="fail">${testsFailed} neuspešnih</span>

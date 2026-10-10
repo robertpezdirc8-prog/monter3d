@@ -173,65 +173,88 @@ export function estimateFenceMaterials(plan: FencePlan, materials: {
   const items: MaterialItem[] = [];
   const wastePercent = 0.07; // 7% waste
 
+  // Validate plan values
+  if (!isFinite(plan.totalPanels) || plan.totalPanels <= 0) return [];
+  if (!isFinite(plan.totalPosts) || plan.totalPosts <= 0) return [];
+  if (!isFinite(plan.panelWidth) || plan.panelWidth <= 0) return [];
+  if (!isFinite(plan.panelHeight) || plan.panelHeight <= 0) return [];
+
+  // Validate material prices
+  if (!isFinite(materials.panelPricePerM) || materials.panelPricePerM < 0) return [];
+  if (!isFinite(materials.postPriceEach) || materials.postPriceEach < 0) return [];
+
   // Panels
   const panelTotalM = plan.totalPanels * plan.panelWidth * plan.panelHeight;
+  const panelQuantity = Math.max(1, Math.ceil(plan.totalPanels * (1 + wastePercent)));
+  const panelUnitPrice = materials.panelPricePerM * plan.panelWidth * plan.panelHeight;
+  
+  if (!isFinite(panelTotalM) || !isFinite(panelUnitPrice)) return [];
+  
   items.push({
     id: 'mat-panels',
     name: 'Paneli ograje',
     category: 'panels',
-    quantity: Math.ceil(plan.totalPanels * (1 + wastePercent)),
+    quantity: panelQuantity,
     unit: 'kos',
-    unitPrice: materials.panelPricePerM * plan.panelWidth * plan.panelHeight,
-    totalPrice: Math.ceil(plan.totalPanels * (1 + wastePercent)) * materials.panelPricePerM * plan.panelWidth * plan.panelHeight,
+    unitPrice: panelUnitPrice,
+    totalPrice: panelQuantity * panelUnitPrice,
     notes: `Višina: ${plan.panelHeight}m, Širina: ${(plan.panelWidth * 100).toFixed(0)}cm`
   });
 
   // Posts
+  const postQuantity = Math.max(1, Math.ceil(plan.totalPosts * (1 + wastePercent)));
   items.push({
     id: 'mat-posts',
     name: 'Stebri',
     category: 'posts',
-    quantity: Math.ceil(plan.totalPosts * (1 + wastePercent)),
+    quantity: postQuantity,
     unit: 'kos',
     unitPrice: materials.postPriceEach,
-    totalPrice: Math.ceil(plan.totalPosts * (1 + wastePercent)) * materials.postPriceEach,
+    totalPrice: postQuantity * materials.postPriceEach,
     notes: `Višina: ${plan.postHeight.toFixed(2)}m`
   });
 
   // Rails
-  const railTotalM = plan.segments.reduce((sum, s) => sum + s.length, 0) * 2;
+  const railTotalM = plan.segments.reduce((sum, s) => {
+    if (!isFinite(s.length) || s.length < 0) return sum;
+    return sum + s.length;
+  }, 0) * 2;
+  
+  const railQuantity = Math.max(0, Math.ceil(railTotalM * (1 + wastePercent) * 10) / 10);
   items.push({
     id: 'mat-rails',
     name: 'Letve (zgornja + spodnja)',
     category: 'rails',
-    quantity: Math.ceil(railTotalM * (1 + wastePercent) * 10) / 10,
+    quantity: railQuantity,
     unit: 'm',
     unitPrice: materials.railPricePerM,
-    totalPrice: Math.ceil(railTotalM * (1 + wastePercent) * 10) / 10 * materials.railPricePerM,
+    totalPrice: railQuantity * materials.railPricePerM,
     notes: `${plan.totalRails} letv skupaj`
   });
 
   // Fasteners
+  const fastenerQuantity = Math.max(0, Math.ceil(plan.totalFasteners * (1 + wastePercent)));
   items.push({
     id: 'mat-fasteners',
     name: 'Pritrdilni elementi',
     category: 'fasteners',
-    quantity: Math.ceil(plan.totalFasteners * (1 + wastePercent)),
+    quantity: fastenerQuantity,
     unit: 'kos',
     unitPrice: materials.fastenerPriceEach,
-    totalPrice: Math.ceil(plan.totalFasteners * (1 + wastePercent)) * materials.fastenerPriceEach,
+    totalPrice: fastenerQuantity * materials.fastenerPriceEach,
     notes: 'Vijaki, nosilci, sponke'
   });
 
   // End caps
+  const endCapQuantity = Math.max(0, plan.segments.length * 2 + 2);
   items.push({
     id: 'mat-endcaps',
     name: 'Zaključni elementi',
     category: 'endcaps',
-    quantity: plan.segments.length * 2 + 2,
+    quantity: endCapQuantity,
     unit: 'kos',
     unitPrice: materials.endCapPriceEach,
-    totalPrice: (plan.segments.length * 2 + 2) * materials.endCapPriceEach,
+    totalPrice: endCapQuantity * materials.endCapPriceEach,
     notes: 'Začetni in končni pokrovi'
   });
 
@@ -290,10 +313,43 @@ export function buildCostEstimate(
   taxRate: number,
   measurements?: { status: 'verified' | 'warning' | 'invalid'; scaleSource: string }[]
 ): CostEstimate {
-  const subtotal = materials.reduce((sum, m) => sum + m.totalPrice, 0);
-  const laborTotal = labor ? labor.hours * labor.rate : 0;
+  // Validate and sum material prices
+  const subtotal = materials.reduce((sum, m) => {
+    // Skip invalid prices
+    if (!isFinite(m.totalPrice) || m.totalPrice < 0) return sum;
+    return sum + m.totalPrice;
+  }, 0);
+  
+  // Validate labor
+  let laborTotal = 0;
+  if (labor) {
+    if (isFinite(labor.hours) && isFinite(labor.rate) && labor.hours >= 0 && labor.rate >= 0) {
+      laborTotal = labor.hours * labor.rate;
+    }
+  }
+  
+  // Validate tax rate
+  const validTaxRate = (isFinite(taxRate) && taxRate >= 0) ? taxRate : 0;
+  
   const beforeTax = subtotal + laborTotal;
-  const tax = beforeTax * taxRate;
+  const tax = beforeTax * validTaxRate;
+  
+  // Final validation
+  if (!isFinite(beforeTax) || !isFinite(tax)) {
+    // Return zero estimate if calculations are invalid
+    return {
+      materials: [],
+      labor: undefined,
+      subtotal: 0,
+      tax: 0,
+      taxRate: validTaxRate,
+      total: 0,
+      wastePercent: 0,
+      validMeasurements: 0,
+      invalidMeasurements: 0,
+      warningMeasurements: 0
+    };
+  }
 
   // Count measurement validity
   let validMeasurements = 0;
@@ -317,7 +373,7 @@ export function buildCostEstimate(
     labor: labor ? { ...labor, total: laborTotal } : undefined,
     subtotal,
     tax,
-    taxRate,
+    taxRate: validTaxRate,
     total: beforeTax + tax,
     wastePercent: 7,
     validMeasurements,
