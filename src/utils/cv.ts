@@ -387,6 +387,8 @@ export function estimateHomography(
 
 // Solve homogeneous system Ah = 0 using inverse power iteration on A^T * A
 // For homography with 4 points: m=8 rows, n=9 columns (valid minimal case)
+// NOTE: This method squares the condition number. For better stability, SVD would be preferred,
+// but requires external libraries. Current implementation includes stability checks.
 function solveHomogeneousSystem(A: number[][]): number[] | null {
   const m = A.length;
   const n = A[0].length;
@@ -413,6 +415,10 @@ function solveHomogeneousSystem(A: number[][]): number[] | null {
     }
   }
   
+  // Check matrix stability - compute approximate condition number
+  const diagSum = ATA.reduce((sum, row, i) => sum + Math.abs(row[i]), 0);
+  if (diagSum < 1e-10) return null; // Matrix is essentially zero
+  
   // Find eigenvector with smallest eigenvalue using inverse power iteration
   // Start with deterministic initial vector (not random for reproducibility)
   let v = new Array(n).fill(0);
@@ -426,14 +432,18 @@ function solveHomogeneousSystem(A: number[][]): number[] | null {
   
   // Inverse power iteration (find eigenvector with smallest eigenvalue)
   let prevNorm = 0;
-  for (let iter = 0; iter < 200; iter++) {
+  let converged = false;
+  for (let iter = 0; iter < 300; iter++) {
     // Solve ATA * w = v using Gaussian elimination
     const w = gaussianElimination(ATA, v);
     if (!w) return null;
     
     // Check for convergence
     const currentNorm = vectorNorm(w);
-    if (iter > 10 && Math.abs(currentNorm - prevNorm) < 1e-10) {
+    if (!isFinite(currentNorm) || currentNorm < 1e-15) return null;
+    
+    if (iter > 20 && Math.abs(currentNorm - prevNorm) < 1e-12) {
+      converged = true;
       break;
     }
     prevNorm = currentNorm;
@@ -444,8 +454,28 @@ function solveHomogeneousSystem(A: number[][]): number[] | null {
   
   // Verify result is valid
   if (!v || v.some(x => !isFinite(x))) return null;
+  if (!converged) {
+    // Check if result is still reasonable
+    const residual = computeResidual(A, v);
+    if (residual > 1e-6) return null; // Poor solution
+  }
   
   return v;
+}
+
+// Compute residual ||A * v|| for validation
+function computeResidual(A: number[][], v: number[]): number {
+  const m = A.length;
+  const n = v.length;
+  let sum = 0;
+  for (let i = 0; i < m; i++) {
+    let rowSum = 0;
+    for (let j = 0; j < n; j++) {
+      rowSum += A[i][j] * v[j];
+    }
+    sum += rowSum * rowSum;
+  }
+  return Math.sqrt(sum);
 }
 
 function vectorNorm(v: number[]): number {

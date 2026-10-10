@@ -329,12 +329,31 @@ function App() {
     }
 
     // Use ONLY valid measurements to create segments
-    const segments = validMeasurements.map((m, i) => ({
-      startPoint: [i * 2, 0] as [number, number],
-      endPoint: [i * 2 + m.value, 0] as [number, number],
-      // Height change only from valid measurements
-      heightChange: i === 0 ? 0 : (validMeasurements[i]?.value || 0) * 0.1
-    }));
+    // Segments are connected sequentially: end of segment i = start of segment i+1
+    let currentX = 0;
+    let currentHeight = 0;
+    const segments = validMeasurements.map((m, i) => {
+      // Validate measurement value
+      if (!isFinite(m.value) || m.value <= 0) {
+        return null; // Skip invalid measurements
+      }
+      
+      const startPoint: [number, number] = [currentX, currentHeight];
+      const endPoint: [number, number] = [currentX + m.value, currentHeight];
+      
+      // Update position for next segment
+      currentX += m.value;
+      
+      // Height change is not derived from length measurements
+      // It should come from separate height measurements or be 0
+      const heightChange = 0;
+      
+      return {
+        startPoint,
+        endPoint,
+        heightChange
+      };
+    }).filter((s): s is NonNullable<typeof s> => s !== null); // Remove null entries
 
     const plan = calculateFencePlan(segments, fenceConfig);
     setFencePlan(plan);

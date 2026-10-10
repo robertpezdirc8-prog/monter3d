@@ -441,6 +441,61 @@
         assert(estimate2.total === estimate1.total, `Končni znesek je enak - meritve ne vplivajo na ceno`);
       }
       
+      // Test 19: Sequential fence segments
+      section('19. Zaporedni segmenti ograje');
+      {
+        // Three consecutive segments: 5m, 3m, 4m
+        const segments = [
+          { startPoint: [0, 0], endPoint: [5, 0], heightChange: 0 },
+          { startPoint: [5, 0], endPoint: [8, 0], heightChange: 0 },
+          { startPoint: [8, 0], endPoint: [12, 0], heightChange: 0 }
+        ];
+        
+        const config = {
+          panelWidth: 1.8, panelHeight: 1.5, postWidth: 0.06,
+          maxGap: 0.12, mountingStyle: 'level', slopeThreshold: 5
+        };
+        
+        const plan = calculateFencePlan(segments, config);
+        
+        assert(plan.totalLength === 12, `Skupna dolžina: 12m (dejansko: ${plan.totalLength}m)`);
+        assert(plan.segments.length === 3, `3 segmenti (dejansko: ${plan.segments.length})`);
+        assert(plan.segments[0].length === 5, `Segment 1: 5m (dejansko: ${plan.segments[0].length}m)`);
+        assert(plan.segments[1].length === 3, `Segment 2: 3m (dejansko: ${plan.segments[1].length}m)`);
+        assert(plan.segments[2].length === 4, `Segment 3: 4m (dejansko: ${plan.segments[2].length}m)`);
+        
+        // Check segment connections
+        assert(plan.segments[0].endPoint[0] === plan.segments[1].startPoint[0], 
+          'Segment 1 se poveže na segment 2');
+        assert(plan.segments[1].endPoint[0] === plan.segments[2].startPoint[0], 
+          'Segment 2 se poveže na segment 3');
+      }
+      
+      // Test 20: NaN and Infinity protection
+      section('20. Zaščita pred NaN in Infinity');
+      {
+        // Invalid material prices
+        const invalidMaterials = [
+          { id: '1', name: 'Panel', category: 'panels', quantity: NaN, unit: 'kos', unitPrice: 50, totalPrice: NaN },
+          { id: '2', name: 'Post', category: 'posts', quantity: 10, unit: 'kos', unitPrice: Infinity, totalPrice: Infinity }
+        ];
+        
+        const estimate = buildCostEstimate(invalidMaterials, { hours: 8, rate: 35 }, 0.22, []);
+        
+        assert(estimate.subtotal === 0, `Subtotal je 0 za neveljavne materiale (dejansko: ${estimate.subtotal})`);
+        assert(isFinite(estimate.total), 'Total je končen');
+        assert(!isNaN(estimate.total), 'Total ni NaN');
+        
+        // Invalid tax rate
+        const validMaterials = [
+          { id: '1', name: 'Panel', category: 'panels', quantity: 10, unit: 'kos', unitPrice: 50, totalPrice: 500 }
+        ];
+        
+        const estimate2 = buildCostEstimate(validMaterials, { hours: 8, rate: 35 }, NaN, []);
+        assert(estimate2.taxRate === 0, `Davčna stopnja je 0 za NaN (dejansko: ${estimate2.taxRate})`);
+        assert(isFinite(estimate2.total), 'Total je končen z NaN davčno stopnjo');
+      }
+      
       // Test 17: Edge cases
       section('17. Robni primeri');
       {
@@ -466,7 +521,7 @@
       const summary = document.createElement('div');
       summary.className = 'summary';
       summary.innerHTML = `
-        <h2>📊 Povzetek testov (18 sklopov)</h2>
+        <h2>📊 Povzetek testov (20 sklopov)</h2>
         <p style="font-size: 18pt; margin: 15px 0;">
           <span class="pass">${testsPassed} uspešnih</span> | 
           <span class="fail">${testsFailed} neuspešnih</span>
