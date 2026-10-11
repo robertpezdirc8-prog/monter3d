@@ -213,7 +213,11 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   
   if (!solutionFound && canUseRequestedSpacing) {
     const totalBoardWidth = effectiveWidth + boardSpacing;
-    numberOfBoards = Math.ceil(totalDimension / totalBoardWidth);
+    // Use round instead of ceil to find closest fit
+    numberOfBoards = Math.round(totalDimension / totalBoardWidth);
+    
+    // Ensure at least 1 board
+    if (numberOfBoards < 1) numberOfBoards = 1;
     
     if (numberOfBoards === 1) {
       actualBoardSpacing = 0;
@@ -226,13 +230,28 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
       actualBoardSpacing = totalSpacing / (numberOfBoards - 1);
       
       if (actualBoardSpacing < 0) {
-        errors.push(`Konfiguracija ni mogoča: ${numberOfBoards} desk širine ${effectiveWidth}mm ne more pokriti ${totalDimension}mm z negativnim razmikom`);
-        actualBoardSpacing = 0;
-        uncoveredWidth = totalDimension - (numberOfBoards * effectiveWidth);
+        // Too many boards - try one less
+        numberOfBoards = numberOfBoards - 1;
+        if (numberOfBoards === 1) {
+          actualBoardSpacing = 0;
+          uncoveredWidth = totalDimension - effectiveWidth;
+          if (uncoveredWidth < 0) uncoveredWidth = 0;
+        } else {
+          const newTotalBoardsWidth = numberOfBoards * effectiveWidth;
+          const newTotalSpacing = totalDimension - newTotalBoardsWidth;
+          actualBoardSpacing = newTotalSpacing / (numberOfBoards - 1);
+          if (actualBoardSpacing < 0) {
+            errors.push(`Konfiguracija ni mogoča: ${numberOfBoards} desk širine ${effectiveWidth}mm ne more pokriti ${totalDimension}mm z negativnim razmikom`);
+            actualBoardSpacing = 0;
+            uncoveredWidth = totalDimension - (numberOfBoards * effectiveWidth);
+          } else {
+            uncoveredWidth = 0;
+          }
+        }
       } else {
         uncoveredWidth = 0;
-        solutionFound = true;
       }
+      solutionFound = true;
     }
   }
   
@@ -331,7 +350,7 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
     beamSpacingValid,
     
     numberOfBoards,
-    actualBoardSpacing: Math.round(actualBoardSpacing),
+    actualBoardSpacing: Math.round(actualBoardSpacing * 100) / 100,
     boardSpacingValid,
     effectiveWidth,
     
