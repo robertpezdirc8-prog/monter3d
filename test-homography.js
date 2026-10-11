@@ -264,6 +264,116 @@ console.log('\nTest 8: RANSAC z znanimi napačnimi ujemanji');
   }
 }
 
+// Test 9: Equal column norms with non-zero dot product
+console.log('\nTest 9: Enaka norma stolpcev z neničelnim skalarnim produktom');
+{
+  // Create points that will result in columns with equal norms
+  const srcPoints = [
+    { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 100 }, { x: 50, y: 50 }
+  ];
+  const dstPoints = [
+    { x: 10, y: 10 }, { x: 110, y: 10 }, { x: 60, y: 110 }, { x: 60, y: 60 }
+  ];
+  
+  const result = estimateHomography(srcPoints, dstPoints);
+  
+  if (!result) {
+    assert(false, 'Homografija mora biti izračunana');
+  } else {
+    const maxErr = computeMaxError(srcPoints, dstPoints, result.matrix);
+    assert(maxErr < 0.5, `Največja reprojekcijska napaka < 0.5 (dejansko: ${maxErr.toFixed(6)})`);
+    assert(result.rmse < 0.5, `RMSE < 0.5 (dejansko: ${result.rmse.toFixed(6)})`);
+  }
+}
+
+// Test 10: Nearly collinear points
+console.log('\nTest 10: Skoraj kolinearni pari točk');
+{
+  // Points that are nearly collinear (should be rejected or have high error)
+  const srcPoints = [
+    { x: 0, y: 0 }, { x: 100, y: 0.001 }, { x: 200, y: 0.002 }, { x: 300, y: 0.003 }
+  ];
+  const dstPoints = [
+    { x: 0, y: 0 }, { x: 100, y: 0.001 }, { x: 200, y: 0.002 }, { x: 300, y: 0.003 }
+  ];
+  
+  const result = estimateHomography(srcPoints, dstPoints);
+  
+  // Should either return null (rejected) or have very high error
+  if (result === null) {
+    assert(true, 'Skoraj kolinearne točke pravilno zavrnjene');
+  } else {
+    const maxErr = computeMaxError(srcPoints, dstPoints, result.matrix);
+    // If not rejected, error should be high
+    assert(maxErr > 1 || result.rmse > 1, 
+      `Skoraj kolinearne točke: visoka napaka (maxErr: ${maxErr.toFixed(6)}, RMSE: ${result.rmse.toFixed(6)})`);
+  }
+}
+
+// Test 11: Known perspective transformation
+console.log('\nTest 11: Znana perspektivna transformacija');
+{
+  // Known perspective transformation (projective)
+  const srcPoints = [
+    { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
+  ];
+  // Apply known perspective transformation
+  const H_true = [
+    1.2, 0.1, 10,
+    0.05, 1.1, 20,
+    0.001, 0.002, 1
+  ];
+  
+  const dstPoints = srcPoints.map(p => {
+    const w = H_true[6] * p.x + H_true[7] * p.y + H_true[8];
+    return {
+      x: (H_true[0] * p.x + H_true[1] * p.y + H_true[2]) / w,
+      y: (H_true[3] * p.x + H_true[4] * p.y + H_true[5]) / w
+    };
+  });
+  
+  const result = estimateHomography(srcPoints, dstPoints);
+  
+  if (!result) {
+    assert(false, 'Homografija mora biti izračunana');
+  } else {
+    const maxErr = computeMaxError(srcPoints, dstPoints, result.matrix);
+    assert(maxErr < 0.01, `Največja reprojekcijska napaka < 0.01 (dejansko: ${maxErr.toFixed(6)})`);
+    assert(result.rmse < 0.01, `RMSE < 0.01 (dejansko: ${result.rmse.toFixed(6)})`);
+  }
+}
+
+// Test 12: RANSAC with multiple outliers
+console.log('\nTest 12: RANSAC z več napačnimi ujemanji');
+{
+  const srcPoints = [
+    { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 },
+    { x: 50, y: 50 }, { x: 25, y: 75 }, { x: 75, y: 25 }, { x: 50, y: 0 }
+  ];
+  const tx = 15, ty = 25;
+  const dstPoints = [
+    { x: 15, y: 25 }, { x: 115, y: 25 }, { x: 115, y: 125 }, { x: 15, y: 125 },
+    { x: 65, y: 75 }, { x: 200, y: 200 }, { x: 300, y: 300 }, { x: 500, y: 500 }
+  ];
+  // Outliers: indices 5, 6, 7
+  
+  const result = ransacHomography(srcPoints, dstPoints, 200, 5.0);
+  
+  if (!result) {
+    assert(false, 'RANSAC mora najti model');
+  } else {
+    assert(result.inlierCount >= 4, `Vsaj 4 inlierji (dejansko: ${result.inlierCount})`);
+    assert(result.inlierCount <= 5, `Največ 5 inlierjev (dejansko: ${result.inlierCount})`);
+    
+    // Check that outliers are correctly identified
+    assert(result.inliers[5] === false, 'Outlier 5 pravilno označen');
+    assert(result.inliers[6] === false, 'Outlier 6 pravilno označen');
+    assert(result.inliers[7] === false, 'Outlier 7 pravilno označen');
+    
+    assert(result.rmse < 5, `RMSE < 5 (dejansko: ${result.rmse.toFixed(6)})`);
+  }
+}
+
 // Summary
 console.log('\n========================================');
 console.log('POVZETEK');
