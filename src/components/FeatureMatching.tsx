@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import type { Photo } from '../types';
-import { toGrayscale, harrisCornerDetection, computeDescriptors, crossCheckMatch, ransacHomography } from '../utils/cv';
+import { toGrayscale, harrisCornerDetection, computeDescriptors, crossCheckMatch, ransacHomography, bruteForceMatch } from '../utils/cv';
 
 interface FeatureMatchingProps {
   photo1: Photo | null;
@@ -106,10 +106,13 @@ export function FeatureMatchingView({ photo1, photo2 }: FeatureMatchingProps) {
       ctx.fill();
     });
 
-    // Cross-check matching
+    // P1: Calculate ACTUAL raw matches (before cross-check)
+    // Use brute force matching to get true raw match count
+    const allRawMatches = bruteForceMatch(features1, features2);
+    const rawMatches = allRawMatches.length;
+    
+    // Cross-check matching (subset of raw matches that pass bidirectional check)
     const ccMatches = crossCheckMatch(features1, features2, 0.8);
-    const rawMatches = features1.length * features2.length > 0 ? 
-      Math.round(ccMatches.length * 1.5) : 0;
 
     // Draw matches
     const maxDrawMatches = Math.min(ccMatches.length, 30);

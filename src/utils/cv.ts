@@ -970,8 +970,23 @@ export function ransacHomography(
   const refined = estimateHomography(inlierSrc, inlierDst);
   
   if (!refined) {
-    // Refinement failed, return best model from RANSAC iterations
-    return { matrix: bestMatrix, inliers: bestInliers, inlierCount: bestCount, rmse: bestRMSE };
+    // P1: Refinement failed - calculate RMSE for best model from RANSAC iterations
+    let fallbackRMSE = 0;
+    let fallbackCount = 0;
+    for (let i = 0; i < srcPoints.length; i++) {
+      if (!bestInliers[i]) continue;
+      const x = srcPoints[i].x, y = srcPoints[i].y;
+      const w = bestMatrix[6] * x + bestMatrix[7] * y + bestMatrix[8];
+      if (Math.abs(w) < 1e-10 || !isFinite(w)) continue;
+      const u = (bestMatrix[0] * x + bestMatrix[1] * y + bestMatrix[2]) / w;
+      const v = (bestMatrix[3] * x + bestMatrix[4] * y + bestMatrix[5]) / w;
+      if (!isFinite(u) || !isFinite(v)) continue;
+      const err = Math.sqrt((u - dstPoints[i].x) ** 2 + (v - dstPoints[i].y) ** 2);
+      fallbackRMSE += err * err;
+      fallbackCount++;
+    }
+    const finalRMSE = fallbackCount > 0 ? Math.sqrt(fallbackRMSE / fallbackCount) : threshold;
+    return { matrix: bestMatrix, inliers: bestInliers, inlierCount: bestCount, rmse: finalRMSE };
   }
   
   // After refinement, recompute inliers, count, and RMSE for the final model
