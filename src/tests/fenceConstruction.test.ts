@@ -161,18 +161,22 @@ describe('Fence Construction Calculator', () => {
 
   describe('Načrt rezanja', () => {
     it('Test: 3 kosi po 1200mm iz 2200mm profila - 3 deske, ne 2', () => {
+      // Za 3 deske širine 128mm z 20mm razmikom: 3×128 + 2×20 = 424mm
       const result = calculateFenceConstruction({
         profile: polna128, // dolžina 2200mm
         orientation: 'vertical',
         fenceHeight: 1200, // vsaka deska 1200mm
-        fenceLength: 3000,
+        fenceLength: 424, // Točno za 3 deske z 20mm razmikom
         boardSpacing: 20
       });
+      
+      // Preverimo, da imamo 3 deske
+      expect(result.numberOfBoards).toBe(3);
       
       // Iz 2200mm profila lahko izrežemo samo 1 kos 1200mm
       expect(result.cutsPerProfile).toBe(1);
       
-      // Če potrebujemo 3 kose po 1200mm, potrebujemo 3 profile
+      // Za 3 deske potrebujemo 3 profile
       expect(result.profilesNeeded).toBe(3);
     });
 

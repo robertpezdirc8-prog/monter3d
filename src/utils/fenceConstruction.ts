@@ -122,6 +122,15 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   
   const postSpacingValid = actualPostSpacing <= maxPostSpacing;
   
+  // ROMB 67 specific warnings for horizontal orientation
+  if (profile.id === 'romb-deska-67' && orientation === 'horizontal') {
+    if (actualPostSpacing > 1450 && actualPostSpacing < 1800) {
+      warnings.push(`ROMB 67: Razmak stebričkov ${actualPostSpacing}mm je med 1450mm in 1800mm - potrebna dodatna povezava`);
+    } else if (actualPostSpacing >= 1800) {
+      errors.push(`ROMB 67: Razmak stebričkov ${actualPostSpacing}mm presega 1800mm - potreben dodaten stebriček`);
+    }
+  }
+  
   // Calculate beams (horizontal supports)
   const maxBeamSpacing = orientation === 'vertical' 
     ? profile.maxBeamSpacing 
@@ -164,25 +173,27 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   // Find valid number of boards with spacing in allowed range
   let solutionFound = false;
   
-  // Try different numbers of boards to find one that gives valid spacing
-  const maxPossibleBoards = Math.floor(totalDimension / (effectiveWidth + profile.minBoardSpacing));
-  const minPossibleBoards = Math.ceil(totalDimension / (effectiveWidth + profile.maxBoardSpacing));
-  
-  for (let n = Math.max(1, minPossibleBoards); n <= maxPossibleBoards; n++) {
-    const totalBoardsWidth = n * effectiveWidth;
-    const remainingSpace = totalDimension - totalBoardsWidth;
+  // Special case: single board that fits exactly or with small gap
+  if (totalDimension <= effectiveWidth) {
+    // One board is enough
+    numberOfBoards = 1;
+    actualBoardSpacing = 0;
+    uncoveredWidth = totalDimension - effectiveWidth;
+    if (uncoveredWidth < 0) uncoveredWidth = 0;
+    solutionFound = true;
+  } else {
+    // Try different numbers of boards to find one that gives valid spacing
+    // Start from minimum possible boards and go up
+    const minPossibleBoards = Math.max(2, Math.ceil(totalDimension / (effectiveWidth + profile.maxBoardSpacing)));
+    const maxPossibleBoards = Math.floor((totalDimension + profile.maxBoardSpacing) / (effectiveWidth + profile.minBoardSpacing));
     
-    if (n === 1) {
-      // Single board - no spacing needed
-      if (remainingSpace >= 0 && remainingSpace <= profile.maxBoardSpacing) {
-        numberOfBoards = n;
-        actualBoardSpacing = 0;
-        uncoveredWidth = remainingSpace;
-        solutionFound = true;
-        break;
-      }
-    } else {
-      // Multiple boards - calculate spacing
+    for (let n = minPossibleBoards; n <= maxPossibleBoards; n++) {
+      const totalBoardsWidth = n * effectiveWidth;
+      const remainingSpace = totalDimension - totalBoardsWidth;
+      
+      if (remainingSpace < 0) continue; // Too many boards
+      
+      // Calculate spacing between boards
       const spacing = remainingSpace / (n - 1);
       
       if (spacing >= profile.minBoardSpacing && spacing <= profile.maxBoardSpacing) {
@@ -196,13 +207,19 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   }
   
   // If no solution found with preferred spacing, try with user's requested spacing
-  if (!solutionFound && boardSpacing >= profile.minBoardSpacing && boardSpacing <= profile.maxBoardSpacing) {
+  // For single board, allow boardSpacing = 0 even if it's less than minBoardSpacing
+  const canUseRequestedSpacing = numberOfBoards === 1 || 
+                                  (boardSpacing >= profile.minBoardSpacing && boardSpacing <= profile.maxBoardSpacing);
+  
+  if (!solutionFound && canUseRequestedSpacing) {
     const totalBoardWidth = effectiveWidth + boardSpacing;
     numberOfBoards = Math.ceil(totalDimension / totalBoardWidth);
     
     if (numberOfBoards === 1) {
       actualBoardSpacing = 0;
       uncoveredWidth = totalDimension - effectiveWidth;
+      if (uncoveredWidth < 0) uncoveredWidth = 0;
+      solutionFound = true;
     } else {
       const totalBoardsWidth = numberOfBoards * effectiveWidth;
       const totalSpacing = totalDimension - totalBoardsWidth;
@@ -227,17 +244,22 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
     uncoveredWidth = totalDimension - (numberOfBoards * effectiveWidth);
   }
   
-  const boardSpacingValid = actualBoardSpacing >= profile.minBoardSpacing && 
-                            actualBoardSpacing <= profile.maxBoardSpacing;
+  // For single board, spacing validation is not needed
+  const boardSpacingValid = numberOfBoards === 1 || 
+                            (actualBoardSpacing >= profile.minBoardSpacing && 
+                             actualBoardSpacing <= profile.maxBoardSpacing);
   
   if (uncoveredWidth > 0) {
     errors.push(`Ograja ne more biti popolnoma pokrita. Nepokrita širina: ${uncoveredWidth}mm`);
   }
   
-  if (actualBoardSpacing < profile.minBoardSpacing && numberOfBoards > 1) {
-    errors.push(`Razmik med deskami (${actualBoardSpacing.toFixed(1)}mm) je manjši od minimalnega (${profile.minBoardSpacing}mm)`);
-  } else if (actualBoardSpacing > profile.maxBoardSpacing && numberOfBoards > 1) {
-    errors.push(`Razmik med deskami (${actualBoardSpacing.toFixed(1)}mm) je večji od maksimalnega (${profile.maxBoardSpacing}mm)`);
+  // Only check spacing for multiple boards
+  if (numberOfBoards > 1) {
+    if (actualBoardSpacing < profile.minBoardSpacing) {
+      errors.push(`Razmik med deskami (${actualBoardSpacing.toFixed(1)}mm) je manjši od minimalnega (${profile.minBoardSpacing}mm)`);
+    } else if (actualBoardSpacing > profile.maxBoardSpacing) {
+      errors.push(`Razmik med deskami (${actualBoardSpacing.toFixed(1)}mm) je večji od maksimalnega (${profile.maxBoardSpacing}mm)`);
+    }
   }
   
   // Calculate material with cutting plan
