@@ -5,10 +5,11 @@
  * Supports natural language input and manual configuration.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ROKSAL_PROFILES, ROKSAL_COLORS, getProfileById } from '../data/roksalCatalog';
 import type { RoksalProfile, RoksalColor } from '../data/roksalCatalog';
 import { parseFenceConfiguration, validateConfiguration, getExamplePrompts } from '../utils/naturalLanguageParser';
+import { calculateFenceConstruction, validateFenceConfiguration } from '../utils/fenceConstruction';
 
 interface FenceConfiguratorProps {
   onClose?: () => void;
@@ -75,36 +76,31 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
     }
   }, []);
 
-  // Calculate number of boards
-  const calculateBoards = () => {
-    if (!selectedProfile) return 0;
-    
-    const boardWidth = selectedProfile.width;
-    const totalWidth = orientation === 'vertical' ? fenceLength : fenceHeight;
-    const boardCount = Math.floor(totalWidth / (boardWidth + boardSpacing));
-    
-    return boardCount;
-  };
-
-  // Calculate estimated material
-  const calculateMaterial = () => {
+  // Calculate construction using technical rules
+  const construction = useMemo(() => {
     if (!selectedProfile) return null;
+    
+    return calculateFenceConstruction({
+      profile: selectedProfile,
+      orientation,
+      fenceHeight,
+      fenceLength,
+      boardSpacing
+    });
+  }, [selectedProfile, orientation, fenceHeight, fenceLength, boardSpacing]);
 
-    const boardCount = calculateBoards();
-    const boardLength = orientation === 'vertical' ? fenceHeight : fenceLength;
-    const totalLength = boardCount * boardLength;
-    const profileLength = selectedProfile.length;
-    const profilesNeeded = Math.ceil(totalLength / profileLength);
-
-    return {
-      boards: boardCount,
-      totalLength: totalLength,
-      profilesNeeded: profilesNeeded,
-      waste: (profilesNeeded * profileLength) - totalLength
-    };
-  };
-
-  const material = calculateMaterial();
+  // Validate configuration
+  const validation = useMemo(() => {
+    if (!selectedProfile) return null;
+    
+    return validateFenceConfiguration({
+      profile: selectedProfile,
+      orientation,
+      fenceHeight,
+      fenceLength,
+      boardSpacing
+    });
+  }, [selectedProfile, orientation, fenceHeight, fenceLength, boardSpacing]);
   const examplePrompts = getExamplePrompts();
 
   return (
@@ -324,24 +320,40 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
             </div>
 
             {/* Validation Results */}
-            {validationResult && (
+            {validation && (
               <div className="bg-slate-900 rounded-lg p-4">
                 <h3 className="text-sm font-semibold text-slate-300 mb-2">
-                  {validationResult.valid ? '✓ Konfiguracija je veljavna' : '✗ Napake v konfiguraciji'}
+                  {validation.valid ? '✓ Konfiguracija je veljavna' : '✗ Napake v konfiguraciji'}
                 </h3>
-                {validationResult.errors.length > 0 && (
-                  <ul className="text-xs text-red-400 space-y-1">
-                    {validationResult.errors.map((error: string, i: number) => (
-                      <li key={i}>• {error}</li>
-                    ))}
-                  </ul>
+                {validation.errors.length > 0 && (
+                  <div className="mb-2">
+                    <p className="text-xs text-red-400 mb-1">Napake:</p>
+                    <ul className="text-xs text-red-400 space-y-1">
+                      {validation.errors.map((error: string, i: number) => (
+                        <li key={i}>• {error}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
-                {validationResult.warnings.length > 0 && (
-                  <ul className="text-xs text-amber-400 space-y-1 mt-2">
-                    {validationResult.warnings.map((warning: string, i: number) => (
-                      <li key={i}>• {warning}</li>
-                    ))}
-                  </ul>
+                {validation.warnings.length > 0 && (
+                  <div className="mb-2">
+                    <p className="text-xs text-amber-400 mb-1">Opozorila:</p>
+                    <ul className="text-xs text-amber-400 space-y-1">
+                      {validation.warnings.map((warning: string, i: number) => (
+                        <li key={i}>• {warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {validation.recommendations.length > 0 && (
+                  <div>
+                    <p className="text-xs text-blue-400 mb-1">Priporočila:</p>
+                    <ul className="text-xs text-blue-400 space-y-1">
+                      {validation.recommendations.map((rec: string, i: number) => (
+                        <li key={i}>• {rec}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             )}
@@ -376,35 +388,64 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
               </div>
             </div>
 
-            {/* Material Summary */}
-            {material && selectedProfile && (
+            {/* Construction Summary */}
+            {construction && selectedProfile && (
               <div className="bg-slate-900 rounded-lg p-4">
                 <h3 className="text-sm font-semibold text-slate-300 mb-3">
-                  📊 Povzetek materiala
+                  📊 Povzetek konstrukcije
                 </h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
+                    <span className="text-slate-400">Število stebričkov:</span>
+                    <span className="text-white font-medium">{construction.numberOfPosts}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Razmak stebričkov:</span>
+                    <span className={`font-medium ${construction.postSpacingValid ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {construction.actualPostSpacing}mm
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Število nosilcev:</span>
+                    <span className="text-white font-medium">{construction.numberOfBeams}</span>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-slate-400">Število desk:</span>
-                    <span className="text-white font-medium">{material.boards}</span>
+                    <span className="text-white font-medium">{construction.numberOfBoards}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Skupna dolžina:</span>
-                    <span className="text-white font-medium">
-                      {(material.totalLength / 1000).toFixed(2)} m
+                    <span className="text-slate-400">Razmik med deskami:</span>
+                    <span className={`font-medium ${construction.boardSpacingValid ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {construction.actualBoardSpacing}mm
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Potrebnih profilov:</span>
-                    <span className="text-white font-medium">
-                      {material.profilesNeeded} × {(selectedProfile.length / 1000).toFixed(1)}m
-                    </span>
+                  <div className="border-t border-slate-700 pt-2 mt-2">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Skupna dolžina desk:</span>
+                      <span className="text-white font-medium">
+                        {(construction.totalBoardLength / 1000).toFixed(2)} m
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Potrebnih profilov:</span>
+                      <span className="text-white font-medium">
+                        {construction.profilesNeeded} × {(construction.profileLength / 1000).toFixed(1)}m
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Odpad:</span>
+                      <span className="text-white font-medium">
+                        {(construction.waste / 1000).toFixed(2)} m
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Odpad:</span>
-                    <span className="text-white font-medium">
-                      {(material.waste / 1000).toFixed(2)} m
-                    </span>
-                  </div>
+                  {construction.requiresAluminumTube && (
+                    <div className="bg-amber-900/30 border border-amber-700 rounded p-2 mt-2">
+                      <p className="text-xs text-amber-200">
+                        ⚠️ Potrebna aluminijasta cev za ROMB profil
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -424,7 +465,7 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Max razmak stebrov:</span>
-                    <span className="text-white">{selectedProfile.maxSpacing}mm</span>
+                    <span className="text-white">{selectedProfile.maxPostSpacing}mm</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Vijačenje:</span>
@@ -446,6 +487,16 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
                        'Pokončno ali prečno'}
                     </span>
                   </div>
+                  {selectedProfile.technicalNotes && selectedProfile.technicalNotes.length > 0 && (
+                    <div className="border-t border-slate-700 pt-2 mt-2">
+                      <p className="text-slate-400 mb-1">Tehnične opombe:</p>
+                      <ul className="text-slate-300 space-y-1">
+                        {selectedProfile.technicalNotes.map((note, i) => (
+                          <li key={i} className="text-xs">• {note}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

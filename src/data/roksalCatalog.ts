@@ -30,13 +30,22 @@ export interface RoksalProfile {
   thickness: number; // mm
   length: number; // mm
   orientation: 'vertical' | 'horizontal' | 'both';
-  maxSpacing: number; // mm - maksimalni razmak med stebri
+  maxPostSpacing: number; // mm - maksimalni razmak med stebrički
+  maxBeamSpacing: number; // mm - maksimalni razmak med vodoravnimi nosilci
+  minBoardSpacing: number; // mm - minimalni razmik med deskami
+  maxBoardSpacing: number; // mm - maksimalni razmik med deskami
+  recommendedBoardSpacing: number; // mm - priporočen razmik med deskami
   screwVisible: boolean;
+  screwSide: 'front' | 'back' | 'both'; // stran vijačenja
   hasAluminumTube: boolean;
+  requiresAluminumTube: boolean; // ali profil zahteva ALU cev
+  maxPostSpacingLow: number; // mm - max razmak stebričkov za ograje do 150cm
+  maxPostSpacingHigh: number; // mm - max razmak stebričkov za ograje nad 150cm
   colors: RoksalColor[];
   verified: boolean;
   source: string;
   notes?: string;
+  technicalNotes?: string[]; // dodatne tehnične opombe
 }
 
 // Color definitions based on official Roksal color palettes
@@ -125,9 +134,17 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     thickness: 32,
     length: 5800,
     orientation: 'vertical',
-    maxSpacing: 1500,
+    maxPostSpacing: 1500, // max razmak stebričkov ne glede na višino
+    maxBeamSpacing: 1000, // max razmak vodoravnih nosilcev
+    minBoardSpacing: 5,
+    maxBoardSpacing: 30,
+    recommendedBoardSpacing: 20,
     screwVisible: false,
+    screwSide: 'back',
     hasAluminumTube: false,
+    requiresAluminumTube: false,
+    maxPostSpacingLow: 1500, // do 150cm višine
+    maxPostSpacingHigh: 1500, // nad 150cm višine
     colors: [
       ROKSAL_COLORS['amazon-wood'],
       ROKSAL_COLORS['ash-wood'],
@@ -135,8 +152,14 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
       ROKSAL_COLORS['golden-teak']
     ],
     verified: true,
-    source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'Skrito vijačenje skozi cev iz zadnje strani. Montaža na širino 57mm ali 32mm. Samo za pokončno ograjo.'
+    source: 'https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-ograja-pokoncna/',
+    notes: 'Skrito vijačenje skozi cev iz zadnje strani. Montaža na širino 57mm ali 32mm. Samo za pokončno ograjo.',
+    technicalNotes: [
+      'Vijak naj bo približno 2/3 globine profila',
+      'Predvrtanje obvezno - luknja 1mm večja od vijaka',
+      'Maksimalni razmak med stebrički: 150cm ne glede na višino ograje',
+      'Maksimalni razmak med vodoravnimi nosilci: 100cm'
+    ]
   },
   
   // POLNA DESKA 100 - Vertical only, visible screwing
@@ -147,9 +170,17 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     thickness: 12,
     length: 5800,
     orientation: 'vertical',
-    maxSpacing: 2000,
+    maxPostSpacing: 1800, // max razmak stebričkov (do 150cm višine)
+    maxBeamSpacing: 800, // max razmak vodoravnih nosilcev
+    minBoardSpacing: 5,
+    maxBoardSpacing: 30,
+    recommendedBoardSpacing: 20,
     screwVisible: true,
+    screwSide: 'front',
     hasAluminumTube: false,
+    requiresAluminumTube: false,
+    maxPostSpacingLow: 1800, // do 150cm višine
+    maxPostSpacingHigh: 1500, // nad 150cm višine
     colors: [
       ROKSAL_COLORS['amazon-wood'],
       ROKSAL_COLORS['ash-wood'],
@@ -160,7 +191,15 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     ],
     verified: true,
     source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'Vijačenje vidno iz lica - OBVEZNO vijačenje iz lica. Samo za pokončno ograjo. Dolžina 5.8m, reže se na poljubne dolžine.'
+    notes: 'Vijačenje vidno iz lica - OBVEZNO vijačenje iz lica. Samo za pokončno ograjo. Dolžina 5.8m, reže se na poljubne dolžine.',
+    technicalNotes: [
+      'OBVEZNO vijačenje iz lica (vidno)',
+      'Predvrtanje obvezno - luknja 1mm večja od vijaka',
+      'Maksimalni razmak med stebrički: 180cm za ograje do 150cm višine',
+      'Maksimalni razmak med stebrički: 150cm za ograje nad 150cm višine',
+      'Maksimalni razmak med vodoravnimi nosilci: 80cm',
+      'Priporočen razmik med deskami: 0.5-3cm'
+    ]
   },
   
   // ROMB DESKA 67 - Both orientations, hidden screwing with aluminum tube
@@ -171,9 +210,17 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     thickness: 26,
     length: 5800,
     orientation: 'both',
-    maxSpacing: 1450,
+    maxPostSpacing: 1450, // max razmak stebričkov (prečna postavitev)
+    maxBeamSpacing: 1100, // max razmak vodoravnih nosilcev (pokončna postavitev)
+    minBoardSpacing: 5,
+    maxBoardSpacing: 30,
+    recommendedBoardSpacing: 20,
     screwVisible: false,
+    screwSide: 'back',
     hasAluminumTube: true,
+    requiresAluminumTube: true, // OBVEZNA aluminijasta cev!
+    maxPostSpacingLow: 1450, // do 150cm višine
+    maxPostSpacingHigh: 1450, // nad 150cm višine
     colors: [
       ROKSAL_COLORS['amazon-wood'],
       ROKSAL_COLORS['ash-wood'],
@@ -184,7 +231,18 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     ],
     verified: true,
     source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'OPOZORILO: MONTAŽA BREZ ALU CEVI NI MOŽNA! Skrito vijačenje skozi aluminijasto cev. Primerna za pokončno in prečno ograjo. Dolžina 5.8m.'
+    notes: 'OPOZORILO: MONTAŽA BREZ ALU CEVI NI MOŽNA! Skrito vijačenje skozi aluminijasto cev. Primerna za pokončno in prečno ograjo. Dolžina 5.8m.',
+    technicalNotes: [
+      '⚠️ OPOZORILO: MONTAŽA BREZ ALUMINIJASTE CEVI NI MOŽNA!',
+      'Aluminijasta cev je obvezna in že vključena v ceno',
+      'Skrito vijačenje z zadnje strani skozi aluminijasto cev',
+      'Potrebni so ustrezni kotniki levo in desno na stebričkih',
+      'Maksimalni razmak med stebrički (prečna): 145cm',
+      'Maksimalni razmak med vodoravnimi nosilci (pokončna): 110cm',
+      'Pri razmaku nad 145cm (prečna) potrebna dodatna povezava do 180cm',
+      'Pri razmaku 180cm ali več (prečna) potreben dodatni stebriček',
+      'Priporočen razmik med deskami: 0.5-3cm'
+    ]
   },
   
   // DESKA 150 - Horizontal only (terrace board), visible screwing
@@ -195,9 +253,17 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     thickness: 25,
     length: 4000,
     orientation: 'horizontal',
-    maxSpacing: 1400,
+    maxPostSpacing: 1300, // max razmak stebričkov (varnejši podatek)
+    maxBeamSpacing: 1300, // max razmak vodoravnih nosilcev
+    minBoardSpacing: 5,
+    maxBoardSpacing: 30,
+    recommendedBoardSpacing: 20,
     screwVisible: true,
+    screwSide: 'front',
     hasAluminumTube: false,
+    requiresAluminumTube: false,
+    maxPostSpacingLow: 1300, // do 150cm višine
+    maxPostSpacingHigh: 1300, // nad 150cm višine
     colors: [
       ROKSAL_COLORS['amazon-wood'],
       ROKSAL_COLORS['ash-wood'],
@@ -208,7 +274,15 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     ],
     verified: true,
     source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'Terasna deska za prečno ograjo. Vijačenje vidno iz lica. Na voljo v dolžinah 4m in 2.2m. Stebrički na max 140cm razmiku.'
+    notes: 'Terasna deska za prečno ograjo. Vijačenje vidno iz lica. Na voljo v dolžinah 4m in 2.2m.',
+    technicalNotes: [
+      'Vijačenje vidno iz lica - skozi desko v konstrukcijo',
+      'Predvrtanje obvezno - luknja 1mm večja od vijaka',
+      'Maksimalni razmak med stebrički: 130cm (varnejši podatek)',
+      'Opomba: Spletna stran navaja 133-140cm, uporabljamo 130cm za varnost',
+      'Na voljo v dolžinah 4000mm in 2200mm',
+      'Priporočen razmik med deskami: 0.5-3cm'
+    ]
   },
   
   // POLNA DESKA 128 - Both orientations (from website, not in PDF)
@@ -219,9 +293,17 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     thickness: 16.5,
     length: 2200,
     orientation: 'both',
-    maxSpacing: 1100,
+    maxPostSpacing: 1100, // max razmak stebričkov (prečna postavitev)
+    maxBeamSpacing: 1000, // max razmak vodoravnih nosilcev (pokončna postavitev)
+    minBoardSpacing: 5,
+    maxBoardSpacing: 30,
+    recommendedBoardSpacing: 20,
     screwVisible: true,
+    screwSide: 'front',
     hasAluminumTube: false,
+    requiresAluminumTube: false,
+    maxPostSpacingLow: 1100, // do 150cm višine
+    maxPostSpacingHigh: 1100, // nad 150cm višine
     colors: [
       ROKSAL_COLORS['anthracite'],
       ROKSAL_COLORS['white'],
@@ -232,7 +314,16 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     ],
     verified: true,
     source: 'https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/',
-    notes: 'Vijačenje vidno iz lica. Primerna za pokončno in prečno ograjo. Samo spletna stran - ni v PDF katalogu.'
+    notes: 'Vijačenje vidno iz lica. Primerna za pokončno in prečno ograjo. Samo spletna stran - ni v PDF katalogu.',
+    technicalNotes: [
+      'Vijačenje vidno iz lica - skozi desko v konstrukcijo',
+      'Predvrtanje obvezno - luknja 1mm večja od vijaka',
+      'Maksimalni razmak med stebrički (prečna): 110cm',
+      'Maksimalni razmak med vodoravnimi nosilci (pokončna): 100cm',
+      'Standardna dolžina: 2200mm',
+      'Priporočen razmik med deskami: 0.5-3cm',
+      'Opomba: Podatki samo iz spletne strani, niso v PDF katalogu'
+    ]
   }
 ];
 
