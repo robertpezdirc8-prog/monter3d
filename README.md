@@ -24,16 +24,22 @@ Profesionalna spletna aplikacija za monterje WPC ograj Roksal. Omogoča zajem fo
 - **📄 Izvoz poročil** - PDF in CSV izvoz meritev in materiala
 - **🔍 Naravni jezik** - Konfiguracija ograj z naravnim jezikom (slovenščina)
 
+### 🆕 Perspektivna vizualizacija (Faza 7)
+
+- **📐 Perspektivni Visualizer** - Označite 4 vogale ograje za perspektivno poravnan predogled
+- **🔧 OpenCV.js** - Preverjeni algoritmi za perspektivno transformacijo (Apache 2.0)
+- **📏 Natančne meritve** - Merilna napaka < 50mm na testnih primerih
+
 ### ⚠️ Približki (zahtevajo validacijo)
 
 - **🗺️ Pokritost fotografij** - Avtomatska analiza pokritosti (približek, ne natančna rekonstrukcija)
 - **🔗 Povezovanje fotografij** - Feature matching med zaporednimi slikami (osnovna implementacija)
 - **🏗️ Vizualizacija ograj** - 2D približek na fotografiji (NE upošteva perspektive)
 
-### ❌ Ni implementirano
+### ❌ Ni implementirano (glej docs/3D-ARCHITECTURE.md)
 
-- **3D rekonstrukcija** - Prava 3D rekonstrukcija iz fotografij (potrebuje COLMAP ali podobno)
-- **AR meritve** - Augmented reality meritve v realnem času
+- **3D rekonstrukcija** - Prava 3D rekonstrukcija iz fotografij (predlagan COLMAP + Open3D kot ločen backend)
+- **AR meritve** - Augmented reality meritve v realnem času (predlagana ARCore Depth API za Android)
 - **Samodejno prepoznavanje objektov** - AI-based detekcija ograj in objektov
 
 ## 🚀 Namestitev
