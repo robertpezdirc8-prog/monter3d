@@ -16,6 +16,7 @@ import { MathTestRunner } from './components/MathTestRunner';
 import { CameraCapture } from './components/CameraCapture';
 import { MeasurementOverlay } from './components/MeasurementOverlay';
 import { MeasurementAccuracyTests } from './components/MeasurementAccuracyTests';
+import { GuidedCapture } from './components/GuidedCapture';
 import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId } from './utils/storage';
 
 // Icons as simple SVG components
@@ -78,6 +79,7 @@ function App() {
   const [showCamera, setShowCamera] = useState(false);
   const [showMeasurement, setShowMeasurement] = useState(false);
   const [showAccuracyTests, setShowAccuracyTests] = useState(false);
+  const [capturedSteps, setCapturedSteps] = useState<string[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -179,7 +181,9 @@ function App() {
             quality,
             coverage: 0,
             status: quality.overallScore > 0.4 ? 'analyzed' : 'rejected',
-            rejectionReason: quality.overallScore <= 0.4 ? 'Nizka kakovost slike' : undefined
+            rejectionReason: quality.overallScore <= 0.4 ? 'Nizka kakovost slike' : undefined,
+            width: img.width,
+            height: img.height
           };
 
           setPhotos(prev => [...prev, photo]);
@@ -210,7 +214,7 @@ function App() {
   }, [selectedPhoto, currentProject]);
 
   // Handle camera capture
-  const handleCameraCapture = useCallback((dataUrl: string, quality: ImageQuality) => {
+  const handleCameraCapture = useCallback((dataUrl: string, quality: ImageQuality, stepId?: string) => {
     const img = new Image();
     img.onload = () => {
       const photo: Photo = {
@@ -220,12 +224,19 @@ function App() {
         quality,
         coverage: 0,
         status: quality.overallScore > 0.4 ? 'analyzed' : 'rejected',
-        rejectionReason: quality.overallScore <= 0.4 ? 'Nizka kakovost slike' : undefined
+        rejectionReason: quality.overallScore <= 0.4 ? 'Nizka kakovost slike' : undefined,
+        width: img.width,
+        height: img.height
       };
 
       setPhotos(prev => [...prev, photo]);
       if (!selectedPhoto) setSelectedPhoto(photo);
       setShowCamera(false);
+      
+      // Mark step as captured if this is part of guided capture
+      if (stepId) {
+        setCapturedSteps(prev => [...prev, stepId]);
+      }
 
       // Save to IndexedDB if project exists
       if (currentProject) {
@@ -718,6 +729,13 @@ function App() {
               showInstructions={showInstructions}
               onToggleInstructions={() => setShowInstructions(!showInstructions)}
               onOpenCamera={() => setShowCamera(true)}
+              objectType={currentProject?.objectType || 'fence'}
+              capturedSteps={capturedSteps}
+              onCaptureStep={(stepId) => {
+                // Open camera for this step
+                setShowCamera(true);
+                // Note: stepId will be passed to handleCameraCapture when photo is taken
+              }}
             />
           )}
 
@@ -775,8 +793,8 @@ function App() {
                   </h3>
                   <MeasurementOverlay
                     imageUrl={selectedPhoto.dataUrl}
-                    imageWidth={800} // Default, will be scaled
-                    imageHeight={600}
+                    imageWidth={selectedPhoto.width || 800}
+                    imageHeight={selectedPhoto.height || 600}
                   />
                 </div>
               )}
@@ -967,7 +985,7 @@ function NewProjectView({ onCreateProject, projects }: {
   );
 }
 
-function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPhoto, onAnalyze, canvasRef, showInstructions, onToggleInstructions, onOpenCamera }: {
+function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPhoto, onAnalyze, canvasRef, showInstructions, onToggleInstructions, onOpenCamera, objectType, capturedSteps, onCaptureStep }: {
   photos: Photo[];
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   fileInputRef: React.RefObject<HTMLInputElement>;
@@ -978,6 +996,9 @@ function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPh
   showInstructions: boolean;
   onToggleInstructions: () => void;
   onOpenCamera: () => void;
+  objectType: ObjectType;
+  capturedSteps: string[];
+  onCaptureStep: (stepId: string) => void;
 }) {
   return (
     <div>
@@ -1004,6 +1025,15 @@ function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPh
           </ul>
         </div>
       )}
+
+      {/* Guided Capture */}
+      <div className="mb-4">
+        <GuidedCapture
+          objectType={objectType}
+          capturedSteps={capturedSteps}
+          onCaptureStep={onCaptureStep}
+        />
+      </div>
 
       {/* Camera and Upload buttons */}
       <div className="grid grid-cols-2 gap-3 mb-4">
@@ -1076,8 +1106,8 @@ function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPh
         <div className="mt-4">
           <CameraGuide
             quality={selectedPhoto.quality}
-            coverage={photos.length > 0 ? Math.min(photos.length * 15, 100) : 0}
-            trackingStable={selectedPhoto.quality.overallScore > 0.5}
+            photoCount={photos.length}
+            imageStable={selectedPhoto.quality.overallScore > 0.5}
           />
         </div>
       )}

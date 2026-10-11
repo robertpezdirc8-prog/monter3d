@@ -231,27 +231,27 @@ interface CameraGuideProps {
     glareDetected: boolean;
     overallScore: number;
   } | null;
-  coverage: number;
-  trackingStable: boolean;
+  photoCount: number;
+  imageStable: boolean;
   featureCount?: number;
 }
 
-export function CameraGuide({ quality, coverage, trackingStable, featureCount }: CameraGuideProps) {
+export function CameraGuide({ quality, photoCount, imageStable, featureCount }: CameraGuideProps) {
   const messages: string[] = [];
 
   if (!quality) {
     messages.push('📷 Pripravite kamero in začnite zajem.');
   } else {
-    if (quality.sharpness < 0.4) messages.push('⚡ Premikaj se počasneje — slika je zamegljena.');
+    if (quality.sharpness < 0.4) messages.push('⚡ Slika je zamegljena — poskusite ponovno.');
     if (quality.brightness < 0.3) messages.push('💡 Premalo svetlobe — poiščite boljšo pozicijo.');
     if (quality.brightness > 0.8) messages.push('☀️ Preveč svetlobe — izogibajte se direktnemu soncu.');
     if (quality.glareDetected) messages.push('🔆 Zaznano bleščanje — spremenite kot.');
-    if (!trackingStable) messages.push('🔄 Sledenje je nestabilno — upočasnite premik.');
+    if (!imageStable) messages.push('📸 Slika ni dovolj ostra — poskusite ponovno.');
     if (featureCount !== undefined && featureCount < 10) {
       messages.push('📸 Premalo značilk — poiščite območje z več teksture.');
     }
-    if (coverage < 30) messages.push('📸 Naredi vmesni posnetek — pokritost je nizka.');
-    if (quality.overallScore > 0.7 && trackingStable) messages.push('✅ Kakovost je dobra — nadaljujte.');
+    if (photoCount < 2) messages.push('📸 Zajemite vsaj 2 fotografiji za boljšo pokritost.');
+    if (quality.overallScore > 0.7 && imageStable) messages.push('✅ Kakovost je dobra — nadaljujte.');
   }
 
   return (

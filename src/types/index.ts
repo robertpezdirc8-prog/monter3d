@@ -29,6 +29,8 @@ export interface Photo {
   coverage: number;
   status: 'pending' | 'analyzed' | 'accepted' | 'rejected';
   rejectionReason?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface CameraPosition {
