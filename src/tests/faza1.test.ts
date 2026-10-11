@@ -28,21 +28,22 @@ describe('calculateFencePlan — model panelov (rezanje na mero)', () => {
   it('robni primer 2,5 m / panel 1,8 m / steber 0,06 m: NE sme nastati panel 2,38 m', () => {
     // Stara implementacija (Math.round(idealN)=round(1.344)=1) je dala N=1 in dejansko
     // sirino (2.5 - 2*0.06)/1 = 2.38 m — tiho nad dimenzijo profila 1.8 m.
-    // Novo: ceil -> N=2; en sam steber (0,06 m) ne more drzati 2,38 m šiwnega panela,
-    // zato algoritem doda VMESNI STEBER (model: vsak razpon med sosednjima stebroma je
-    // panel sirine <= nominalna + toleranca).
+    // Novo: ceil -> N=2 razpona, 3 stebri; preostanek se enakomerno porazdeli med
+    // VSE razpone: vsak panel = (2.5 - 3*0.06)/2 = 1.16 m <= nominalna 1.8 m.
     const plan = calculateFencePlan([seg(0, 0, 2.5, 0)], CONFIG);
     expect(plan.errors).toBeUndefined();
     expect(plan.segments[0].numPanels).toBe(2);
     expect(plan.segments[0].numPosts).toBe(3);
-    // Dejanska sirina = (2.5 - 3*0.06)/2 = 1.34 m <= nominalna 1.8 m (krajšani rezani paneli)
-    expect(plan.segments[0].panelWidth).toBeCloseTo(1.34, 5);
+    // Dejanska sirina = (2.5 - 3*0.06)/2 = 1.16 m (enakomerno krajšani rezani paneli)
+    expect(plan.segments[0].panelWidth).toBeCloseTo(1.16, 10);
     expect(plan.segments[0].nominalPanelWidth).toBe(1.8);
-    // Identiteta modela velja:
+    // Identiteta modela velja TOČNO:
     const s = plan.segments[0];
     expect(s.numPanels * s.panelWidth + s.numPosts * CONFIG.postWidth).toBeCloseTo(2.5, 10);
     // In DEJANSKA sirina nikoli ne preseze nominalne (brez tihega raztezanja nad profil):
     expect(s.panelWidth).toBeLessThanOrEqual(CONFIG.panelWidth + 1e-9);
+    // Ker 1,16 < nominalna - maxGap, mora biti uporabnik obveščen o krajšanem panelu:
+    expect(plan.warnings?.some(w => /1\.16/.test(w))).toBe(true);
   });
 
   it('natančno izmenjan razpored (L točno ustreza modelu): brez odrezanega panela', () => {
@@ -144,7 +145,7 @@ describe('calculateFencePlan — model panelov (rezanje na mero)', () => {
 });
 
 describe('estimateFenceMaterials — skladnost z načrtom in enote cen', () => {
-  const prices = { panelPricePerM: 85, postPriceEach: 45, railPricePerM: 12, fastenerPriceEach: 0.5, endCapPriceEach: 8 };
+  const prices = { panelPricePerM2: 85, postPriceEach: 45, railPricePerM: 12, fastenerPriceEach: 0.5, endCapPriceEach: 8 };
 
   it('iz nacrta z NAPAKO ne nastane predračun (prazna lista)', () => {
     const badPlan = calculateFencePlan([{ startPoint: [NaN, 0], endPoint: [2, 0], heightChange: 0 }], CONFIG);
@@ -152,7 +153,7 @@ describe('estimateFenceMaterials — skladnost z načrtom in enote cen', () => {
     expect(estimateFenceMaterials(badPlan, prices)).toEqual([]);
   });
 
-  it('enota panelPricePerM = EUR/m²: enotska cena kosa = cena/m² × širina × višina', () => {
+  it('enota panelPricePerM2 = EUR/m²: enotska cena kosa = cena/m² × širina × višina', () => {
     const plan = calculateFencePlan([seg(0, 0, 5.5, 0)], CONFIG);
     const items = estimateFenceMaterials(plan, prices);
     const panels = items.find(i => i.category === 'panels')!;

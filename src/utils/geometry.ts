@@ -75,10 +75,20 @@ export function calculateFencePlan(
         mountingType = Math.abs(slope) > config.slopeThreshold ? 'stepped' : 'level';
       }
 
-      // N najmanjše število panelov, da dejanska širina <= nominalna (brez tihega raztezanja).
+      // N je najmanjše število RAZPONOV (panel + steber), ki pokrije dolžino:
+      //   N >= (L - postWidth) / (panelWidth + postWidth)
+      // Uporabljen je ceil — NE round — sicer premalo razponov tiho proizvede panel,
+      // širši od profila (npr. L=2,5 m / profil 1,8 m / steber 0,06 m: round(1,34)=1
+      // -> panel (2,5-2*0,06)/1 = 2,38 m, kar krši dimenzijo sistema).
+      // EPS (1e-9 m = 1 nm) je IZKLJUČNO toleranca plavajoče vejice: pri točno zveznem
+      // razporedu (L=3,78 m) je idealN zaradi binarnega predstavljanja lahko
+      // 1.9999999999999998 in bi ga ceil napačno dvignil na 3. Ne prikriva nobene
+      // resnične razlike v merah — merjene razlike so > 1e-6 m (mm resolucija).
       const idealN = (horizontalLength - config.postWidth) / effectiveWidth;
       const numPanels = Math.max(1, Math.ceil(idealN - EPS));
       const numPosts = numPanels + 1;
+      // Preostanek se enakomerno porazdeli med VSE razpone: vsak panel je
+      // (L - (N+1)*postWidth)/N <= nominalna širina profila (validacija spodaj).
       const actualPanelWidth = (horizontalLength - numPosts * config.postWidth) / numPanels;
 
       // Pravilnost: realni razmik sme ODSTOPATI navzdol (krajši rezani panel),
@@ -272,7 +282,7 @@ export function calculateTerrainPlan(
 
 // Material estimation for fence
 // ENOTE CEN (FAZA 1, jasno definirane):
-//   panelPricePerM  = EUR na kvadratni METER panela (m²) — poslovna definicija WPC panelnih
+//   panelPricePerM2  = EUR na kvadratni METER panela (m²) — poslovna definicija WPC panelnih
 //                     sistemov; enotska cena kosa = cena/m² × (širina × višina panela).
 //   railPricePerM   = EUR na TEKOČI METER letve.
 //   post/fastener/endCap = EUR na kos.
@@ -280,7 +290,7 @@ export function calculateTerrainPlan(
 // rezanih panelov — kupujemo celne panele, reže se na terenu. Količine stebrov upoštevajo
 // že odštete vogalne stebre iz nacrta (plan.totalPosts).
 export function estimateFenceMaterials(plan: FencePlan, materials: {
-  panelPricePerM: number; // EUR/m²
+  panelPricePerM2: number; // EUR/m²
   postPriceEach: number;
   railPricePerM: number; // EUR/tekm
   fastenerPriceEach: number;
@@ -299,12 +309,12 @@ export function estimateFenceMaterials(plan: FencePlan, materials: {
   if (!isFinite(plan.panelHeight) || plan.panelHeight <= 0) return [];
 
   // Validate material prices
-  if (!isFinite(materials.panelPricePerM) || materials.panelPricePerM < 0) return [];
+  if (!isFinite(materials.panelPricePerM2) || materials.panelPricePerM2 < 0) return [];
   if (!isFinite(materials.postPriceEach) || materials.postPriceEach < 0) return [];
 
   const panelAreaM2 = plan.panelWidth * plan.panelHeight;
   const panelQuantity = Math.max(1, Math.ceil(plan.totalPanels * (1 + wastePercent)));
-  const panelUnitPrice = materials.panelPricePerM * panelAreaM2;
+  const panelUnitPrice = materials.panelPricePerM2 * panelAreaM2;
 
   if (!isFinite(panelAreaM2) || !isFinite(panelUnitPrice)) return [];
   

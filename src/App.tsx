@@ -554,7 +554,7 @@ function App() {
 
     // Calculate materials
     const materialItems = estimateFenceMaterials(plan, {
-      panelPricePerM: 85,
+      panelPricePerM2: 85,
       postPriceEach: 45,
       railPricePerM: 12,
       fastenerPriceEach: 0.5,
