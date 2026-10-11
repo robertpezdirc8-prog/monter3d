@@ -42,11 +42,14 @@ export function CoverageMapView({ photos, gridSize = 6 }: CoverageMapProps) {
     for (const photo of photosWithFeatures) {
       if (!photo.features) continue;
 
+      // Use actual image dimensions for proper normalization
+      const imgWidth = photo.width || 1000;
+      const imgHeight = photo.height || 1000;
+
       for (const feature of photo.features) {
-        // Normalize feature position to 0-1 range (assuming features are in pixel coordinates)
-        // We need to know image dimensions, but we'll use relative positions
-        const normalizedX = feature.x / 1000; // Approximate normalization
-        const normalizedY = feature.y / 1000;
+        // Normalize feature position to 0-1 range using actual image dimensions
+        const normalizedX = feature.x / imgWidth;
+        const normalizedY = feature.y / imgHeight;
         
         // Clamp to 0-1
         const nx = Math.max(0, Math.min(1, normalizedX));

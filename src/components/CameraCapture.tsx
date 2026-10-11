@@ -11,11 +11,12 @@ import { assessImageQuality } from '../utils/cv';
 import type { ImageQuality } from '../types';
 
 interface CameraCaptureProps {
-  onCapture: (dataUrl: string, quality: ImageQuality) => void;
+  onCapture: (dataUrl: string, quality: ImageQuality, stepId?: string) => void;
   onClose?: () => void;
+  stepId?: string;
 }
 
-export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
+export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -133,9 +134,9 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
   // Confirm captured photo
   const confirmCapture = useCallback(() => {
     if (capturedImage && capturedQuality) {
-      onCapture(capturedImage, capturedQuality);
+      onCapture(capturedImage, capturedQuality, stepId);
     }
-  }, [capturedImage, capturedQuality, onCapture]);
+  }, [capturedImage, capturedQuality, onCapture, stepId]);
 
   // Retake photo
   const retakePhoto = useCallback(() => {

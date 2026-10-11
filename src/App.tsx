@@ -17,6 +17,7 @@ import { CameraCapture } from './components/CameraCapture';
 import { MeasurementOverlay } from './components/MeasurementOverlay';
 import { MeasurementAccuracyTests } from './components/MeasurementAccuracyTests';
 import { GuidedCapture } from './components/GuidedCapture';
+import { PhotoMatchingView } from './components/PhotoMatchingView';
 import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId } from './utils/storage';
 
 // Icons as simple SVG components
@@ -80,6 +81,8 @@ function App() {
   const [showMeasurement, setShowMeasurement] = useState(false);
   const [showAccuracyTests, setShowAccuracyTests] = useState(false);
   const [capturedSteps, setCapturedSteps] = useState<string[]>([]);
+  const [currentCaptureStep, setCurrentCaptureStep] = useState<string | null>(null);
+  const [photoMatchings, setPhotoMatchings] = useState<any[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -258,6 +261,38 @@ function App() {
     };
     img.src = dataUrl;
   }, [selectedPhoto, currentProject]);
+
+  // Compute photo matchings
+  const computePhotoMatchings = useCallback(async () => {
+    if (photos.length < 2) {
+      setPhotoMatchings([]);
+      return;
+    }
+
+    try {
+      const { computeAllMatchings } = await import('./utils/photoMatching');
+      const matchings = await computeAllMatchings(photos);
+      
+      // Convert to format expected by PhotoMatchingView
+      const viewMatchings = matchings.map(m => ({
+        photo1: photos.find(p => p.id === m.photo1Id)!,
+        photo2: photos.find(p => p.id === m.photo2Id)!,
+        features1: m.features1,
+        features2: m.features2,
+        matches: m.matches,
+        inliers: m.inliers,
+        homography: m.homography,
+        reprojError: m.reprojError,
+        status: m.status,
+        message: m.message
+      }));
+      
+      setPhotoMatchings(viewMatchings);
+    } catch (err) {
+      console.error('Failed to compute matchings:', err);
+      setPhotoMatchings([]);
+    }
+  }, [photos]);
 
   // Analyze selected photo for features
   const analyzePhoto = useCallback((photo: Photo) => {
@@ -591,7 +626,11 @@ function App() {
       {showCamera && (
         <CameraCapture
           onCapture={handleCameraCapture}
-          onClose={() => setShowCamera(false)}
+          onClose={() => {
+            setShowCamera(false);
+            setCurrentCaptureStep(null);
+          }}
+          stepId={currentCaptureStep || undefined}
         />
       )}
 
@@ -732,9 +771,9 @@ function App() {
               objectType={currentProject?.objectType || 'fence'}
               capturedSteps={capturedSteps}
               onCaptureStep={(stepId) => {
-                // Open camera for this step
+                // Store step ID and open camera
+                setCurrentCaptureStep(stepId);
                 setShowCamera(true);
-                // Note: stepId will be passed to handleCameraCapture when photo is taken
               }}
             />
           )}
@@ -795,6 +834,27 @@ function App() {
                     imageUrl={selectedPhoto.dataUrl}
                     imageWidth={selectedPhoto.width || 800}
                     imageHeight={selectedPhoto.height || 600}
+                  />
+                </div>
+              )}
+
+              {/* Photo Matching */}
+              {photos.length >= 2 && (
+                <div className="mt-6 border-t border-slate-700 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-emerald-400">
+                      🔗 Povezovanje fotografij
+                    </h3>
+                    <button
+                      onClick={computePhotoMatchings}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors"
+                    >
+                      Izračunaj ujemanja
+                    </button>
+                  </div>
+                  <PhotoMatchingView
+                    matchings={photoMatchings}
+                    onSelectPhoto={setSelectedPhoto}
                   />
                 </div>
               )}

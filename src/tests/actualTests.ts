@@ -340,5 +340,90 @@ export function runActualTests(): TestResult[] {
     results.push({ name: 'End-to-end meritev', passed: false, error: String(e) });
   }
 
+  // Test 16: Homography with known transformation
+  try {
+    // Create points with known translation (10, 20)
+    const srcPoints: Point2D[] = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+      { x: 50, y: 50 }
+    ];
+    const dstPoints = srcPoints.map(p => ({ x: p.x + 10, y: p.y + 20 }));
+    
+    const result = estimateHomography(srcPoints, dstPoints);
+    
+    const passed = result !== null && 
+                   result.matrix.length === 9 &&
+                   result.rmse < 0.5;
+    
+    results.push({
+      name: 'Homografija: znana translacija (10, 20)',
+      passed,
+      expected: 'RMSE < 0.5',
+      actual: result ? `RMSE=${result.rmse.toFixed(4)}` : 'null'
+    });
+  } catch (e) {
+    results.push({ name: 'Homografija: znana translacija', passed: false, error: String(e) });
+  }
+
+  // Test 17: RANSAC with outliers
+  try {
+    const srcPoints: Point2D[] = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+      { x: 50, y: 50 },
+      { x: 200, y: 200 } // outlier
+    ];
+    const dstPoints = [
+      { x: 10, y: 20 },
+      { x: 110, y: 20 },
+      { x: 110, y: 120 },
+      { x: 10, y: 120 },
+      { x: 60, y: 70 },
+      { x: 999, y: 999 } // outlier destination
+    ];
+    
+    const result = ransacHomography(srcPoints, dstPoints, 100, 5.0);
+    
+    const passed = result !== null && result.inlierCount >= 4;
+    
+    results.push({
+      name: 'RANSAC: z outlierji (vsaj 4 inlierji)',
+      passed,
+      expected: '>= 4 inlierji',
+      actual: result ? `${result.inlierCount} inlierjev` : 'null'
+    });
+  } catch (e) {
+    results.push({ name: 'RANSAC: z outlierji', passed: false, error: String(e) });
+  }
+
+  // Test 18: Insufficient matches for homography
+  try {
+    // Only 3 points - not enough for homography
+    const srcPoints: Point2D[] = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 }
+    ];
+    const dstPoints = srcPoints.map(p => ({ x: p.x + 10, y: p.y + 20 }));
+    
+    const result = estimateHomography(srcPoints, dstPoints);
+    
+    const passed = result === null;
+    
+    results.push({
+      name: 'Homografija: premalo točk (3) → null',
+      passed,
+      expected: null,
+      actual: result
+    });
+  } catch (e) {
+    results.push({ name: 'Homografija: premalo točk', passed: false, error: String(e) });
+  }
+
   return results;
 }
