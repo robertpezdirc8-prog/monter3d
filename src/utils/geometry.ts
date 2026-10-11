@@ -2,11 +2,16 @@
 
 import type { FenceSegment, FencePlan, StairsPlan, StairStep, TerrainPlan, TerrainSegment, CostEstimate, MaterialItem } from '../types';
 
+const EPS = 1e-9;
+
 // Calculate fence plan from segments
-// NOTE: This function requires segments with explicit coordinates (startPoint, endPoint).
-// If only lengths are provided (without directions/angles), the geometry is incomplete.
-// The caller must ensure segments are properly connected and oriented.
-// Without direction data, corners and angles cannot be determined.
+// Model (FAZA 1, jasno dolocen): paneli se REZEJO NA MERO. N panelov + (N+1) stebrov
+// točno zapolnita dolžino: N*panelWidth + (N+1)*postWidth = L.
+// N je izbran tako, da DEJANSKA sirina panela nikoli ne preseže načrtovane sirine profila:
+//   N_min = ceil((L - postWidth) / (panelWidth + postWidth))
+// Če dejanska širina odstopa več kot maxGap, je konfiguracija NEVELJAVNA (napaka) —
+// tiho raztezanje panelov nad dimenzije profila ni dovoljeno.
+// Neveljavnih segmentov NE filtriramo tiho; načrt vrne strukturirane napake/opozorila.
 export function calculateFencePlan(
   segments: { startPoint: [number, number]; endPoint: [number, number]; heightChange: number }[],
   config: {
@@ -18,76 +23,156 @@ export function calculateFencePlan(
     slopeThreshold: number; // degrees
   }
 ): FencePlan {
+  const errors: string[] = [];
+  const warnings: string[] = [];
   const fenceSegments: FenceSegment[] = [];
   let totalPanels = 0;
-  let totalPosts = 0;
+  let postsRaw = 0;
   let totalLength = 0;
   let totalHeightChange = 0;
 
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
-    const dx = seg.endPoint[0] - seg.startPoint[0];
-    const dy = seg.endPoint[1] - seg.startPoint[1];
-    const length = Math.sqrt(dx * dx + dy * dy);
-    const slope = Math.atan2(seg.heightChange, length) * 180 / Math.PI;
-    
-    totalLength += length;
-    totalHeightChange += seg.heightChange;
+  // FAZA 1: validacija konfiguracije — brez tega bi NaN geometrija stekla v načrt.
+  if (!isFinite(config.panelWidth) || config.panelWidth <= 0) errors.push(`Neveljavna širina panela: ${config.panelWidth}`);
+  if (!isFinite(config.panelHeight) || config.panelHeight <= 0) errors.push(`Neveljavna višina panela: ${config.panelHeight}`);
+  if (!isFinite(config.postWidth) || config.postWidth < 0) errors.push(`Neveljavna širina stebra: ${config.postWidth}`);
+  if (!isFinite(config.maxGap) || config.maxGap < 0) errors.push(`Neveljaven največji razmik (maxGap): ${config.maxGap}`);
 
-    // Determine mounting type
-    let mountingType: 'level' | 'stepped' | 'raked';
-    if (config.mountingStyle === 'level') {
-      mountingType = 'level';
-    } else if (config.mountingStyle === 'stepped') {
-      mountingType = 'stepped';
-    } else {
-      mountingType = Math.abs(slope) > config.slopeThreshold ? 'stepped' : 'level';
+  if (errors.length === 0) {
+    const effectiveWidth = config.panelWidth + config.postWidth;
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const badCoords = !seg ||
+        !isFinite(seg.startPoint?.[0]) || !isFinite(seg.startPoint?.[1]) ||
+        !isFinite(seg.endPoint?.[0]) || !isFinite(seg.endPoint?.[1]);
+      if (badCoords) {
+        errors.push(`Segment ${i + 1}: neveljavne koordinate (NaN/Infinity/manjkajoče).`);
+        continue;
+      }
+      if (!isFinite(seg.heightChange)) {
+        errors.push(`Segment ${i + 1}: neveljavna višinska razlika (${seg.heightChange}).`);
+        continue;
+      }
+      const dx = seg.endPoint[0] - seg.startPoint[0];
+      const dy = seg.endPoint[1] - seg.startPoint[1];
+      const horizontalLength = Math.sqrt(dx * dx + dy * dy);
+      if (!(horizontalLength > EPS)) {
+        warnings.push(`Segment ${i + 1}: ničelna dolžina — izpuščen iz načrta.`);
+        continue;
+      }
+      const slope = Math.atan2(seg.heightChange, horizontalLength) * 180 / Math.PI;
+      // Fizična dolžina segmenta po naklonu (pomembno za 'raked' montažo)
+      const length = Math.sqrt(horizontalLength * horizontalLength + seg.heightChange * seg.heightChange);
+
+      totalLength += horizontalLength;
+      totalHeightChange += seg.heightChange;
+
+      let mountingType: 'level' | 'stepped' | 'raked';
+      if (config.mountingStyle === 'level') {
+        mountingType = 'level';
+      } else if (config.mountingStyle === 'stepped') {
+        mountingType = 'stepped';
+      } else {
+        mountingType = Math.abs(slope) > config.slopeThreshold ? 'stepped' : 'level';
+      }
+
+      // N je najmanjše število RAZPONOV (panel + steber), ki pokrije dolžino:
+      //   N >= (L - postWidth) / (panelWidth + postWidth)
+      // Uporabljen je ceil — NE round — sicer premalo razponov tiho proizvede panel,
+      // širši od profila (npr. L=2,5 m / profil 1,8 m / steber 0,06 m: round(1,34)=1
+      // -> panel (2,5-2*0,06)/1 = 2,38 m, kar krši dimenzijo sistema).
+      // EPS (1e-9 m = 1 nm) je IZKLJUČNO toleranca plavajoče vejice: pri točno zveznem
+      // razporedu (L=3,78 m) je idealN zaradi binarnega predstavljanja lahko
+      // 1.9999999999999998 in bi ga ceil napačno dvignil na 3. Ne prikriva nobene
+      // resnične razlike v merah — merjene razlike so > 1e-6 m (mm resolucija).
+      const idealN = (horizontalLength - config.postWidth) / effectiveWidth;
+      const numPanels = Math.max(1, Math.ceil(idealN - EPS));
+      const numPosts = numPanels + 1;
+      // Preostanek se enakomerno porazdeli med VSE razpone: vsak panel je
+      // (L - (N+1)*postWidth)/N <= nominalna širina profila (validacija spodaj).
+      const actualPanelWidth = (horizontalLength - numPosts * config.postWidth) / numPanels;
+
+      // Pravilnost: realni razmik sme ODSTOPATI navzdol (krajši rezani panel),
+      // navzgor pa ne sme preseči tolerance maxGap glede na profil.
+      if (actualPanelWidth > config.panelWidth + config.maxGap + EPS) {
+        errors.push(
+          `Segment ${i + 1} (${horizontalLength.toFixed(2)} m): panel bi moral biti ${actualPanelWidth.toFixed(3)} m ` +
+          `(nominalna širina profila ${config.panelWidth} m + toleranca ${config.maxGap} m). ` +
+          `Zmanjšajte razpon segmenta ali dodajte vmesni steber.`
+        );
+        continue;
+      }
+      if (actualPanelWidth < config.panelWidth - config.maxGap - EPS) {
+        warnings.push(
+          `Segment ${i + 1}: zadnji panel bo odrezan na ${actualPanelWidth.toFixed(3)} m (večji odkupni kos).`
+        );
+      }
+
+      fenceSegments.push({
+        id: `seg-${i}`,
+        startPoint: seg.startPoint,
+        endPoint: seg.endPoint,
+        length,
+        heightChange: seg.heightChange,
+        slope,
+        mountingType,
+        numPanels,
+        numPosts,
+        panelWidth: actualPanelWidth,
+        nominalPanelWidth: config.panelWidth,
+        postSpacing: actualPanelWidth + config.postWidth // točen razmik med sredinami stebrov
+      });
+
+      totalPanels += numPanels;
+      postsRaw += numPosts;
     }
 
-    // Calculate panels and posts
-    const effectiveWidth = config.panelWidth + config.postWidth;
-    const numPanels = Math.max(1, Math.round(length / effectiveWidth));
-    const numPosts = numPanels + 1;
-    const actualPanelWidth = (length - config.postWidth) / numPanels;
+    // FAZA 1: vogalni steber si delita sosednja segmenta (konec_i == zacetek_i+1) — steje SAMO ENKRAT.
+    let sharedCornerPosts = 0;
+    for (let i = 0; i + 1 < fenceSegments.length; i++) {
+      const a = fenceSegments[i], b = fenceSegments[i + 1];
+      if (Math.hypot(a.endPoint[0] - b.startPoint[0], a.endPoint[1] - b.startPoint[1]) < EPS &&
+          Math.abs(a.heightChange - b.heightChange) < EPS) {
+        sharedCornerPosts++;
+      }
+    }
+    const totalPosts = postsRaw - sharedCornerPosts;
 
-    fenceSegments.push({
-      id: `seg-${i}`,
-      startPoint: seg.startPoint,
-      endPoint: seg.endPoint,
-      length,
-      heightChange: seg.heightChange,
-      slope,
-      mountingType,
-      numPanels,
-      numPosts,
-      panelWidth: actualPanelWidth,
-      postSpacing: length / numPanels
-    });
+    if (fenceSegments.length === 0 && errors.length === 0) {
+      errors.push('Ni veljavnih segmentov — prazen načrt.');
+    }
 
-    totalPanels += numPanels;
-    totalPosts += numPosts;
+    const totalRails = fenceSegments.length * 2;
+    // Fasteners: 4 na panel + 2 na steber (stebri BREZ dvojnega štetja vogalov)
+    const totalFasteners = totalPanels * 4 + totalPosts * 2;
+
+    return {
+      totalLength,
+      totalHeightChange,
+      segments: fenceSegments,
+      mountingStyle: config.mountingStyle,
+      productType: 'standard',
+      panelHeight: config.panelHeight,
+      panelWidth: config.panelWidth,
+      postHeight: config.panelHeight + 0.1,
+      maxGap: config.maxGap,
+      totalPanels,
+      totalPosts,
+      sharedCornerPosts,
+      totalRails,
+      totalFasteners,
+      errors: errors.length ? errors : undefined,
+      warnings: warnings.length ? warnings : undefined
+    };
   }
 
-  // Rails: top and bottom for each segment
-  const totalRails = fenceSegments.length * 2;
-  
-  // Fasteners: approximately 4 per panel + 2 per post
-  const totalFasteners = totalPanels * 4 + totalPosts * 2;
-
+  // Neveljavna konfiguracija — prazen, a jasno označen načrt (nikoli lažno veljaven).
   return {
-    totalLength,
-    totalHeightChange,
-    segments: fenceSegments,
-    mountingStyle: config.mountingStyle,
-    productType: 'standard',
-    panelHeight: config.panelHeight,
-    panelWidth: config.panelWidth,
-    postHeight: config.panelHeight + 0.1,
-    maxGap: config.maxGap,
-    totalPanels,
-    totalPosts,
-    totalRails,
-    totalFasteners
+    totalLength: 0, totalHeightChange: 0, segments: [],
+    mountingStyle: config.mountingStyle, productType: 'standard',
+    panelHeight: config.panelHeight, panelWidth: config.panelWidth,
+    postHeight: config.panelHeight + 0.1, maxGap: config.maxGap,
+    totalPanels: 0, totalPosts: 0, sharedCornerPosts: 0,
+    totalRails: 0, totalFasteners: 0, errors, warnings: warnings.length ? warnings : undefined
   };
 }
 
@@ -98,10 +183,24 @@ export function calculateStairsPlan(
   totalRun: number,
   handrailHeight: number = 0.9
 ): StairsPlan {
+  // FAZA 1: validacija vhodov — neveljavne vrednosti nikoli ne proizvedejo NaN nacrta.
+  if (!isFinite(numSteps) || !Number.isInteger(numSteps) || numSteps <= 0) {
+    throw new Error(`Neveljavno število stopnic: ${numSteps}`);
+  }
+  if (!isFinite(totalRise) || totalRise < 0) throw new Error(`Neveljavna višinska razlika: ${totalRise}`);
+  if (!isFinite(totalRun) || totalRun <= 0) throw new Error(`Neveljavna dolžina stopnišča: ${totalRun}`);
+  if (!isFinite(handrailHeight) || handrailHeight <= 0) throw new Error(`Neveljavna višina ograje: ${handrailHeight}`);
+
   const avgRise = totalRise / numSteps;
   const avgRun = totalRun / numSteps;
   const slope = Math.atan2(totalRise, totalRun) * 180 / Math.PI;
+  // Dolzina ograja po naklonu + prehod na zacetek/konec (0.3 m skupaj, ne 0.3 m "vsiljen" vsaki smeri)
   const railingLength = Math.sqrt(totalRise * totalRise + totalRun * totalRun) + 0.3;
+
+  // Blum-ovo pravilo udobja stopnic: 2r + g ≈ 59–65 cm (din A/B/C).
+  // Opozorilo ni vraceno prek izjeme, ker nacrt ostane tehnicno izvedljiv, a opozarjamo monterja.
+  // Semantika (FAZA 1): numSteps steje POHODNE PLOSKEV; zadnja ploskev je lahko podest,
+  // pri cemer je skupno stevilo dvigov enako stevilu pohodnih ploskev (zadnji dvig do vhoda).
 
   const steps: StairStep[] = [];
   for (let i = 0; i < numSteps; i++) {
@@ -114,6 +213,20 @@ export function calculateStairsPlan(
     });
   }
 
+  // Opozorila udobja/varnosti (Blum 2r+g; naklon po EN/odstopnici)
+  const warnings: string[] = [];
+  const blumCm = (2 * avgRise + avgRun) * 100;
+  if (blumCm < 59 || blumCm > 65) {
+    warnings.push(`Neudobne stopnice: 2r+g = ${blumCm.toFixed(0)} cm (priporočeno 59–65 cm).`);
+  }
+  if (avgRise * 100 > 19) warnings.push(`Višina stopnice ${(avgRise*100).toFixed(1)} cm presega 19 cm.`);
+  if (avgRun * 100 < 26) warnings.push(`Globina stopnice ${(avgRun*100).toFixed(1)} cm je manjša od 26 cm.`);
+  if (slope > 45) warnings.push(`Naklon ${slope.toFixed(1)}° je preveč strm za običajne stopnice (< 45°).`);
+  // FAZA 1: validacija višine ograje — vidno uporabniku (QuantityView prikazuje warnings).
+  if (handrailHeight < 0.9) {
+    warnings.push(`Višina ograje ${handrailHeight.toFixed(2)} m je pod priporočenih 0,9 m (varnostni standard).`);
+  }
+
   return {
     numSteps,
     totalRise,
@@ -123,7 +236,8 @@ export function calculateStairsPlan(
     slope,
     steps,
     railingLength,
-    handrailHeight
+    handrailHeight,
+    warnings
   };
 }
 
@@ -167,15 +281,26 @@ export function calculateTerrainPlan(
 }
 
 // Material estimation for fence
+// ENOTE CEN (FAZA 1, jasno definirane):
+//   panelPricePerM2  = EUR na kvadratni METER panela (m²) — poslovna definicija WPC panelnih
+//                     sistemov; enotska cena kosa = cena/m² × (širina × višina panela).
+//   railPricePerM   = EUR na TEKOČI METER letve.
+//   post/fastener/endCap = EUR na kos.
+// OPOMBA: uporabljen je NOMINALNI profil (plan.panelWidth), ne povprečna dejanska širina
+// rezanih panelov — kupujemo celne panele, reže se na terenu. Količine stebrov upoštevajo
+// že odštete vogalne stebre iz nacrta (plan.totalPosts).
 export function estimateFenceMaterials(plan: FencePlan, materials: {
-  panelPricePerM: number;
+  panelPricePerM2: number; // EUR/m²
   postPriceEach: number;
-  railPricePerM: number;
+  railPricePerM: number; // EUR/tekm
   fastenerPriceEach: number;
   endCapPriceEach: number;
 }): MaterialItem[] {
   const items: MaterialItem[] = [];
   const wastePercent = 0.07; // 7% waste
+
+  // FAZA 1: predračuna NI mogoče sestaviti iz napačnega/nepopolnega načrta.
+  if (plan.errors && plan.errors.length > 0) return [];
 
   // Validate plan values
   if (!isFinite(plan.totalPanels) || plan.totalPanels <= 0) return [];
@@ -184,15 +309,14 @@ export function estimateFenceMaterials(plan: FencePlan, materials: {
   if (!isFinite(plan.panelHeight) || plan.panelHeight <= 0) return [];
 
   // Validate material prices
-  if (!isFinite(materials.panelPricePerM) || materials.panelPricePerM < 0) return [];
+  if (!isFinite(materials.panelPricePerM2) || materials.panelPricePerM2 < 0) return [];
   if (!isFinite(materials.postPriceEach) || materials.postPriceEach < 0) return [];
 
-  // Panels
-  const panelTotalM = plan.totalPanels * plan.panelWidth * plan.panelHeight;
+  const panelAreaM2 = plan.panelWidth * plan.panelHeight;
   const panelQuantity = Math.max(1, Math.ceil(plan.totalPanels * (1 + wastePercent)));
-  const panelUnitPrice = materials.panelPricePerM * plan.panelWidth * plan.panelHeight;
-  
-  if (!isFinite(panelTotalM) || !isFinite(panelUnitPrice)) return [];
+  const panelUnitPrice = materials.panelPricePerM2 * panelAreaM2;
+
+  if (!isFinite(panelAreaM2) || !isFinite(panelUnitPrice)) return [];
   
   items.push({
     id: 'mat-panels',

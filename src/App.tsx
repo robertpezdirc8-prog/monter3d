@@ -21,6 +21,9 @@ import { PhotoMatchingView } from './components/PhotoMatchingView';
 import { FenceVisualizer } from './components/FenceVisualizer';
 import { RoksalGalleryView } from './components/RoksalGalleryView';
 import { FenceConfigurator } from './components/FenceConfigurator';
+import TradeMenu from './components/TradeMenu';
+import TradeCapture from './components/TradeCapture';
+import type { TradeId } from './utils/cameraSDK';
 import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId } from './utils/storage';
 
 // Icons as simple SVG components
@@ -37,8 +40,25 @@ const IconSave = () => <svg className="w-6 h-6" fill="none" stroke="currentColor
 
 function App() {
   const [showTests, setShowTests] = useState(() => window.location.hash === '#tests');
+  // Kamera za monterje (brez AI): #trade = meni obrti, #capture/<obrt> = voden zajem
+  const [tradeRoute, setTradeRoute] = useState<{ menu: boolean; capture: TradeId | null }>(() => {
+    const h = window.location.hash;
+    if (h.startsWith('#capture/')) {
+      const id = h.slice('#capture/'.length) as TradeId;
+      return { menu: false, capture: id };
+    }
+    return { menu: h === '#trade', capture: null };
+  });
   useEffect(() => {
-    const handler = () => setShowTests(window.location.hash === '#tests');
+    const handler = () => {
+      setShowTests(window.location.hash === '#tests');
+      const h = window.location.hash;
+      if (h.startsWith('#capture/')) {
+        setTradeRoute({ menu: false, capture: h.slice('#capture/'.length) as TradeId });
+      } else {
+        setTradeRoute({ menu: h === '#trade', capture: null });
+      }
+    };
     window.addEventListener('hashchange', handler);
     return () => window.removeEventListener('hashchange', handler);
   }, []);
@@ -534,7 +554,7 @@ function App() {
 
     // Calculate materials
     const materialItems = estimateFenceMaterials(plan, {
-      panelPricePerM: 85,
+      panelPricePerM2: 85,
       postPriceEach: 45,
       railPricePerM: 12,
       fastenerPriceEach: 0.5,
@@ -552,13 +572,19 @@ function App() {
 
   // Calculate stairs
   const calculateStairs = useCallback(() => {
-    const plan = calculateStairsPlan(
-      stairsConfig.numSteps,
-      stairsConfig.totalRise,
-      stairsConfig.totalRun,
-      stairsConfig.handrailHeight
-    );
-    setStairsPlan(plan);
+    // FAZA 1: neveljavni vhodi zdaj vržejo napako — prikažemo jo, ne tiho NaN-građimo načrt.
+    try {
+      const plan = calculateStairsPlan(
+        stairsConfig.numSteps,
+        stairsConfig.totalRise,
+        stairsConfig.totalRun,
+        stairsConfig.handrailHeight
+      );
+      setStairsPlan(plan);
+    } catch (e) {
+      setStairsPlan(null);
+      alert(e instanceof Error ? e.message : 'Neveljaven vnos za stopnice.');
+    }
   }, [stairsConfig]);
 
   // Export data
@@ -631,6 +657,14 @@ function App() {
         <MathTestRunner />
       </div>
     );
+  }
+
+  // Kamera za monterje (brez AI modela) — meni obrti ali voden zajem
+  if (tradeRoute.capture && ['ograje', 'keramika', 'fasade', 'krovstvo'].includes(tradeRoute.capture)) {
+    return <TradeCapture trade={tradeRoute.capture} onBack={() => { window.location.hash = '#trade'; }} />;
+  }
+  if (tradeRoute.menu) {
+    return <TradeMenu />;
   }
 
   return (
@@ -1147,6 +1181,17 @@ function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPh
           capturedSteps={capturedSteps}
           onCaptureStep={onCaptureStep}
         />
+      </div>
+
+      {/* Kamera za monterje (brez AI) — bližnjica do menija obrti */}
+      <div className="mb-4">
+        <a
+          href="#trade"
+          className="block bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 rounded-lg p-3 text-center transition-colors"
+        >
+          <span className="text-sm font-semibold">📷 Voden zajem po obrti — ograje · keramika · fasade · krovstvo</span>
+          <span className="block text-xs opacity-80 mt-0.5">Kamera + skripte, brez AI modela · samodejna prevera ostrine in svetlobe</span>
+        </a>
       </div>
 
       {/* Camera and Upload buttons */}
@@ -1745,10 +1790,34 @@ function QuantityView({ fencePlan, stairsPlan }: { fencePlan: FencePlan | null; 
       {fencePlan && (
         <div className="bg-slate-800 rounded-lg p-4 mb-4">
           <h3 className="text-sm font-semibold text-slate-300 mb-3">🏗️ Ograja - povzetek</h3>
+
+          {/* FAZA 1: napake nacrta so vidne — ne prikazujemo lazno veljavnih kolicin */}
+          {fencePlan.errors && fencePlan.errors.length > 0 && (
+            <div className="mb-3 rounded-lg border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-200">
+              <p className="font-semibold mb-1">⛔ Napake pri načrtu (predračun ni mogoč)</p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                {fencePlan.errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            </div>
+          )}
+          {fencePlan.warnings && fencePlan.warnings.length > 0 && (
+            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+              <p className="font-semibold mb-1">⚠️ Opozorila</p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                {fencePlan.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatCard label="Skupna dolžina" value={`${fencePlan.totalLength.toFixed(2)} m`} />
             <StatCard label="Paneli" value={`${fencePlan.totalPanels} kos`} />
-            <StatCard label="Stebri" value={`${fencePlan.totalPosts} kos`} />
+            <StatCard
+              label="Stebri"
+              value={fencePlan.sharedCornerPosts > 0
+                ? `${fencePlan.totalPosts} kos (${fencePlan.sharedCornerPosts} deljenih vogalnih)`
+                : `${fencePlan.totalPosts} kos`}
+            />
             <StatCard label="Letve" value={`${fencePlan.totalRails} kos`} />
             <StatCard label="Pritrdilni elem." value={`${fencePlan.totalFasteners} kos`} />
             <StatCard label="Višina" value={`${fencePlan.panelHeight} m`} />
@@ -1768,6 +1837,7 @@ function QuantityView({ fencePlan, stairsPlan }: { fencePlan: FencePlan | null; 
                       <th className="px-2 py-1 text-left text-slate-400">ΔVišina</th>
                       <th className="px-2 py-1 text-left text-slate-400">Naklon</th>
                       <th className="px-2 py-1 text-left text-slate-400">Paneli</th>
+                      <th className="px-2 py-1 text-left text-slate-400">Dej. širina panela</th>
                       <th className="px-2 py-1 text-left text-slate-400">Montaža</th>
                     </tr>
                   </thead>
@@ -1779,6 +1849,10 @@ function QuantityView({ fencePlan, stairsPlan }: { fencePlan: FencePlan | null; 
                         <td className="px-2 py-1 text-slate-200">{seg.heightChange.toFixed(2)} m</td>
                         <td className="px-2 py-1 text-slate-200">{seg.slope.toFixed(1)}°</td>
                         <td className="px-2 py-1 text-slate-200">{seg.numPanels}</td>
+                        <td className={`px-2 py-1 ${Math.abs(seg.panelWidth - seg.nominalPanelWidth) > fencePlan.maxGap ? 'text-red-300 font-semibold' : 'text-slate-200'}`}>
+                          {(seg.panelWidth * 100).toFixed(1)} cm
+                          {seg.panelWidth < seg.nominalPanelWidth - 0.001 && ' (rezan)'}
+                        </td>
                         <td className="px-2 py-1 text-slate-200">{seg.mountingType}</td>
                       </tr>
                     ))}
@@ -1802,6 +1876,14 @@ function QuantityView({ fencePlan, stairsPlan }: { fencePlan: FencePlan | null; 
             <StatCard label="Povp. gaz" value={`${(stairsPlan.averageRun * 100).toFixed(1)} cm`} />
             <StatCard label="Dolžina ograje" value={`${stairsPlan.railingLength.toFixed(2)} m`} />
             <StatCard label="Višina ograje" value={`${stairsPlan.handrailHeight} m`} />
+            {stairsPlan.warnings && stairsPlan.warnings.length > 0 && (
+              <div className="col-span-full rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+                <p className="font-semibold mb-1">⚠️ Tehnična opozorila</p>
+                <ul className="list-disc pl-5 space-y-0.5">
+                  {stairsPlan.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       )}
