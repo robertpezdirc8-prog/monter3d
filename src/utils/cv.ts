@@ -1187,3 +1187,95 @@ export function detectVanishingPoints(
   
   return results;
 }
+
+/**
+ * Calculate pixel-to-meter scale from a known reference distance
+ * 
+ * @param refPoint1 - First point of reference (pixels)
+ * @param refPoint2 - Second point of reference (pixels)
+ * @param realDistance - Known real-world distance between points (meters)
+ * @returns Pixel-to-meter conversion factor, or null if invalid
+ */
+export function calculateScaleFromReference(
+  refPoint1: Point2D,
+  refPoint2: Point2D,
+  realDistance: number
+): number | null {
+  if (realDistance <= 0) return null;
+  
+  const pixelDistance = Math.sqrt(
+    (refPoint2.x - refPoint1.x) ** 2 + 
+    (refPoint2.y - refPoint1.y) ** 2
+  );
+  
+  if (pixelDistance < 1) return null; // Too small to be meaningful
+  
+  return realDistance / pixelDistance;
+}
+
+/**
+ * Calculate real-world distance between two points using pixel-to-meter scale
+ * 
+ * @param point1 - First point (pixels)
+ * @param point2 - Second point (pixels)
+ * @param pixelToMeter - Conversion factor from pixels to meters
+ * @returns Real-world distance in meters, or null if scale is invalid
+ */
+export function calculateRealDistance(
+  point1: Point2D,
+  point2: Point2D,
+  pixelToMeter: number
+): number | null {
+  if (pixelToMeter <= 0 || !isFinite(pixelToMeter)) return null;
+  
+  const pixelDistance = Math.sqrt(
+    (point2.x - point1.x) ** 2 + 
+    (point2.y - point1.y) ** 2
+  );
+  
+  return pixelDistance * pixelToMeter;
+}
+
+/**
+ * Assess measurement reliability based on various factors
+ * 
+ * @param pixelDistance - Distance in pixels between measurement points
+ * @param imageWidth - Width of the image in pixels
+ * @param imageHeight - Height of the image in pixels
+ * @param referenceDistance - Distance of reference in pixels
+ * @returns Reliability score (0-1) and warnings
+ */
+export function assessMeasurementReliability(
+  pixelDistance: number,
+  imageWidth: number,
+  imageHeight: number,
+  referenceDistance: number
+): { reliability: number; warnings: string[] } {
+  const warnings: string[] = [];
+  let reliability = 1.0;
+  
+  const imageDiagonal = Math.sqrt(imageWidth ** 2 + imageHeight ** 2);
+  
+  // Check if measurement is too small relative to image
+  if (pixelDistance < imageDiagonal * 0.02) {
+    reliability *= 0.5;
+    warnings.push('Meritev je zelo majhna glede na sliko - nizka natančnost');
+  }
+  
+  // Check if reference is too small
+  if (referenceDistance < imageDiagonal * 0.05) {
+    reliability *= 0.7;
+    warnings.push('Referenčna mera je majhna - priporočamo večjo referenco');
+  }
+  
+  // Check if measurement extends near image edges (perspective distortion)
+  // This is a simplified check - full edge detection would be more accurate
+  
+  // Penalize if measurement is very large (likely perspective error)
+  if (pixelDistance > imageDiagonal * 0.8) {
+    reliability *= 0.8;
+    warnings.push('Meritev zajema večino slike - možna perspektivna napaka');
+  }
+  
+  return { reliability, warnings };
+}

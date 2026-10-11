@@ -13,6 +13,10 @@ import { CoverageMapView, CameraGuide } from './components/CoverageMap';
 import { FeatureMatchingView } from './components/FeatureMatching';
 import { ProjectSummary } from './components/ProjectSummary';
 import { MathTestRunner } from './components/MathTestRunner';
+import { CameraCapture } from './components/CameraCapture';
+import { MeasurementOverlay } from './components/MeasurementOverlay';
+import { MeasurementAccuracyTests } from './components/MeasurementAccuracyTests';
+import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId } from './utils/storage';
 
 // Icons as simple SVG components
 const IconCamera = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
@@ -71,6 +75,9 @@ function App() {
   const [vizNumBoards, setVizNumBoards] = useState(12);
   const [vizColor, setVizColor] = useState('#2d3436');
   const [comparePhoto, setComparePhoto] = useState<Photo | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [showMeasurement, setShowMeasurement] = useState(false);
+  const [showAccuracyTests, setShowAccuracyTests] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -99,6 +106,50 @@ function App() {
     setCurrentProject(project);
     setProjects(prev => [...prev, project]);
     setCurrentStep('capture');
+    
+    // Save to IndexedDB
+    saveProject(project).catch(err => console.error('Failed to save project:', err));
+    setCurrentProjectId(project.id);
+  }, []);
+
+  // Load projects from IndexedDB on mount
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const savedProjects = await getAllProjects();
+        if (savedProjects.length > 0) {
+          setProjects(savedProjects);
+          
+          // Restore last active project
+          const lastProjectId = getCurrentProjectId();
+          if (lastProjectId) {
+            const lastProject = await getProject(lastProjectId);
+            if (lastProject) {
+              setCurrentProject(lastProject);
+              // Map project status to workflow step
+              const statusToStep: Record<string, WorkflowStep> = {
+                'capture': 'capture',
+                'processing': 'quality_check',
+                'measuring': 'scale_verification',
+                'planning': 'material_selection',
+                'complete': 'export'
+              };
+              setCurrentStep(statusToStep[lastProject.status] || 'capture');
+              
+              // Load photos for this project
+              const savedPhotos = await getPhotosByProject(lastProjectId);
+              if (savedPhotos.length > 0) {
+                setPhotos(savedPhotos);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load projects:', err);
+      }
+    };
+    
+    loadProjects();
   }, []);
 
   // Handle photo capture/upload
@@ -139,6 +190,34 @@ function App() {
       reader.readAsDataURL(file);
     });
   }, [selectedPhoto]);
+
+  // Handle camera capture
+  const handleCameraCapture = useCallback((dataUrl: string, quality: ImageQuality) => {
+    const img = new Image();
+    img.onload = () => {
+      const photo: Photo = {
+        id: uuidv4(),
+        dataUrl,
+        timestamp: new Date(),
+        quality,
+        coverage: 0,
+        status: quality.overallScore > 0.4 ? 'analyzed' : 'rejected',
+        rejectionReason: quality.overallScore <= 0.4 ? 'Nizka kakovost slike' : undefined
+      };
+
+      setPhotos(prev => [...prev, photo]);
+      if (!selectedPhoto) setSelectedPhoto(photo);
+      setShowCamera(false);
+
+      // Save to IndexedDB if project exists
+      if (currentProject) {
+        savePhoto({ ...photo, projectId: currentProject.id }).catch(err => 
+          console.error('Failed to save photo:', err)
+        );
+      }
+    };
+    img.src = dataUrl;
+  }, [selectedPhoto, currentProject]);
 
   // Analyze selected photo for features
   const analyzePhoto = useCallback((photo: Photo) => {
@@ -468,6 +547,14 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
+      {/* Camera Capture Modal */}
+      {showCamera && (
+        <CameraCapture
+          onCapture={handleCameraCapture}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
+
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -481,6 +568,12 @@ function App() {
           <span className="text-xs bg-emerald-900/50 text-emerald-300 px-2 py-1 rounded">
             Offline ✓
           </span>
+          <button
+            onClick={() => setShowAccuracyTests(!showAccuracyTests)}
+            className="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded hover:bg-blue-800/50"
+          >
+            🧪 Testi
+          </button>
           {currentProject && (
             <span className="text-sm text-slate-300">
               {currentProject.name}
@@ -595,6 +688,7 @@ function App() {
               canvasRef={canvasRef}
               showInstructions={showInstructions}
               onToggleInstructions={() => setShowInstructions(!showInstructions)}
+              onOpenCamera={() => setShowCamera(true)}
             />
           )}
 
@@ -629,19 +723,35 @@ function App() {
 
           {/* Scale Verification */}
           {currentStep === 'scale_verification' && (
-            <ScaleView
-              selectedPhoto={selectedPhoto}
-              canvasRef={canvasRef}
-              measuringMode={measuringMode}
-              onToggleMeasuring={() => setMeasuringMode(!measuringMode)}
-              measurePoints={measurePoints}
-              referenceLength={referenceLength}
-              onSetReferenceLength={setReferenceLength}
-              onSetScale={setScale}
-              pixelToMeter={pixelToMeter}
-              onCanvasClick={handleCanvasClick}
-              onAnalyze={analyzePhoto}
-            />
+            <div className="space-y-4">
+              <ScaleView
+                selectedPhoto={selectedPhoto}
+                canvasRef={canvasRef}
+                measuringMode={measuringMode}
+                onToggleMeasuring={() => setMeasuringMode(!measuringMode)}
+                measurePoints={measurePoints}
+                referenceLength={referenceLength}
+                onSetReferenceLength={setReferenceLength}
+                onSetScale={setScale}
+                pixelToMeter={pixelToMeter}
+                onCanvasClick={handleCanvasClick}
+                onAnalyze={analyzePhoto}
+              />
+              
+              {/* New Measurement Overlay */}
+              {selectedPhoto && (
+                <div className="mt-6 border-t border-slate-700 pt-6">
+                  <h3 className="text-lg font-bold text-emerald-400 mb-4">
+                    📐 Napredno merjenje z referenco
+                  </h3>
+                  <MeasurementOverlay
+                    imageUrl={selectedPhoto.dataUrl}
+                    imageWidth={800} // Default, will be scaled
+                    imageHeight={600}
+                  />
+                </div>
+              )}
+            </div>
           )}
 
           {/* Measurements */}
@@ -724,6 +834,13 @@ function App() {
               estimate={estimate}
               pixelToMeter={pixelToMeter}
             />
+          )}
+
+          {/* Measurement Accuracy Tests */}
+          {showAccuracyTests && (
+            <div className="bg-slate-800 rounded-lg p-6 mt-4">
+              <MeasurementAccuracyTests />
+            </div>
           )}
         </div>
       </main>
@@ -821,7 +938,7 @@ function NewProjectView({ onCreateProject, projects }: {
   );
 }
 
-function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPhoto, onAnalyze, canvasRef, showInstructions, onToggleInstructions }: {
+function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPhoto, onAnalyze, canvasRef, showInstructions, onToggleInstructions, onOpenCamera }: {
   photos: Photo[];
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   fileInputRef: React.RefObject<HTMLInputElement>;
@@ -831,6 +948,7 @@ function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPh
   canvasRef: React.RefObject<HTMLCanvasElement>;
   showInstructions: boolean;
   onToggleInstructions: () => void;
+  onOpenCamera: () => void;
 }) {
   return (
     <div>
@@ -858,23 +976,33 @@ function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPh
         </div>
       )}
 
-      {/* Upload area */}
-      <div
-        onClick={() => fileInputRef.current?.click()}
-        className="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center cursor-pointer hover:border-emerald-500 transition-colors mb-4"
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          capture="environment"
-          onChange={onUpload}
-          className="hidden"
-        />
-        <IconCamera />
-        <p className="text-slate-300 mt-2">Kliknite za zajem ali nalaganje fotografij</p>
-        <p className="text-xs text-slate-500 mt-1">Podprti formati: JPG, PNG • Več datotek hkrati</p>
+      {/* Camera and Upload buttons */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <button
+          onClick={onOpenCamera}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg p-4 flex flex-col items-center gap-2 transition-colors"
+        >
+          <IconCamera />
+          <span className="text-sm font-medium">Zajem s kamero</span>
+          <span className="text-xs opacity-75">Uporabi zadnjo kamero</span>
+        </button>
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          className="border-2 border-dashed border-slate-600 rounded-lg p-4 text-center cursor-pointer hover:border-emerald-500 transition-colors flex flex-col items-center justify-center gap-2"
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            capture="environment"
+            onChange={onUpload}
+            className="hidden"
+          />
+          <span className="text-2xl">📁</span>
+          <span className="text-sm text-slate-300 font-medium">Naloži datoteke</span>
+          <span className="text-xs text-slate-500">JPG, PNG</span>
+        </div>
       </div>
 
       {/* Analysis canvas */}
