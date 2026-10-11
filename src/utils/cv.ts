@@ -390,7 +390,8 @@ export function estimateHomography(
 }
 
 // Solve homogeneous system Ah = 0
-// Uses hybrid approach: one-sided Jacobi SVD for tall matrices, Jacobi eigensolver for wide matrices
+// For tall/square matrices (m >= n): one-sided Jacobi SVD on A
+// For wide matrices (m < n): QR-based null space computation (stable, no squaring)
 // For homography with 4 points: m=8 rows, n=9 columns (valid minimal case, underdetermined)
 function solveHomogeneousSystem(A: number[][]): number[] | null {
   const m = A.length;
@@ -433,40 +434,10 @@ function solveHomogeneousSystem(A: number[][]): number[] | null {
     }
   } else {
     // Wide matrix (underdetermined system, e.g., 8x9 for 4 points)
-    // Use Jacobi eigensolver on A^T * A (n x n symmetric matrix)
-    // Null space of A = eigenspace of A^T*A with eigenvalue 0
-    const ATA: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
-    for (let i = 0; i < n; i++) {
-      for (let j = i; j < n; j++) {
-        let sum = 0;
-        for (let k = 0; k < m; k++) {
-          sum += A[k][i] * A[k][j];
-        }
-        ATA[i][j] = sum;
-        ATA[j][i] = sum;
-      }
-    }
-    
-    const result = jacobiEigenSolver(ATA, 100, 1e-10);
-    if (!result) return null;
-    
-    const { eigenvalues, eigenvectors } = result;
-    
-    // Find index of smallest eigenvalue
-    let minIdx = 0;
-    let minVal = Math.abs(eigenvalues[0]);
-    for (let i = 1; i < eigenvalues.length; i++) {
-      if (Math.abs(eigenvalues[i]) < minVal) {
-        minVal = Math.abs(eigenvalues[i]);
-        minIdx = i;
-      }
-    }
-    
-    // Extract eigenvector
-    v = [];
-    for (let i = 0; i < n; i++) {
-      v.push(eigenvectors[i][minIdx]);
-    }
+    // Use QR-based null space computation (stable, doesn't square condition number)
+    const nullSpaceResult = computeNullSpaceQR(A);
+    if (!nullSpaceResult) return null;
+    v = nullSpaceResult;
   }
   
   // Verify result is valid
@@ -642,6 +613,99 @@ function jacobiEigenSolver(
   }
   
   return { eigenvalues, eigenvectors: V };
+}
+
+// Compute null space of wide matrix A (m x n, m < n) using QR decomposition
+// Returns basis vector for 1D null space (for homography with 4 points)
+// This is stable and doesn't square the condition number
+function computeNullSpaceQR(A: number[][]): number[] | null {
+  const m = A.length;
+  const n = A[0].length;
+  
+  if (m >= n) return null; // Only for wide matrices
+  
+  // Transpose A to get A^T (n x m)
+  const AT: number[][] = Array.from({ length: n }, () => new Array(m).fill(0));
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < n; j++) {
+      AT[j][i] = A[i][j];
+    }
+  }
+  
+  // QR decomposition of A^T using Householder reflections
+  // A^T = Q * R, where Q is n x n orthogonal, R is n x m upper triangular
+  const Q: number[][] = Array.from({ length: n }, (_, i) => 
+    Array.from({ length: n }, (_, j) => i === j ? 1 : 0)
+  );
+  const R = AT.map(row => [...row]);
+  
+  for (let k = 0; k < m; k++) {
+    // Compute Householder vector for column k
+    let norm = 0;
+    for (let i = k; i < n; i++) {
+      norm += R[i][k] * R[i][k];
+    }
+    norm = Math.sqrt(norm);
+    
+    if (norm < 1e-15) continue;
+    
+    const sign = R[k][k] >= 0 ? 1 : -1;
+    const alpha = -sign * norm;
+    
+    const v: number[] = new Array(n).fill(0);
+    for (let i = k; i < n; i++) {
+      v[i] = R[i][k];
+    }
+    v[k] -= alpha;
+    
+    // Normalize v
+    let vNorm = 0;
+    for (let i = k; i < n; i++) {
+      vNorm += v[i] * v[i];
+    }
+    vNorm = Math.sqrt(vNorm);
+    
+    if (vNorm < 1e-15) continue;
+    
+    for (let i = k; i < n; i++) {
+      v[i] /= vNorm;
+    }
+    
+    // Apply Householder reflection to R: R = (I - 2*v*v^T) * R
+    for (let j = k; j < m; j++) {
+      let dot = 0;
+      for (let i = k; i < n; i++) {
+        dot += v[i] * R[i][j];
+      }
+      for (let i = k; i < n; i++) {
+        R[i][j] -= 2 * v[i] * dot;
+      }
+    }
+    
+    // Apply Householder reflection to Q: Q = Q * (I - 2*v*v^T)
+    for (let i = 0; i < n; i++) {
+      let dot = 0;
+      for (let j = k; j < n; j++) {
+        dot += Q[i][j] * v[j];
+      }
+      for (let j = k; j < n; j++) {
+        Q[i][j] -= 2 * dot * v[j];
+      }
+    }
+  }
+  
+  // The last column of Q (index n-1) is in the null space of A
+  // For homography with 4 points: n=9, m=8, null space is 1D
+  const nullVector: number[] = [];
+  for (let i = 0; i < n; i++) {
+    nullVector.push(Q[i][n - 1]);
+  }
+  
+  // Verify it's actually in null space: ||A * nullVector|| should be small
+  const residual = computeResidual(A, nullVector);
+  if (residual > 1e-6) return null;
+  
+  return nullVector;
 }
 
 // Compute residual ||A * v|| for validation
