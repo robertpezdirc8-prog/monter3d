@@ -20,6 +20,7 @@ import { GuidedCapture } from './components/GuidedCapture';
 import { PhotoMatchingView } from './components/PhotoMatchingView';
 import { FenceVisualizer } from './components/FenceVisualizer';
 import { RoksalGalleryView } from './components/RoksalGalleryView';
+import { FenceConfigurator } from './components/FenceConfigurator';
 import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId } from './utils/storage';
 
 // Icons as simple SVG components
@@ -87,6 +88,7 @@ function App() {
   const [photoMatchings, setPhotoMatchings] = useState<any[]>([]);
   const [showFenceVisualizer, setShowFenceVisualizer] = useState(false);
   const [showRoksalGallery, setShowRoksalGallery] = useState(false);
+  const [showFenceConfigurator, setShowFenceConfigurator] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -658,6 +660,12 @@ function App() {
         />
       )}
 
+      {showFenceConfigurator && (
+        <FenceConfigurator
+          onClose={() => setShowFenceConfigurator(false)}
+        />
+      )}
+
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -857,16 +865,22 @@ function App() {
                     </h3>
                     <div className="flex gap-2">
                       <button
+                        onClick={() => setShowFenceConfigurator(true)}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm font-medium transition-colors"
+                      >
+                        ⚙️ Konfigurator
+                      </button>
+                      <button
                         onClick={() => setShowRoksalGallery(true)}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors"
                       >
-                        🖼️ Roksal Galerija
+                        🖼️ Galerija
                       </button>
                       <button
                         onClick={() => setShowFenceVisualizer(true)}
                         className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm font-medium transition-colors"
                       >
-                        🏗️ Roksal Visualizer
+                        🏗️ Visualizer
                       </button>
                     </div>
                   </div>
