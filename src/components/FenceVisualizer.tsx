@@ -9,6 +9,13 @@
  * - Adjust board spacing and dimensions
  * - Remove old fence and render new one
  * - Before/after comparison
+ * 
+ * ⚠️ OMEJITVE / LIMITATIONS:
+ * - Ta vizualizacija je 2D-približek in NE upošteva perspektive fotografije
+ * - Prikaz NI konstrukcijsko natančen - za natančne izračune uporabite FenceConfigurator
+ * - Prikaz NI fotorealističen - teksture so poenostavljene barve, ne dejanski materiali
+ * - Za fotorealističen prikaz bi bilo potrebno 3D modeliranje s perspektivno korekcijo
+ * - Ta funkcija je namenjena samo hitremu predogledu, ne končni odločitvi
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -249,6 +256,15 @@ export function FenceVisualizer({ photo, onClose }: FenceVisualizerProps) {
           >
             ✕
           </button>
+        </div>
+
+        {/* P1: Opozorilo o omejitvah vizualizacije */}
+        <div className="mx-4 mt-4 bg-amber-900/30 border border-amber-700 rounded-lg p-3">
+          <p className="text-xs text-amber-200">
+            ⚠️ <strong>Opozorilo:</strong> Ta vizualizacija je <strong>2D-približek</strong> in ne upošteva perspektive fotografije.
+            Prikaz NI konstrukcijsko natančen in NI fotorealističen. Za natančne izračune uporabite <strong>Fence Configurator</strong>.
+            Ta funkcija je namenjena samo hitremu predogledu videza, ne končni odločitvi o materialu ali montaži.
+          </p>
         </div>
 
         <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">

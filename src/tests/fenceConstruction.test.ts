@@ -62,6 +62,47 @@ describe('Fence Construction Calculator', () => {
       expect(result.actualBoardSpacing).toBeLessThanOrEqual(30);
     });
 
+    // P0-3: Regresijski test - algoritem mora izbrati NAJBOLJŠO rešitev, ne samo prvo veljavno
+    it('Test: 1000mm dolžine, 100mm širine, 5mm razmika - pričakovano 9 desk, 12.5mm razmik', () => {
+      const result = calculateFenceConstruction({
+        profile: polna100,
+        orientation: 'vertical',
+        fenceHeight: 1000,
+        fenceLength: 1000,
+        boardSpacing: 5
+      });
+      
+      // Pri 9 deskah: 9 * 100mm = 900mm, preostanek = 100mm, 8 razmikov = 100/8 = 12.5mm
+      // To je najbližje zahtevanemu razmiku 5mm med vsemi veljavnimi rešitvami
+      expect(result.numberOfBoards).toBe(9);
+      expect(result.actualBoardSpacing).toBeCloseTo(12.5, 1);
+      expect(result.valid).toBe(true);
+      
+      // Preveri, da je pokritost pravilna
+      const coveredLength = result.numberOfBoards * result.effectiveWidth + 
+                           (result.numberOfBoards - 1) * result.actualBoardSpacing;
+      expect(Math.abs(coveredLength - 1000)).toBeLessThanOrEqual(1);
+    });
+
+    it('Test: Algoritem izbere rešitev najbližjo zahtevanemu razmiku', () => {
+      // Test za 1500mm dolžine, 100mm širine, razmik 10mm
+      // Možne rešitve:
+      // - 13 desk: 13*100 = 1300, razmik = 200/12 = 16.67mm (deviacija 6.67)
+      // - 14 desk: 14*100 = 1400, razmik = 100/13 = 7.69mm (deviacija 2.31) <- NAJBOLJŠA
+      // - 15 desk: 15*100 = 1500, razmik = 0mm (deviacija 10)
+      const result = calculateFenceConstruction({
+        profile: polna100,
+        orientation: 'vertical',
+        fenceHeight: 1000,
+        fenceLength: 1500,
+        boardSpacing: 10
+      });
+      
+      expect(result.numberOfBoards).toBe(14);
+      expect(result.actualBoardSpacing).toBeCloseTo(7.69, 1);
+      expect(result.valid).toBe(true);
+    });
+
     it('Test: Več desk pri maksimalnem razmiku (30mm)', () => {
       const result = calculateFenceConstruction({
         profile: polna100,

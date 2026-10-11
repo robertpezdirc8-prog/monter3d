@@ -23,18 +23,16 @@ jobs:
         node-version: ${{ matrix.node-version }}
         check-latest: true
     
-    - name: Clean npm cache
-      run: npm cache clean --force
-    
-    - name: Install dependencies
-      run: |
-        rm -rf node_modules
-        npm install
+    - name: Install dependencies (reproducible)
+      run: npm ci
     
     - name: Run TypeScript type check
       run: npm run typecheck
     
-    - name: Run tests
+    - name: Run fence construction tests
+      run: npx vitest run src/tests/fenceConstruction.test.ts --reporter=verbose
+    
+    - name: Run all tests
       run: npx vitest run --reporter=verbose
     
     - name: Build production

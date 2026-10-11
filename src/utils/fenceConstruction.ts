@@ -107,27 +107,39 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   let actualPostSpacing: number;
   
   if (config.postSpacing) {
-    // User specified post spacing
-    actualPostSpacing = config.postSpacing;
-    numberOfPosts = Math.ceil(fenceLength / actualPostSpacing) + 1;
+    // User specified post spacing - calculate exact number of posts needed
+    // Number of posts = number of spans + 1
+    // For fenceLength = 3000, postSpacing = 1000: spans = 3, posts = 4
+    // For fenceLength = 3500, postSpacing = 1000: spans = 4, posts = 5 (actual spacing = 875)
+    // For fenceLength = 5800, postSpacing = 1000: spans = 6, posts = 7 (actual spacing = 966.67)
+    const numberOfSpans = Math.ceil(fenceLength / config.postSpacing);
+    numberOfPosts = numberOfSpans + 1;
+    actualPostSpacing = fenceLength / numberOfSpans;
     
     if (actualPostSpacing > maxPostSpacing) {
-      errors.push(`Razmak stebričkov (${actualPostSpacing}mm) presega maksimalni dovoljeni razmak (${maxPostSpacing}mm)`);
+      errors.push(`Razmak stebričkov (${actualPostSpacing.toFixed(1)}mm) presega maksimalni dovoljeni razmak (${maxPostSpacing}mm)`);
     }
   } else {
-    // Calculate optimal post spacing
-    numberOfPosts = Math.ceil(fenceLength / maxPostSpacing) + 1;
-    actualPostSpacing = fenceLength / (numberOfPosts - 1);
+    // Calculate optimal post spacing - minimize number of posts while staying within max
+    const numberOfSpans = Math.ceil(fenceLength / maxPostSpacing);
+    numberOfPosts = numberOfSpans + 1;
+    actualPostSpacing = fenceLength / numberOfSpans;
   }
   
   const postSpacingValid = actualPostSpacing <= maxPostSpacing;
   
-  // ROMB 67 specific warnings for horizontal orientation
+  // ROMB 67 specific rules for horizontal orientation
+  // NOTE: These rules are based on general industry practice, not confirmed by official Roksal documentation
   if (profile.id === 'romb-deska-67' && orientation === 'horizontal') {
+    warnings.push('⚠️ ROMB 67 horizontalna pravila NISO uradno potrjena s strani Roksal - preverite tehnično dokumentacijo');
+    
     if (actualPostSpacing > 1450 && actualPostSpacing < 1800) {
-      warnings.push(`ROMB 67: Razmak stebričkov ${actualPostSpacing}mm je med 1450mm in 1800mm - potrebna dodatna povezava`);
+      // This range MAY be acceptable with additional reinforcement/connection
+      // But this is NOT confirmed by Roksal - mark as unverified
+      warnings.push(`ROMB 67: Razmak stebričkov ${actualPostSpacing.toFixed(0)}mm je med 1450mm in 1800mm - morda potrebna dodatna povezava (NEPOTRJENO)`);
     } else if (actualPostSpacing >= 1800) {
-      errors.push(`ROMB 67: Razmak stebričkov ${actualPostSpacing}mm presega 1800mm - potreben dodaten stebriček`);
+      // This definitely exceeds safe limits
+      errors.push(`ROMB 67: Razmak stebričkov ${actualPostSpacing.toFixed(0)}mm presega 1800mm - potreben dodaten stebriček`);
     }
   }
   
@@ -182,10 +194,18 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
     if (uncoveredWidth < 0) uncoveredWidth = 0;
     solutionFound = true;
   } else {
+    // P0-2: Find BEST solution that matches user's requested spacing
+    // First, calculate ideal number of boards for requested spacing
+    const idealBoardWidth = effectiveWidth + boardSpacing;
+    const idealNumberOfBoards = Math.round(totalDimension / idealBoardWidth);
+    
     // Try different numbers of boards to find one that gives valid spacing
     // Start from minimum possible boards and go up
     const minPossibleBoards = Math.max(2, Math.ceil(totalDimension / (effectiveWidth + profile.maxBoardSpacing)));
     const maxPossibleBoards = Math.floor((totalDimension + profile.maxBoardSpacing) / (effectiveWidth + profile.minBoardSpacing));
+    
+    // Find ALL valid solutions and pick the one closest to requested spacing
+    let bestSolution: { n: number; spacing: number; deviation: number } | null = null;
     
     for (let n = minPossibleBoards; n <= maxPossibleBoards; n++) {
       const totalBoardsWidth = n * effectiveWidth;
@@ -197,12 +217,22 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
       const spacing = remainingSpace / (n - 1);
       
       if (spacing >= profile.minBoardSpacing && spacing <= profile.maxBoardSpacing) {
-        numberOfBoards = n;
-        actualBoardSpacing = spacing;
-        uncoveredWidth = 0;
-        solutionFound = true;
-        break;
+        // Calculate how far this spacing is from requested spacing
+        const deviation = Math.abs(spacing - boardSpacing);
+        
+        // Keep the solution with smallest deviation
+        if (!bestSolution || deviation < bestSolution.deviation) {
+          bestSolution = { n, spacing, deviation };
+        }
       }
+    }
+    
+    // Use best solution if found
+    if (bestSolution) {
+      numberOfBoards = bestSolution.n;
+      actualBoardSpacing = bestSolution.spacing;
+      uncoveredWidth = 0;
+      solutionFound = true;
     }
   }
   
@@ -286,6 +316,14 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   const totalBoardLength = numberOfBoards * boardLength;
   const profileLength = profile.length;
   
+  // P0-7: Validate all dimensions before calculations
+  if (!isFinite(boardLength) || boardLength <= 0) {
+    errors.push(`Neveljavna dolžina deske: ${boardLength}mm`);
+  }
+  if (!isFinite(profileLength) || profileLength <= 0) {
+    errors.push(`Neveljavna dolžina profila: ${profileLength}mm`);
+  }
+  
   // Saw blade width (typical value for circular saw)
   const sawBladeWidth = 3; // mm - width of cut
   
@@ -295,32 +333,74 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   if (boardLength > profileLength) {
     // Board is longer than profile - need special handling
     cutsPerProfile = 0;
-    warnings.push(`Posamezna deska (${boardLength}mm) je daljša od profila (${profileLength}mm). Potrebno spajanje.`);
+  } else if (!isFinite(boardLength) || boardLength <= 0 || !isFinite(profileLength) || profileLength <= 0) {
+    // Invalid dimensions - cannot calculate
+    cutsPerProfile = 0;
+    errors.push(`Ni mogoče izračunati rezanja zaradi neveljavnih dimenzij`);
   } else {
     // Calculate considering saw blade width
     // First cut doesn't need extra space, subsequent cuts need sawBladeWidth
-    cutsPerProfile = Math.floor((profileLength + sawBladeWidth) / (boardLength + sawBladeWidth));
+    const divisor = boardLength + sawBladeWidth;
+    if (divisor <= 0 || !isFinite(divisor)) {
+      cutsPerProfile = 0;
+      errors.push(`Neveljaven delitelj pri izračunu rezanja`);
+    } else {
+      cutsPerProfile = Math.floor((profileLength + sawBladeWidth) / divisor);
+      // Ensure cutsPerProfile is at least 0
+      if (!isFinite(cutsPerProfile) || cutsPerProfile < 0) {
+        cutsPerProfile = 0;
+      }
+    }
   }
   
   // Calculate how many profiles we need
   let profilesNeeded: number;
   if (cutsPerProfile === 0) {
-    // Board is longer than profile
+    // Board is longer than profile or invalid calculation
     profilesNeeded = numberOfBoards;
   } else {
     profilesNeeded = Math.ceil(numberOfBoards / cutsPerProfile);
   }
   
-  // Calculate waste (material that cannot be used)
-  const waste = (profilesNeeded * profileLength) - totalBoardLength;
+  // P0-7: Ensure all calculated values are finite
+  if (!isFinite(profilesNeeded) || profilesNeeded < 0) {
+    profilesNeeded = numberOfBoards; // Fallback
+    errors.push(`Neveljaven izračun števila profilov`);
+  }
   
-  // Ensure waste is never negative
+  // Calculate waste (material that cannot be used)
+  // P0-8: Waste should never be negative - if it is, there's a calculation error
+  let waste = (profilesNeeded * profileLength) - totalBoardLength;
+  
   if (waste < 0) {
-    warnings.push(`Opozorilo: Izračun odpada je negativen (${waste}mm). Preverite dimenzije.`);
+    // This indicates a serious calculation error
+    errors.push(`KRITIČNA NAPAKA: Izračun odpada je negativen (${waste.toFixed(1)}mm). Preverite dimenzije in število profilov.`);
+    waste = 0; // Set to 0 to prevent invalid output
+  }
+  
+  // P0-8: If boards need to be joined (longer than profile), add clear warning
+  if (boardLength > profileLength) {
+    warnings.push(`⚠️ DESKE ZAJEDAJAJO: Posamezna deska (${boardLength}mm) je daljša od profila (${profileLength}mm).`);
+    warnings.push(`Potrebno je spajanje desk - TA IZRAČUN NI ŠE POTRJEN in zahteva dodatno validacijo.`);
+    warnings.push(`Kontaktirajte tehnično podporo za potrjen načrt spojev.`);
   }
   
   // Additional requirements
-  const requiresAluminumTube = profile.requiresAluminumTube;
+  // P0-6: Aluminum tube requirement should be based on actual span, not just static flag
+  let requiresAluminumTube = profile.requiresAluminumTube;
+  
+  // For KUBO profile, check if actual beam spacing exceeds safe limit without reinforcement
+  if (profile.id === 'kubo-80-42') {
+    const maxSpanWithoutTube = 1200; // mm - KUBO can span up to 1200mm without aluminum tube
+    if (orientation === 'vertical' && beamSpacing > maxSpanWithoutTube) {
+      requiresAluminumTube = true;
+      warnings.push(`KUBO: Razmak nosilcev (${beamSpacing.toFixed(0)}mm) presega ${maxSpanWithoutTube}mm - potrebna aluminijasta ojačitev`);
+    } else if (orientation === 'horizontal' && actualPostSpacing > maxSpanWithoutTube) {
+      requiresAluminumTube = true;
+      warnings.push(`KUBO: Razmak stebričkov (${actualPostSpacing.toFixed(0)}mm) presega ${maxSpanWithoutTube}mm - potrebna aluminijasta ojačitev`);
+    }
+  }
+  
   const requiresBrackets = profile.id === 'romb-deska-67'; // ROMB needs brackets
   const screwType = profile.screwVisible ? 'visible' : 'hidden';
   
