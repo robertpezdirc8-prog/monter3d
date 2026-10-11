@@ -14,6 +14,7 @@ export interface FenceConfiguration {
   fenceLength: number; // mm
   boardSpacing: number; // mm
   postSpacing?: number; // mm - optional, calculated if not provided
+  visibleWidth?: number; // mm - for profiles like 57/32 where you can choose visible side
 }
 
 export interface ConstructionResult {
@@ -31,12 +32,14 @@ export interface ConstructionResult {
   numberOfBoards: number;
   actualBoardSpacing: number; // mm
   boardSpacingValid: boolean;
+  effectiveWidth: number; // mm - actual visible width used
   
   // Material calculations
   totalBoardLength: number; // mm
   profilesNeeded: number;
   profileLength: number; // mm
   waste: number; // mm
+  cutsPerProfile: number; // how many boards can be cut from one profile
   
   // Additional requirements
   requiresAluminumTube: boolean;
@@ -53,9 +56,19 @@ export interface ConstructionResult {
  * Calculate fence construction based on configuration
  */
 export function calculateFenceConstruction(config: FenceConfiguration): ConstructionResult {
-  const { profile, orientation, fenceHeight, fenceLength, boardSpacing } = config;
+  const { profile, orientation, fenceHeight, fenceLength, boardSpacing, visibleWidth } = config;
   const warnings: string[] = [];
   const errors: string[] = [];
+  
+  // Check orientation compatibility
+  if (profile.orientation === 'vertical' && orientation === 'horizontal') {
+    errors.push(`Profil ${profile.name} je namenjen samo pokončni postavitvi`);
+  } else if (profile.orientation === 'horizontal' && orientation === 'vertical') {
+    errors.push(`Profil ${profile.name} je namenjen samo prečni postavitvi`);
+  }
+  
+  // Determine effective board width
+  const effectiveWidth = visibleWidth || profile.width;
   
   // Determine maximum post spacing based on fence height
   let maxPostSpacing = profile.maxPostSpacing;
@@ -118,15 +131,15 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   if (orientation === 'vertical') {
     // Vertical boards - calculate based on fence length
     // Use ceiling to ensure full coverage
-    const totalBoardWidth = profile.width + boardSpacing;
+    const totalBoardWidth = effectiveWidth + boardSpacing;
     numberOfBoards = Math.ceil(fenceLength / totalBoardWidth);
     
     // Calculate actual spacing to fit exactly
     if (numberOfBoards === 1) {
       actualBoardSpacing = 0;
-      uncoveredWidth = fenceLength - profile.width;
+      uncoveredWidth = fenceLength - effectiveWidth;
     } else {
-      const totalBoardsWidth = numberOfBoards * profile.width;
+      const totalBoardsWidth = numberOfBoards * effectiveWidth;
       const totalSpacing = fenceLength - totalBoardsWidth;
       actualBoardSpacing = totalSpacing / (numberOfBoards - 1);
       uncoveredWidth = 0; // With ceiling, we should have full coverage
@@ -134,15 +147,15 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   } else {
     // Horizontal boards - calculate based on fence height
     // Use ceiling to ensure full coverage
-    const totalBoardWidth = profile.width + boardSpacing;
+    const totalBoardWidth = effectiveWidth + boardSpacing;
     numberOfBoards = Math.ceil(fenceHeight / totalBoardWidth);
     
     // Calculate actual spacing to fit exactly
     if (numberOfBoards === 1) {
       actualBoardSpacing = 0;
-      uncoveredWidth = fenceHeight - profile.width;
+      uncoveredWidth = fenceHeight - effectiveWidth;
     } else {
-      const totalBoardsWidth = numberOfBoards * profile.width;
+      const totalBoardsWidth = numberOfBoards * effectiveWidth;
       const totalSpacing = fenceHeight - totalBoardsWidth;
       actualBoardSpacing = totalSpacing / (numberOfBoards - 1);
       uncoveredWidth = 0; // With ceiling, we should have full coverage
@@ -162,11 +175,24 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
     warnings.push(`Razmik med deskami (${actualBoardSpacing.toFixed(1)}mm) je večji od maksimalnega (${profile.maxBoardSpacing}mm)`);
   }
   
-  // Calculate material
+  // Calculate material with cutting plan
   const boardLength = orientation === 'vertical' ? fenceHeight : fenceLength;
   const totalBoardLength = numberOfBoards * boardLength;
   const profileLength = profile.length;
-  const profilesNeeded = Math.ceil(totalBoardLength / profileLength);
+  
+  // Simple cutting plan: how many boards of boardLength can we cut from one profile?
+  const cutsPerProfile = Math.floor(profileLength / boardLength);
+  
+  // Calculate how many profiles we need
+  let profilesNeeded: number;
+  if (cutsPerProfile === 0) {
+    // Board is longer than profile - need special handling
+    profilesNeeded = numberOfBoards;
+    warnings.push(`Posamezna deska (${boardLength}mm) je daljša od profila (${profileLength}mm). Potrebno spajanje.`);
+  } else {
+    profilesNeeded = Math.ceil(numberOfBoards / cutsPerProfile);
+  }
+  
   const waste = (profilesNeeded * profileLength) - totalBoardLength;
   
   // Additional requirements
@@ -202,11 +228,13 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
     numberOfBoards,
     actualBoardSpacing: Math.round(actualBoardSpacing),
     boardSpacingValid,
+    effectiveWidth,
     
     totalBoardLength,
     profilesNeeded,
     profileLength,
     waste: Math.round(waste),
+    cutsPerProfile,
     
     requiresAluminumTube,
     requiresBrackets,
