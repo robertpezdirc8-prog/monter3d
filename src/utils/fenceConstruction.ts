@@ -110,29 +110,56 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
     errors.push(`Razmak nosilcev (${beamSpacing}mm) presega maksimalni dovoljeni razmak (${maxBeamSpacing}mm)`);
   }
   
-  // Calculate boards
+  // Calculate boards - ensure full coverage without gaps
   let numberOfBoards: number;
   let actualBoardSpacing: number;
+  let uncoveredWidth: number = 0;
   
   if (orientation === 'vertical') {
     // Vertical boards - calculate based on fence length
+    // Use ceiling to ensure full coverage
     const totalBoardWidth = profile.width + boardSpacing;
-    numberOfBoards = Math.floor(fenceLength / totalBoardWidth);
-    actualBoardSpacing = (fenceLength - (numberOfBoards * profile.width)) / Math.max(numberOfBoards - 1, 1);
+    numberOfBoards = Math.ceil(fenceLength / totalBoardWidth);
+    
+    // Calculate actual spacing to fit exactly
+    if (numberOfBoards === 1) {
+      actualBoardSpacing = 0;
+      uncoveredWidth = fenceLength - profile.width;
+    } else {
+      const totalBoardsWidth = numberOfBoards * profile.width;
+      const totalSpacing = fenceLength - totalBoardsWidth;
+      actualBoardSpacing = totalSpacing / (numberOfBoards - 1);
+      uncoveredWidth = 0; // With ceiling, we should have full coverage
+    }
   } else {
     // Horizontal boards - calculate based on fence height
+    // Use ceiling to ensure full coverage
     const totalBoardWidth = profile.width + boardSpacing;
-    numberOfBoards = Math.floor(fenceHeight / totalBoardWidth);
-    actualBoardSpacing = (fenceHeight - (numberOfBoards * profile.width)) / Math.max(numberOfBoards - 1, 1);
+    numberOfBoards = Math.ceil(fenceHeight / totalBoardWidth);
+    
+    // Calculate actual spacing to fit exactly
+    if (numberOfBoards === 1) {
+      actualBoardSpacing = 0;
+      uncoveredWidth = fenceHeight - profile.width;
+    } else {
+      const totalBoardsWidth = numberOfBoards * profile.width;
+      const totalSpacing = fenceHeight - totalBoardsWidth;
+      actualBoardSpacing = totalSpacing / (numberOfBoards - 1);
+      uncoveredWidth = 0; // With ceiling, we should have full coverage
+    }
   }
   
   const boardSpacingValid = actualBoardSpacing >= profile.minBoardSpacing && 
                             actualBoardSpacing <= profile.maxBoardSpacing;
   
-  if (actualBoardSpacing < profile.minBoardSpacing) {
-    warnings.push(`Razmik med deskami (${actualBoardSpacing}mm) je manjši od minimalnega (${profile.minBoardSpacing}mm)`);
-  } else if (actualBoardSpacing > profile.maxBoardSpacing) {
-    warnings.push(`Razmik med deskami (${actualBoardSpacing}mm) je večji od maksimalnega (${profile.maxBoardSpacing}mm)`);
+  if (uncoveredWidth > 0) {
+    errors.push(`Ograja ne more biti popolnoma pokrita. Nepokrita širina: ${uncoveredWidth}mm`);
+  }
+  
+  if (actualBoardSpacing < profile.minBoardSpacing && numberOfBoards > 1) {
+    warnings.push(`Razmik med deskami (${actualBoardSpacing.toFixed(1)}mm) je manjši od minimalnega (${profile.minBoardSpacing}mm)`);
+  } else if (actualBoardSpacing > profile.maxBoardSpacing && numberOfBoards > 1) {
+    warnings.push(`Razmik med deskami (${actualBoardSpacing.toFixed(1)}mm) je večji od maksimalnega (${profile.maxBoardSpacing}mm)`);
   }
   
   // Calculate material

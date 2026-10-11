@@ -324,6 +324,47 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
       'Priporočen razmik med deskami: 0.5-3cm',
       'Opomba: Podatki samo iz spletne strani, niso v PDF katalogu'
     ]
+  },
+  
+  // KUBO 80/42 - Pregradne stene (partition walls)
+  {
+    id: 'kubo-80-42',
+    name: 'KUBO 80/42 (Pregradna stena)',
+    width: 80,
+    thickness: 42,
+    length: 2900,
+    orientation: 'both',
+    maxPostSpacing: 1200, // max razmak brez ojačitve
+    maxBeamSpacing: 1200, // max razmak brez ojačitve
+    minBoardSpacing: 20,
+    maxBoardSpacing: 100,
+    recommendedBoardSpacing: 40,
+    screwVisible: false,
+    screwSide: 'back',
+    hasAluminumTube: true, // notranja aluminijasta cev 20x60x2mm
+    requiresAluminumTube: true, // OBVEZNA za razpone nad 120cm
+    maxPostSpacingLow: 1200, // do 150cm višine
+    maxPostSpacingHigh: 1200, // nad 150cm višine
+    colors: [
+      ROKSAL_COLORS['amazon-wood'],
+      ROKSAL_COLORS['ash-wood'],
+      ROKSAL_COLORS['burma-teak'],
+      ROKSAL_COLORS['golden-teak']
+    ],
+    verified: true,
+    source: 'https://roksal.com/woodcore-wpc-deske/pregradne-stene/pokoncne-deske/',
+    notes: 'Profil za pregradne stene. Vidna širina 42mm ali 80mm. Z aluminijasto cevjo 20x60x2mm možen razpon do 260cm.',
+    technicalNotes: [
+      'Profil 80 × 42 mm, standardna dolžina 2900mm',
+      'Vidna širina: 42mm ali 80mm (glede na orientacijo)',
+      'Notranja aluminijasta cev 20 × 60 × 2 mm',
+      'Brez dodatne ojačitve: max razpon 120cm',
+      'Z aluminijasto cevjo: max razpon do 260cm',
+      'Skrito vijačenje z zadnje strani',
+      'Primerno za notranje in zunanje pregradne stene',
+      'Razmik med letvicami se izbere glede na želeni videz',
+      'Opomba: KUBO je ločen sistem za pregrade, ni avtomatično združljiv z ograjami'
+    ]
   }
 ];
 
