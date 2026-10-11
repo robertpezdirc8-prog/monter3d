@@ -127,38 +127,28 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   let numberOfBoards: number;
   let actualBoardSpacing: number;
   let uncoveredWidth: number = 0;
+  const totalDimension = orientation === 'vertical' ? fenceLength : fenceHeight;
   
-  if (orientation === 'vertical') {
-    // Vertical boards - calculate based on fence length
-    // Use ceiling to ensure full coverage
-    const totalBoardWidth = effectiveWidth + boardSpacing;
-    numberOfBoards = Math.ceil(fenceLength / totalBoardWidth);
-    
-    // Calculate actual spacing to fit exactly
-    if (numberOfBoards === 1) {
-      actualBoardSpacing = 0;
-      uncoveredWidth = fenceLength - effectiveWidth;
-    } else {
-      const totalBoardsWidth = numberOfBoards * effectiveWidth;
-      const totalSpacing = fenceLength - totalBoardsWidth;
-      actualBoardSpacing = totalSpacing / (numberOfBoards - 1);
-      uncoveredWidth = 0; // With ceiling, we should have full coverage
-    }
+  // Calculate how many boards we need
+  const totalBoardWidth = effectiveWidth + boardSpacing;
+  numberOfBoards = Math.ceil(totalDimension / totalBoardWidth);
+  
+  // Calculate actual spacing to fit exactly
+  if (numberOfBoards === 1) {
+    actualBoardSpacing = 0;
+    uncoveredWidth = totalDimension - effectiveWidth;
   } else {
-    // Horizontal boards - calculate based on fence height
-    // Use ceiling to ensure full coverage
-    const totalBoardWidth = effectiveWidth + boardSpacing;
-    numberOfBoards = Math.ceil(fenceHeight / totalBoardWidth);
+    const totalBoardsWidth = numberOfBoards * effectiveWidth;
+    const totalSpacing = totalDimension - totalBoardsWidth;
+    actualBoardSpacing = totalSpacing / (numberOfBoards - 1);
     
-    // Calculate actual spacing to fit exactly
-    if (numberOfBoards === 1) {
+    // Check if spacing is negative (impossible configuration)
+    if (actualBoardSpacing < 0) {
+      errors.push(`Konfiguracija ni mogoča: ${numberOfBoards} desk širine ${effectiveWidth}mm ne more pokriti ${totalDimension}mm z negativnim razmikom`);
       actualBoardSpacing = 0;
-      uncoveredWidth = fenceHeight - effectiveWidth;
+      uncoveredWidth = totalDimension - (numberOfBoards * effectiveWidth);
     } else {
-      const totalBoardsWidth = numberOfBoards * effectiveWidth;
-      const totalSpacing = fenceHeight - totalBoardsWidth;
-      actualBoardSpacing = totalSpacing / (numberOfBoards - 1);
-      uncoveredWidth = 0; // With ceiling, we should have full coverage
+      uncoveredWidth = 0;
     }
   }
   
