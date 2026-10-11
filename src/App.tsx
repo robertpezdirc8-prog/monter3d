@@ -21,6 +21,9 @@ import { PhotoMatchingView } from './components/PhotoMatchingView';
 import { FenceVisualizer } from './components/FenceVisualizer';
 import { RoksalGalleryView } from './components/RoksalGalleryView';
 import { FenceConfigurator } from './components/FenceConfigurator';
+import TradeMenu from './components/TradeMenu';
+import TradeCapture from './components/TradeCapture';
+import type { TradeId } from './utils/cameraSDK';
 import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId } from './utils/storage';
 
 // Icons as simple SVG components
@@ -37,8 +40,25 @@ const IconSave = () => <svg className="w-6 h-6" fill="none" stroke="currentColor
 
 function App() {
   const [showTests, setShowTests] = useState(() => window.location.hash === '#tests');
+  // Kamera za monterje (brez AI): #trade = meni obrti, #capture/<obrt> = voden zajem
+  const [tradeRoute, setTradeRoute] = useState<{ menu: boolean; capture: TradeId | null }>(() => {
+    const h = window.location.hash;
+    if (h.startsWith('#capture/')) {
+      const id = h.slice('#capture/'.length) as TradeId;
+      return { menu: false, capture: id };
+    }
+    return { menu: h === '#trade', capture: null };
+  });
   useEffect(() => {
-    const handler = () => setShowTests(window.location.hash === '#tests');
+    const handler = () => {
+      setShowTests(window.location.hash === '#tests');
+      const h = window.location.hash;
+      if (h.startsWith('#capture/')) {
+        setTradeRoute({ menu: false, capture: h.slice('#capture/'.length) as TradeId });
+      } else {
+        setTradeRoute({ menu: h === '#trade', capture: null });
+      }
+    };
     window.addEventListener('hashchange', handler);
     return () => window.removeEventListener('hashchange', handler);
   }, []);
@@ -633,6 +653,14 @@ function App() {
     );
   }
 
+  // Kamera za monterje (brez AI modela) — meni obrti ali voden zajem
+  if (tradeRoute.capture && ['ograje', 'keramika', 'fasade', 'krovstvo'].includes(tradeRoute.capture)) {
+    return <TradeCapture trade={tradeRoute.capture} onBack={() => { window.location.hash = '#trade'; }} />;
+  }
+  if (tradeRoute.menu) {
+    return <TradeMenu />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
       {/* Camera Capture Modal */}
@@ -1147,6 +1175,17 @@ function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPh
           capturedSteps={capturedSteps}
           onCaptureStep={onCaptureStep}
         />
+      </div>
+
+      {/* Kamera za monterje (brez AI) — bližnjica do menija obrti */}
+      <div className="mb-4">
+        <a
+          href="#trade"
+          className="block bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 rounded-lg p-3 text-center transition-colors"
+        >
+          <span className="text-sm font-semibold">📷 Voden zajem po obrti — ograje · keramika · fasade · krovstvo</span>
+          <span className="block text-xs opacity-80 mt-0.5">Kamera + skripte, brez AI modela · samodejna prevera ostrine in svetlobe</span>
+        </a>
       </div>
 
       {/* Camera and Upload buttons */}
