@@ -1,8 +1,29 @@
 # Roksal Texture Assets
 
-## Ustvarjene teksture
+## ⚠️ POMEMBNO OPOZORILO
 
-Med razvojem so bile ustvarjene naslednje teksture za Roksal WPC profile:
+**AI-generirane teksture NISO originalni Roksal vzorci.**
+
+Teksture, ustvarjene med Fazno 5, so bile generirane z AI na podlagi barvnih odtenkov iz Roksal kataloga. Te teksture:
+- ❌ Niso originalni Roksal izdelki
+- ❌ Ne prikazujejo dejanske strukture WPC desk
+- ❌ Se NE uporabljajo v aplikaciji
+- ❌ Ne smejo biti prikazane strankam kot originalni vzorci
+
+## Originalni Roksal viri
+
+Za originalne Roksal slike in barvne vzorce glejte:
+- **Galerija slik:** `src/data/roksalGallery.ts`
+- **Komponenta za prikaz:** `src/components/RoksalGalleryView.tsx`
+- **Uradna spletna stran:** https://roksal.com/
+
+Vse originalne slike so last podjetja Roksal d.o.o. in se uporabljajo z dovoljenjem.
+
+---
+
+## AI-generirane teksture (NEUPORABNE)
+
+Med razvojem so bile ustvarjene naslednje AI teksture za Roksal WPC profile:
 
 ### 1. Anthracite (temno siva)
 - **URL:** https://image.qwenlm.ai/generated-images/900b449a-9a82-482a-a8e0-adcb47aafe3e/_result.png

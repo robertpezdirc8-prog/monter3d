@@ -428,7 +428,11 @@ export function FenceVisualizer({ photo, onClose }: FenceVisualizerProps) {
             <div className="bg-blue-900/30 border border-blue-700 rounded p-3">
               <p className="text-xs text-blue-200">
                 <strong>⚠️ Opomba:</strong> Vizualizacija je približna in služi samo za predogled.
+                Barve so prikazane kot solid barve iz uradnega Roksal kataloga.
                 Za natančne mere in tehnične specifikacije kontaktirajte Roksal.
+              </p>
+              <p className="text-xs text-slate-400 mt-2">
+                <strong>Vir podatkov:</strong> https://roksal.com/
               </p>
             </div>
           </div>
