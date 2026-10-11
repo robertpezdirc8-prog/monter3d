@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mera3D Pro - Matematični testi (preusmeritev)</title>
+    <meta http-equiv="refresh" content="0;url=/#/tests">
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .info { background: #e8f4fd; border: 1px solid #3498db; padding: 20px; border-radius: 8px; }
+        a { color: #3498db; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <h2>🧪 Matematični testi</h2>
+        <p>Preusmerjam na testno stran...</p>
+        <p>Če se ne preusmeri samodejno, kliknite: <a href="/#/tests">Zaženi matematične teste</a></p>
+        <hr>
+        <h3>⚠️ Zakaj ta stran ne izvaja testov neposredno?</h3>
+        <p>Prejšnja različica te strani je uvažala <code>./src/utils/cv.ts</code> (TypeScript),
+        kar brskalnik ne more neposredno izvajati. Vite ne transpila datotek iz <code>public/</code> mape.</p>
+        <p>Zato so testi zdaj integrirani v glavno React aplikacijo, kjer se pravilno transpilajo
+        in uporabljajo <strong>dejanske funkcije</strong> iz <code>src/utils/cv.ts</code>.</p>
+        <h3>Navodila za lokalni zagon</h3>
+        <ol>
+            <li>Zaženite <code>npm run dev</code></li>
+            <li>Odprite <code>http://localhost:3000/#tests</code></li>
+            <li>Kliknite "Zaženi vseh 12 testnih sklopov"</li>
+        </ol>
+    </div>
+    <script>
+        // Redirect to test page
+        if (window.location.pathname !== '/') {
+            window.location.href = '/#/tests';
+        } else {
+            window.location.hash = '#tests';
+        }
+    </script>
+</body>
+</html>

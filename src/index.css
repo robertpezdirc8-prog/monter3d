@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* Canvas cursor */
+canvas.cursor-crosshair {
+  cursor: crosshair;
+}
+
+/* Selection color */
+::selection {
+  background-color: #059669;
+  color: white;
+}
+
+/* Focus styles */
+input:focus, select:focus, button:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 1px;
+}
+
+/* Animation for loading states */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  header, nav, footer, aside {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .grid-cols-2, .grid-cols-3, .grid-cols-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Table styles */
+table {
+  border-collapse: collapse;
+}
+
+/* Photo thumbnail hover effect */
+.photo-thumb:hover {
+  transform: scale(1.05);
+  z-index: 10;
+}
+
+/* Status badges */
+.status-verified {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.status-warning {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.status-invalid {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}

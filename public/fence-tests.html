@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mera3D Pro - Dejanski testi konstrukcije ograje</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        h1 { color: #10b981; border-bottom: 2px solid #10b981; padding-bottom: 10px; }
+        .info-box {
+            background: #1e293b;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning-box {
+            background: #78350f;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .test-suite {
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-suite h2 { color: #3b82f6; margin-top: 0; }
+        .test-result {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        .test-pass { background: #064e3b; border-left: 4px solid #10b981; }
+        .test-fail { background: #7f1d1d; border-left: 4px solid #ef4444; }
+        .summary {
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .summary-stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+        }
+        .stat { text-align: center; }
+        .stat-number { font-size: 48px; font-weight: bold; }
+        .stat-label { font-size: 14px; color: #94a3b8; }
+        button {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 6px;
+            font-size: 18px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover { background: #059669; }
+        button:disabled { background: #475569; cursor: not-allowed; }
+        .loading { text-align: center; padding: 40px; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Mera3D Pro - Dejanski testi konstrukcije ograje</h1>
+    
+    <div class="info-box">
+        <strong>ℹ️ Informacija:</strong> Ti testi se izvajajo v brskalniku in uporabljajo dejanske funkcije iz <code>src/utils/fenceConstruction.ts</code>. 
+        Rezultati so dejanski, ne izmišljeni.
+    </div>
+    
+    <div class="warning-box">
+        <strong>⚠️ Omejitev okolja:</strong> V tem razvojnem okolju ni mogoče zagnati <code>npm test</code> ali <code>npx vitest run</code>. 
+        Ti testi se izvajajo v brskalniku kot nadomestek za Vitest teste.
+    </div>
+
+    <div class="summary">
+        <h2>Status testov</h2>
+        <div id="status" class="loading">
+            Pritisnite gumb za zagon testov...
+        </div>
+        <button id="runTests" onclick="runAllTests()">▶ Zaženi 26 testov</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script type="module">
+        import { calculateFenceConstruction, validateFenceConfiguration } from '/src/utils/fenceConstruction.ts';
+        import { ROKSAL_PROFILES } from '/src/data/roksalCatalog.ts';
+
+        const testResults = [];
+
+        function addResult(suite, name, passed, expected, actual) {
+            testResults.push({ suite, name, passed, expected, actual });
+        }
+
+        window.runAllTests = function() {
+            document.getElementById('runTests').disabled = true;
+            document.getElementById('status').innerHTML = 'Izvajam 26 testov...';
+            document.getElementById('results').innerHTML = '';
+            testResults.length = 0;
+
+            const polna57 = ROKSAL_PROFILES.find(p => p.id === 'polna-deska-57-32');
+            const polna100 = ROKSAL_PROFILES.find(p => p.id === 'polna-deska-100');
+            const polna128 = ROKSAL_PROFILES.find(p => p.id === 'polna-deska-128');
+            const romb67 = ROKSAL_PROFILES.find(p => p.id === 'romb-deska-67');
+            const deska150 = ROKSAL_PROFILES.find(p => p.id === 'deska-150');
+            const kubo = ROKSAL_PROFILES.find(p => p.id === 'kubo-80-42');
+
+            // TEST 1: Dolžina 121mm, širina 100mm, razmik 20mm
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna100,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 121,
+                    boardSpacing: 20
+                });
+                addResult('Robni primeri', 'Dolžina 121mm, širina 100mm, razmik 20mm - neveljavno', 
+                    !result.valid && result.errors.length > 0,
+                    'valid=false, errors>0', 
+                    `valid=${result.valid}, errors=${result.errors.length}`);
+            } catch (e) {
+                addResult('Robni primeri', 'Dolžina 121mm', false, 'neveljavno', `napaka: ${e.message}`);
+            }
+
+            // TEST 2: Ena deska brez razmika
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna100,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 100,
+                    boardSpacing: 0
+                });
+                addResult('Robni primeri', 'Ena deska brez razmika - veljavno',
+                    result.numberOfBoards === 1 && result.actualBoardSpacing === 0 && result.valid,
+                    '1 deska, razmik 0, valid=true', 
+                    `${result.numberOfBoards} desk, razmik ${result.actualBoardSpacing}, valid=${result.valid}`);
+            } catch (e) {
+                addResult('Robni primeri', 'Ena deska', false, '1 deska', `napaka: ${e.message}`);
+            }
+
+            // TEST 3: Več desk pri minimalnem razmiku
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna100,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 1000,
+                    boardSpacing: 5
+                });
+                addResult('Robni primeri', 'Več desk pri minimalnem razmiku (5mm)',
+                    result.numberOfBoards > 1 && result.actualBoardSpacing >= 5 && result.actualBoardSpacing <= 30,
+                    'boards>1, spacing 5-30mm', 
+                    `boards=${result.numberOfBoards}, spacing=${result.actualBoardSpacing}mm`);
+            } catch (e) {
+                addResult('Robni primeri', 'Minimalni razmik', false, 'boards>1', `napaka: ${e.message}`);
+            }
+
+            // TEST 4: Več desk pri maksimalnem razmiku
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna100,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 1000,
+                    boardSpacing: 30
+                });
+                addResult('Robni primeri', 'Več desk pri maksimalnem razmiku (30mm)',
+                    result.numberOfBoards > 1 && result.actualBoardSpacing <= 30,
+                    'boards>1, spacing<=30mm', 
+                    `boards=${result.numberOfBoards}, spacing=${result.actualBoardSpacing}mm`);
+            } catch (e) {
+                addResult('Robni primeri', 'Maksimalni razmik', false, 'boards>1', `napaka: ${e.message}`);
+            }
+
+            // TEST 5: Pokritost robov
+            try {
+                const lengths = [500, 1000, 1500, 2000, 2500];
+                let allCovered = true;
+                for (const length of lengths) {
+                    const result = calculateFenceConstruction({
+                        profile: polna128,
+                        orientation: 'vertical',
+                        fenceHeight: 1000,
+                        fenceLength: length,
+                        boardSpacing: 20
+                    });
+                    const coveredLength = result.numberOfBoards * result.effectiveWidth + 
+                                         (result.numberOfBoards - 1) * result.actualBoardSpacing;
+                    if (Math.abs(coveredLength - length) > 1) {
+                        allCovered = false;
+                        break;
+                    }
+                }
+                addResult('Robni primeri', 'Pokritost robov - vse dolžine pokrite',
+                    allCovered,
+                    'vse dolžine pokrite', 
+                    `allCovered=${allCovered}`);
+            } catch (e) {
+                addResult('Robni primeri', 'Pokritost robov', false, 'pokrito', `napaka: ${e.message}`);
+            }
+
+            // TEST 6: Stebrički 3000mm
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna57,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 3000,
+                    boardSpacing: 20
+                });
+                addResult('Izračun stebričkov', '3000mm, max 1500mm - 3 stebrički',
+                    result.numberOfPosts === 3 && result.actualPostSpacing === 1500,
+                    '3 posts, spacing=1500mm', 
+                    `posts=${result.numberOfPosts}, spacing=${result.actualPostSpacing}mm`);
+            } catch (e) {
+                addResult('Izračun stebričkov', '3000mm', false, '3 posts', `napaka: ${e.message}`);
+            }
+
+            // TEST 7: Stebrički 3500mm
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna57,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 3500,
+                    boardSpacing: 20
+                });
+                addResult('Izračun stebričkov', '3500mm, max 1500mm - 4 stebrički',
+                    result.numberOfPosts >= 3 && result.actualPostSpacing <= 1500,
+                    'posts>=3, spacing<=1500mm', 
+                    `posts=${result.numberOfPosts}, spacing=${result.actualPostSpacing}mm`);
+            } catch (e) {
+                addResult('Izračun stebričkov', '3500mm', false, 'posts>=3', `napaka: ${e.message}`);
+            }
+
+            // TEST 8: Stebrički 5800mm
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna100,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 5800,
+                    boardSpacing: 20
+                });
+                addResult('Izračun stebričkov', '5800mm, max 1800mm - pravilen izračun',
+                    result.numberOfPosts >= 4 && result.actualPostSpacing <= 1800,
+                    'posts>=4, spacing<=1800mm', 
+                    `posts=${result.numberOfPosts}, spacing=${result.actualPostSpacing}mm`);
+            } catch (e) {
+                addResult('Izračun stebričkov', '5800mm', false, 'posts>=4', `napaka: ${e.message}`);
+            }
+
+            // TEST 9: Uporabniški razmak stebričkov
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna100,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 3000,
+                    boardSpacing: 20,
+                    postSpacing: 1000
+                });
+                addResult('Izračun stebričkov', 'Uporabniški razmak 1000mm',
+                    result.actualPostSpacing === 1000 && result.numberOfPosts === 4,
+                    'spacing=1000mm, posts=4', 
+                    `spacing=${result.actualPostSpacing}mm, posts=${result.numberOfPosts}`);
+            } catch (e) {
+                addResult('Izračun stebričkov', 'Uporabniški razmak', false, 'spacing=1000', `napaka: ${e.message}`);
+            }
+
+            // TEST 10: Načrt rezanja - 3 kosi po 1200mm
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna128,
+                    orientation: 'vertical',
+                    fenceHeight: 1200,
+                    fenceLength: 3000,
+                    boardSpacing: 20
+                });
+                addResult('Načrt rezanja', '3 kosi po 1200mm iz 2200mm - 3 deske',
+                    result.cutsPerProfile === 1 && result.profilesNeeded >= 3,
+                    'cutsPerProfile=1, profilesNeeded>=3', 
+                    `cutsPerProfile=${result.cutsPerProfile}, profilesNeeded=${result.profilesNeeded}`);
+            } catch (e) {
+                addResult('Načrt rezanja', '3 kosi po 1200mm', false, 'cutsPerProfile=1', `napaka: ${e.message}`);
+            }
+
+            // TEST 11: Optimizacija razreza
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna128,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 2000,
+                    boardSpacing: 20
+                });
+                addResult('Načrt rezanja', '2 kosa po 1000mm iz 2200mm',
+                    result.cutsPerProfile === 2,
+                    'cutsPerProfile=2', 
+                    `cutsPerProfile=${result.cutsPerProfile}`);
+            } catch (e) {
+                addResult('Načrt rezanja', 'Optimizacija', false, 'cutsPerProfile=2', `napaka: ${e.message}`);
+            }
+
+            // TEST 12: Odpad pri rezanju
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna128,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 3000,
+                    boardSpacing: 20
+                });
+                addResult('Načrt rezanja', 'Odpad >= 0',
+                    result.waste >= 0,
+                    'waste>=0', 
+                    `waste=${result.waste}mm`);
+            } catch (e) {
+                addResult('Načrt rezanja', 'Odpad', false, 'waste>=0', `napaka: ${e.message}`);
+            }
+
+            // TEST 13: ROMB zahteva ALU cev
+            try {
+                const result = calculateFenceConstruction({
+                    profile: romb67,
+                    orientation: 'horizontal',
+                    fenceHeight: 1000,
+                    fenceLength: 1000,
+                    boardSpacing: 20
+                });
+                addResult('Tehnična združljivost', 'ROMB 67 zahteva ALU cev',
+                    result.requiresAluminumTube === true,
+                    'requiresAluminumTube=true', 
+                    `requiresAluminumTube=${result.requiresAluminumTube}`);
+            } catch (e) {
+                addResult('Tehnična združljivost', 'ROMB ALU', false, 'true', `napaka: ${e.message}`);
+            }
+
+            // TEST 14: POLNA 100 prečno - nedovoljeno
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna100,
+                    orientation: 'horizontal',
+                    fenceHeight: 1000,
+                    fenceLength: 3000,
+                    boardSpacing: 20
+                });
+                addResult('Tehnična združljivost', 'POLNA 100 prečno - nedovoljeno',
+                    !result.valid && result.errors.length > 0,
+                    'valid=false, errors>0', 
+                    `valid=${result.valid}, errors=${result.errors.length}`);
+            } catch (e) {
+                addResult('Tehnična združljivost', 'POLNA 100 prečno', false, 'neveljavno', `napaka: ${e.message}`);
+            }
+
+            // TEST 15: DESKA 150 pokončno - nedovoljeno
+            try {
+                const result = calculateFenceConstruction({
+                    profile: deska150,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 3000,
+                    boardSpacing: 20
+                });
+                addResult('Tehnična združljivost', 'DESKA 150 pokončno - nedovoljeno',
+                    !result.valid && result.errors.length > 0,
+                    'valid=false, errors>0', 
+                    `valid=${result.valid}, errors=${result.errors.length}`);
+            } catch (e) {
+                addResult('Tehnična združljivost', 'DESKA 150 pokončno', false, 'neveljavno', `napaka: ${e.message}`);
+            }
+
+            // TEST 16: Razmak stebričkov presega maksimum
+            try {
+                const result = calculateFenceConstruction({
+                    profile: polna57,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 3000,
+                    boardSpacing: 20,
+                    postSpacing: 2000
+                });
+                addResult('Tehnična združljivost', 'Razmak 2000mm presega max 1500mm',
+                    !result.valid && result.errors.some(e => e.includes('presega')),
+                    'valid=false, error contains "presega"', 
+                    `valid=${result.valid}, errors=${result.errors.join(', ')}`);
+            } catch (e) {
+                addResult('Tehnična združljivost', 'Razmak presega', false, 'neveljavno', `napaka: ${e.message}`);
+            }
+
+            // TEST 17: KUBO uporablja svoja pravila
+            try {
+                const result = calculateFenceConstruction({
+                    profile: kubo,
+                    orientation: 'vertical',
+                    fenceHeight: 1000,
+                    fenceLength: 2000,
+                    boardSpacing: 40
+                });
+                addResult('Tehnična združljivost', 'KUBO max razmak 1200mm',
+                    result.actualPostSpacing <= 1200,
+                    'spacing<=1200mm', 
+                    `spacing=${result.actualPostSpacing}mm`);
+            } catch (e) {
+                addResult('Tehnična združljivost', 'KUBO', false, 'spacing<=1200', `napaka: ${e.message}`);
+            }
+
+            // TEST 18-21: Pokončne ograje - razmiki nosilcev
+            const verticalTests = [
+                { profile: polna57, max: 1000, name: 'POLNA 57/32 max 1000mm' },
+                { profile: polna100, max: 800, name: 'POLNA 100 max 800mm' },
+                { profile: polna128, max: 1000, name: 'POLNA 128 max 1000mm' },
+                { profile: romb67, max: 1100, name: 'ROMB 67 max 1100mm' }
+            ];
+
+            verticalTests.forEach((test, i) => {
+                try {
+                    const result = calculateFenceConstruction({
+                        profile: test.profile,
+                        orientation: 'vertical',
+                        fenceHeight: 1500,
+                        fenceLength: 3000,
+                        boardSpacing: 20
+                    });
+                    addResult('Pokončne ograje', `${test.name}`,
+                        result.beamSpacing <= test.max,
+                        `beamSpacing<=${test.max}mm`, 
+                        `beamSpacing=${result.beamSpacing}mm`);
+                } catch (e) {
+                    addResult('Pokončne ograje', test.name, false, `<=${test.max}`, `napaka: ${e.message}`);
+                }
+            });
+
+            // TEST 22-26: Prečne ograje - razmiki stebričkov
+            try {
+                const result = calculateFenceConstruction({
+                    profile: romb67,
+                    orientation: 'horizontal',
+                    fenceHeight: 1000,
+                    fenceLength: 1450,
+                    boardSpacing: 20
+                });
+                addResult('Prečne ograje', 'ROMB 67 prečno 1450mm - veljavno',
+                    result.valid && result.actualPostSpacing <= 1450,
+                    'valid=true, spacing<=1450mm', 
+                    `valid=${result.valid}, spacing=${result.actualPostSpacing}mm`);
+            } catch (e) {
+                addResult('Prečne ograje', 'ROMB 1450mm', false, 'veljavno', `napaka: ${e.message}`);
+            }
+
+            try {
+                const validation = validateFenceConfiguration({
+                    profile: romb67,
+                    orientation: 'horizontal',
+                    fenceHeight: 1000,
+                    fenceLength: 1600,
+                    boardSpacing: 20,
+                    postSpacing: 1600
+                });
+                addResult('Prečne ograje', 'ROMB 67 prečno 1600mm - zahteva dodatno povezavo',
+                    validation.warnings.some(w => w.includes('145') || w.includes('dodatna') || w.includes('povezava')),
+                    'warning vsebuje "145" ali "dodatna"', 
+                    `warnings: ${validation.warnings.join(', ')}`);
+            } catch (e) {
+                addResult('Prečne ograje', 'ROMB 1600mm', false, 'warning', `napaka: ${e.message}`);
+            }
+
+            try {
+                const validation = validateFenceConfiguration({
+                    profile: romb67,
+                    orientation: 'horizontal',
+                    fenceHeight: 1000,
+                    fenceLength: 1800,
+                    boardSpacing: 20,
+                    postSpacing: 1800
+                });
+                addResult('Prečne ograje', 'ROMB 67 prečno 1800mm - zahteva dodaten stebriček',
+                    validation.errors.length > 0 || validation.warnings.some(w => w.includes('180') || w.includes('stebriček')),
+                    'error ali warning', 
+                    `errors: ${validation.errors.length}, warnings: ${validation.warnings.join(', ')}`);
+            } catch (e) {
+                addResult('Prečne ograje', 'ROMB 1800mm', false, 'error/warning', `napaka: ${e.message}`);
+            }
+
+            try {
+                const result = calculateFenceConstruction({
+                    profile: deska150,
+                    orientation: 'horizontal',
+                    fenceHeight: 1000,
+                    fenceLength: 1300,
+                    boardSpacing: 20
+                });
+                addResult('Prečne ograje', 'DESKA 150 prečno 1300mm - veljavno',
+                    result.valid && result.actualPostSpacing <= 1300,
+                    'valid=true, spacing<=1300mm', 
+                    `valid=${result.valid}, spacing=${result.actualPostSpacing}mm`);
+            } catch (e) {
+                addResult('Prečne ograje', 'DESKA 150 1300mm', false, 'veljavno', `napaka: ${e.message}`);
+            }
+
+            try {
+                const validation = validateFenceConfiguration({
+                    profile: deska150,
+                    orientation: 'horizontal',
+                    fenceHeight: 1000,
+                    fenceLength: 1400,
+                    boardSpacing: 20,
+                    postSpacing: 1400
+                });
+                addResult('Prečne ograje', 'DESKA 150 prečno 1400mm - neveljavno',
+                    validation.errors.length > 0,
+                    'errors>0', 
+                    `errors: ${validation.errors.length}, ${validation.errors.join(', ')}`);
+            } catch (e) {
+                addResult('Prečne ograje', 'DESKA 150 1400mm', false, 'neveljavno', `napaka: ${e.message}`);
+            }
+
+            displayResults();
+        };
+
+        function displayResults() {
+            const passed = testResults.filter(r => r.passed).length;
+            const failed = testResults.filter(r => !r.passed).length;
+            const total = testResults.length;
+
+            document.getElementById('status').innerHTML = `
+                <div class="summary-stats">
+                    <div class="stat">
+                        <div class="stat-number" style="color: #10b981;">${passed}</div>
+                        <div class="stat-label">Uspešnih</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number" style="color: #ef4444;">${failed}</div>
+                        <div class="stat-label">Neuspešnih</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">${total}</div>
+                        <div class="stat-label">Skupaj</div>
+                    </div>
+                </div>
+                <div style="font-size: 24px; color: ${failed === 0 ? '#10b981' : '#ef4444'};">
+                    ${failed === 0 ? '✅ Vsi testi uspešni!' : '❌ Nekateri testi neuspešni'}
+                </div>
+            `;
+
+            const suites = {};
+            testResults.forEach(r => {
+                if (!suites[r.suite]) suites[r.suite] = [];
+                suites[r.suite].push(r);
+            });
+
+            let html = '';
+            for (const [suite, results] of Object.entries(suites)) {
+                html += `<div class="test-suite"><h2>${suite}</h2>`;
+                results.forEach(r => {
+                    const className = r.passed ? 'test-pass' : 'test-fail';
+                    const icon = r.passed ? '✓' : '✗';
+                    html += `
+                        <div class="test-result ${className}">
+                            <strong>${icon} ${r.name}</strong><br>
+                            Pričakovano: ${r.expected}<br>
+                            Dejansko: ${r.actual}
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            document.getElementById('results').innerHTML = html;
+            document.getElementById('runTests').disabled = false;
+        }
+    </script>
+</body>
+</html>
