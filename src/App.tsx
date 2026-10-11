@@ -572,13 +572,19 @@ function App() {
 
   // Calculate stairs
   const calculateStairs = useCallback(() => {
-    const plan = calculateStairsPlan(
-      stairsConfig.numSteps,
-      stairsConfig.totalRise,
-      stairsConfig.totalRun,
-      stairsConfig.handrailHeight
-    );
-    setStairsPlan(plan);
+    // FAZA 1: neveljavni vhodi zdaj vržejo napako — prikažemo jo, ne tiho NaN-građimo načrt.
+    try {
+      const plan = calculateStairsPlan(
+        stairsConfig.numSteps,
+        stairsConfig.totalRise,
+        stairsConfig.totalRun,
+        stairsConfig.handrailHeight
+      );
+      setStairsPlan(plan);
+    } catch (e) {
+      setStairsPlan(null);
+      alert(e instanceof Error ? e.message : 'Neveljaven vnos za stopnice.');
+    }
   }, [stairsConfig]);
 
   // Export data
@@ -1841,6 +1847,14 @@ function QuantityView({ fencePlan, stairsPlan }: { fencePlan: FencePlan | null; 
             <StatCard label="Povp. gaz" value={`${(stairsPlan.averageRun * 100).toFixed(1)} cm`} />
             <StatCard label="Dolžina ograje" value={`${stairsPlan.railingLength.toFixed(2)} m`} />
             <StatCard label="Višina ograje" value={`${stairsPlan.handrailHeight} m`} />
+            {stairsPlan.warnings && stairsPlan.warnings.length > 0 && (
+              <div className="col-span-full rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+                <p className="font-semibold mb-1">⚠️ Tehnična opozorila</p>
+                <ul className="list-disc pl-5 space-y-0.5">
+                  {stairsPlan.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       )}

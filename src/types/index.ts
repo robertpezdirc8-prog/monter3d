@@ -152,6 +152,7 @@ export interface StairStep {
 }
 
 export interface StairsPlan {
+  warnings?: string[]; // tehnična opozorila (npr. Blum pravilo, naklon) — FAZA 1
   numSteps: number;
   totalRise: number;
   totalRun: number;

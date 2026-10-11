@@ -24,14 +24,24 @@ export function calculateFencePlan(
   let totalLength = 0;
   let totalHeightChange = 0;
 
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
+  // FAZA 1: robustno filtriranje neveljavnih vhodov (NaN/Infinity) — nikoli tiha NaN geometrija.
+  const validSegments = segments.filter(s =>
+    s && isFinite(s.startPoint[0]) && isFinite(s.startPoint[1]) &&
+    isFinite(s.endPoint[0]) && isFinite(s.endPoint[1]) &&
+    isFinite(s.heightChange)
+  );
+
+  for (let i = 0; i < validSegments.length; i++) {
+    const seg = validSegments[i];
     const dx = seg.endPoint[0] - seg.startPoint[0];
     const dy = seg.endPoint[1] - seg.startPoint[1];
-    const length = Math.sqrt(dx * dx + dy * dy);
-    const slope = Math.atan2(seg.heightChange, length) * 180 / Math.PI;
-    
-    totalLength += length;
+    const horizontalLength = Math.sqrt(dx * dx + dy * dy);
+    if (!isFinite(horizontalLength) || horizontalLength <= 0) continue; // ničelna dolžina izpuščena
+    const slope = Math.atan2(seg.heightChange, horizontalLength) * 180 / Math.PI;
+    // Fizična dolžina segmenta po naklonu (pomembno za 'raked' montažo)
+    const length = Math.sqrt(horizontalLength * horizontalLength + seg.heightChange * seg.heightChange);
+
+    totalLength += horizontalLength;
     totalHeightChange += seg.heightChange;
 
     // Determine mounting type
@@ -44,11 +54,18 @@ export function calculateFencePlan(
       mountingType = Math.abs(slope) > config.slopeThreshold ? 'stepped' : 'level';
     }
 
-    // Calculate panels and posts
+    // Izračun panelov in stebrov (FAZA 1: doslednost zahtevanih in dejanskih razmikov).
+    // Model: N panelov + N+1 stebrov točno zapolni dolžino:
+    //   N * panelWidth + (N+1) * postWidth = L  =>  N = (L - postWidth) / (panelWidth + postWidth)
+    // Poročamo DEJANSKO širino panela, da zahtevani in realni razmik nikoli ne razideta tiho.
     const effectiveWidth = config.panelWidth + config.postWidth;
-    const numPanels = Math.max(1, Math.round(length / effectiveWidth));
+    if (!isFinite(effectiveWidth) || effectiveWidth <= 0 || !isFinite(config.postWidth) || config.postWidth < 0) {
+      continue; // neveljavna konfiguracija — izpusti, ne proizvedi NaN
+    }
+    const idealN = (horizontalLength - config.postWidth) / effectiveWidth;
+    const numPanels = Math.max(1, Math.round(idealN));
     const numPosts = numPanels + 1;
-    const actualPanelWidth = (length - config.postWidth) / numPanels;
+    const actualPanelWidth = (horizontalLength - numPosts * config.postWidth) / numPanels;
 
     fenceSegments.push({
       id: `seg-${i}`,
@@ -61,12 +78,13 @@ export function calculateFencePlan(
       numPanels,
       numPosts,
       panelWidth: actualPanelWidth,
-      postSpacing: length / numPanels
+      postSpacing: actualPanelWidth + config.postWidth // točen razmik med sredinami stebrov
     });
 
     totalPanels += numPanels;
     totalPosts += numPosts;
   }
+
 
   // Rails: top and bottom for each segment
   const totalRails = fenceSegments.length * 2;
@@ -98,10 +116,21 @@ export function calculateStairsPlan(
   totalRun: number,
   handrailHeight: number = 0.9
 ): StairsPlan {
+  // FAZA 1: validacija vhodov — neveljavne vrednosti nikoli ne proizvedejo NaN nacrta.
+  if (!isFinite(numSteps) || !Number.isInteger(numSteps) || numSteps <= 0) {
+    throw new Error(`Neveljavno stevilo stopnic: ${numSteps}`);
+  }
+  if (!isFinite(totalRise) || totalRise < 0) throw new Error(`Neveljavna visinska razlika: ${totalRise}`);
+  if (!isFinite(totalRun) || totalRun <= 0) throw new Error(`Neveljavna dolzina stopnisca: ${totalRun}`);
+
   const avgRise = totalRise / numSteps;
   const avgRun = totalRun / numSteps;
   const slope = Math.atan2(totalRise, totalRun) * 180 / Math.PI;
+  // Dolzina ograja po naklonu + prehod na zacetek/konec (0.3 m skupaj, ne 0.3 m "vsiljen" vsaki smeri)
   const railingLength = Math.sqrt(totalRise * totalRise + totalRun * totalRun) + 0.3;
+
+  // Blum-ovo pravilo udobja stopnic: 2r + g ≈ 59–65 cm (din A/B/C).
+  // Opozorilo ni vraceno prek izjeme, ker nacrt ostane tehnicno izvedljiv, a opozarjamo monterja.
 
   const steps: StairStep[] = [];
   for (let i = 0; i < numSteps; i++) {
@@ -114,6 +143,16 @@ export function calculateStairsPlan(
     });
   }
 
+  // Opozorila udobja/varnosti (Blum 2r+g; naklon po EN/odstopnici)
+  const warnings: string[] = [];
+  const blumCm = (2 * avgRise + avgRun) * 100;
+  if (blumCm < 59 || blumCm > 65) {
+    warnings.push(`Neudobne stopnice: 2r+g = ${blumCm.toFixed(0)} cm (priporočeno 59–65 cm).`);
+  }
+  if (avgRise * 100 > 19) warnings.push(`Višina stopnice ${(avgRise*100).toFixed(1)} cm presega 19 cm.`);
+  if (avgRun * 100 < 26) warnings.push(`Globina stopnice ${(avgRun*100).toFixed(1)} cm je manjša od 26 cm.`);
+  if (slope > 45) warnings.push(`Naklon ${slope.toFixed(1)}° je preveč strm za običajne stopnice (< 45°).`);
+
   return {
     numSteps,
     totalRise,
@@ -123,7 +162,8 @@ export function calculateStairsPlan(
     slope,
     steps,
     railingLength,
-    handrailHeight
+    handrailHeight,
+    warnings
   };
 }
 
@@ -187,12 +227,13 @@ export function estimateFenceMaterials(plan: FencePlan, materials: {
   if (!isFinite(materials.panelPricePerM) || materials.panelPricePerM < 0) return [];
   if (!isFinite(materials.postPriceEach) || materials.postPriceEach < 0) return [];
 
-  // Panels
-  const panelTotalM = plan.totalPanels * plan.panelWidth * plan.panelHeight;
+  // Panels — FAZA 1 pojasnilo: panelPricePerM je cena na m²; enotska cena kosa panela
+  // je cena/m² × površina panela (W×H). Količina je število kosov (+ odpad).
+  const panelAreaM2 = plan.panelWidth * plan.panelHeight;
   const panelQuantity = Math.max(1, Math.ceil(plan.totalPanels * (1 + wastePercent)));
-  const panelUnitPrice = materials.panelPricePerM * plan.panelWidth * plan.panelHeight;
-  
-  if (!isFinite(panelTotalM) || !isFinite(panelUnitPrice)) return [];
+  const panelUnitPrice = materials.panelPricePerM * panelAreaM2;
+
+  if (!isFinite(panelAreaM2) || !isFinite(panelUnitPrice)) return [];
   
   items.push({
     id: 'mat-panels',

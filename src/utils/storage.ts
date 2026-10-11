@@ -37,6 +37,28 @@ export function initDB(): Promise<IDBDatabase> {
   });
 }
 
+// FAZA 1: IndexedDB hrani strukturirane vrednosti, a Date objekti preživijo le,
+// če jih ne pretvarjamo skozi JSON. Vsebujoči delovni tok (App.tsx) projekte serializira,
+// zato ob branju obnovimo znana časovna polja iz ISO nizov v prave Date objekte.
+const DATE_FIELDS = ['createdAt', 'updatedAt', 'timestamp', 'verifiedAt'] as const;
+
+function reviveDates<T>(obj: T): T {
+  if (Array.isArray(obj)) return obj.map(reviveDates) as unknown as T;
+  if (obj && typeof obj === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      if (typeof v === 'string' && (DATE_FIELDS as readonly string[]).includes(k) && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+        const d = new Date(v);
+        out[k] = isNaN(d.getTime()) ? v : d;
+      } else {
+        out[k] = reviveDates(v);
+      }
+    }
+    return out as T;
+  }
+  return obj;
+}
+
 // Save project
 export async function saveProject(project: Project): Promise<void> {
   const db = await initDB();
@@ -58,7 +80,7 @@ export async function getProject(id: string): Promise<Project | null> {
     const store = transaction.objectStore(PROJECTS_STORE);
     const request = store.get(id);
 
-    request.onsuccess = () => resolve(request.result || null);
+    request.onsuccess = () => resolve(request.result ? reviveDates<Project>(request.result) : null);
     request.onerror = () => reject(request.error);
   });
 }
@@ -71,7 +93,7 @@ export async function getAllProjects(): Promise<Project[]> {
     const store = transaction.objectStore(PROJECTS_STORE);
     const request = store.getAll();
 
-    request.onsuccess = () => resolve(request.result || []);
+    request.onsuccess = () => resolve(reviveDates<Project[]>(request.result || []));
     request.onerror = () => reject(request.error);
   });
 }
@@ -111,7 +133,7 @@ export async function getPhotosByProject(projectId: string): Promise<Photo[]> {
     const index = store.index('projectId');
     const request = index.getAll(projectId);
 
-    request.onsuccess = () => resolve(request.result || []);
+    request.onsuccess = () => resolve(reviveDates<Photo[]>(request.result || []));
     request.onerror = () => reject(request.error);
   });
 }
