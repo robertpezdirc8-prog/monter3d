@@ -68,7 +68,7 @@ export const TRADE_PROFILES: Record<TradeId, TradeProfile> = {
     icon: '🏗️',
     description: 'Merjenje in fotografiranje balkonskih/strešnih ograj (Roksal program panelov).',
     requirements: [
-      { id: 'ograja_fronta', label: 'Celoten pogled na ograjo', hint: 'Fotografiraj celotno dolžino ograje pravokotno s sredine razdalje.', minPhotos: 1, reference: 'metro' },
+      { id: 'ograja_fronta', label: 'Celoten pogled na ograjo', hint: 'Fotografiraj celotno dolžino ograje pravokotno, s primerne razdalje.', minPhotos: 1, reference: 'metro' },
       { id: 'ograja_visina', label: 'Višina in ročaj', hint: 'Detalj: višina od tal do vrha ročaja, metrična vira ob stebričku.', minPhotos: 2, reference: 'metro' },
       { id: 'ograja_stebricki', label: 'Razmiki stebričkov', hint: 'Vsak spoj/podkonstrukcija — posnemi razmik A-B-C po celotni dolžini.', minPhotos: 3, reference: 'a4' },
       { id: 'ograja_koti', label: 'Koti in prehodi', hint: 'Notranji/zunanji kot, prehod na stopnišče ali lopo.', minPhotos: 1 },
