@@ -389,18 +389,16 @@ export function estimateHomography(
   return { matrix: H_normalized, inliers, rmse };
 }
 
-// Solve homogeneous system Ah = 0 using inverse power iteration on A^T * A
+// Solve homogeneous system Ah = 0 using Jacobi eigensolver on A^T * A
 // For homography with 4 points: m=8 rows, n=9 columns (valid minimal case)
-// NOTE: This method squares the condition number. For better stability, SVD would be preferred,
-// but requires external libraries. Current implementation includes stability checks.
+// Jacobi method is more stable than inverse power iteration for finding smallest eigenvector
 function solveHomogeneousSystem(A: number[][]): number[] | null {
   const m = A.length;
   const n = A[0].length;
   
   // For homography: need at least 4 points = 8 equations, 9 unknowns
-  // m can be less than n (underdetermined system) - this is normal for DLT
-  if (m < 4) return null; // Need at least 4 equations
-  if (n !== 9) return null; // Homography has 9 parameters
+  if (m < 4) return null;
+  if (n !== 9) return null;
   
   // Check for invalid values
   for (let i = 0; i < m; i++) {
@@ -409,70 +407,129 @@ function solveHomogeneousSystem(A: number[][]): number[] | null {
     }
   }
   
-  // Compute A^T * A (n x n matrix)
+  // Compute A^T * A (n x n symmetric matrix)
   const ATA: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
   for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
+    for (let j = i; j < n; j++) { // Only upper triangle (symmetric)
+      let sum = 0;
       for (let k = 0; k < m; k++) {
-        ATA[i][j] += A[k][i] * A[k][j];
+        sum += A[k][i] * A[k][j];
       }
+      ATA[i][j] = sum;
+      ATA[j][i] = sum; // Fill lower triangle
     }
   }
   
-  // Check matrix stability - compute approximate condition number
+  // Check matrix stability
   const diagSum = ATA.reduce((sum, row, i) => sum + Math.abs(row[i]), 0);
-  if (diagSum < 1e-10) return null; // Matrix is essentially zero
+  if (diagSum < 1e-10) return null;
   
-  // Find eigenvector with smallest eigenvalue using inverse power iteration
-  // Start with deterministic initial vector (not random for reproducibility)
-  let v = new Array(n).fill(0);
-  v[0] = 1; // Start with [1, 0, 0, ...]
-  normalize(v);
+  // Jacobi eigensolver for symmetric matrices
+  // Find eigenvector with smallest eigenvalue
+  const result = jacobiEigenSolver(ATA, 100, 1e-10);
+  if (!result) return null;
   
-  // Add small regularization to make ATA invertible
-  // This is necessary because ATA is singular for exact solutions
-  const reg = 1e-8;
-  for (let i = 0; i < n; i++) ATA[i][i] += reg;
+  const { eigenvalues, eigenvectors } = result;
   
-  // Inverse power iteration (find eigenvector with smallest eigenvalue)
-  let prevV = [...v];
-  let converged = false;
-  for (let iter = 0; iter < 300; iter++) {
-    // Solve ATA * w = v using Gaussian elimination
-    const w = gaussianElimination(ATA, v);
-    if (!w) return null;
-    
-    // Normalize
-    const currentNorm = vectorNorm(w);
-    if (!isFinite(currentNorm) || currentNorm < 1e-15) return null;
-    
-    for (let i = 0; i < n; i++) w[i] /= currentNorm;
-    
-    // Check convergence: change in direction (not magnitude)
-    // Use dot product to measure angle between consecutive vectors
-    let dotProduct = 0;
-    for (let i = 0; i < n; i++) dotProduct += prevV[i] * w[i];
-    const angleChange = Math.acos(Math.min(1, Math.max(-1, Math.abs(dotProduct))));
-    
-    if (iter > 20 && angleChange < 1e-10) {
-      converged = true;
-      v = w;
-      break;
+  // Find index of smallest eigenvalue
+  let minIdx = 0;
+  let minVal = Math.abs(eigenvalues[0]);
+  for (let i = 1; i < eigenvalues.length; i++) {
+    if (Math.abs(eigenvalues[i]) < minVal) {
+      minVal = Math.abs(eigenvalues[i]);
+      minIdx = i;
     }
-    
-    prevV = [...w];
-    v = w;
+  }
+  
+  // Extract eigenvector corresponding to smallest eigenvalue
+  const v: number[] = [];
+  for (let i = 0; i < n; i++) {
+    v.push(eigenvectors[i][minIdx]);
   }
   
   // Verify result is valid
-  if (!v || v.some(x => !isFinite(x))) return null;
-  if (!converged) {
-    // Check if result is still reasonable
-    const residual = computeResidual(A, v);
-    if (residual > 1e-6) return null; // Poor solution
-  }
+  if (v.some(x => !isFinite(x))) return null;
+  
+  // Check residual ||A * v||
+  const residual = computeResidual(A, v);
+  if (residual > 1e-6) return null; // Poor solution
   
   return v;
+}
+
+// Jacobi eigenvalue algorithm for symmetric matrices
+// Returns eigenvalues and eigenvectors
+function jacobiEigenSolver(
+  A: number[][], 
+  maxIterations: number = 100, 
+  tolerance: number = 1e-10
+): { eigenvalues: number[]; eigenvectors: number[][] } | null {
+  const n = A.length;
+  
+  // Create copy of A
+  const S = A.map(row => [...row]);
+  
+  // Initialize eigenvector matrix as identity
+  const V: number[][] = Array.from({ length: n }, (_, i) => 
+    Array.from({ length: n }, (_, j) => i === j ? 1 : 0)
+  );
+  
+  for (let iter = 0; iter < maxIterations; iter++) {
+    // Find largest off-diagonal element
+    let maxVal = 0;
+    let p = 0, q = 1;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        if (Math.abs(S[i][j]) > maxVal) {
+          maxVal = Math.abs(S[i][j]);
+          p = i;
+          q = j;
+        }
+      }
+    }
+    
+    // Check convergence
+    if (maxVal < tolerance) break;
+    
+    // Compute rotation angle
+    const theta = (S[q][q] - S[p][p]) / (2 * S[p][q]);
+    const t = Math.sign(theta) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+    const c = 1 / Math.sqrt(t * t + 1);
+    const s = t * c;
+    
+    // Update S (only affected rows/columns)
+    const Sp = [...S[p]];
+    const Sq = [...S[q]];
+    
+    for (let i = 0; i < n; i++) {
+      if (i !== p && i !== q) {
+        const Sip = S[i][p];
+        const Siq = S[i][q];
+        S[i][p] = S[p][i] = c * Sip - s * Siq;
+        S[i][q] = S[q][i] = s * Sip + c * Siq;
+      }
+    }
+    
+    S[p][p] = c * c * Sp[p] - 2 * s * c * Sp[q] + s * s * Sq[q];
+    S[q][q] = s * s * Sp[p] + 2 * s * c * Sp[q] + c * c * Sq[q];
+    S[p][q] = S[q][p] = 0;
+    
+    // Update eigenvector matrix
+    for (let i = 0; i < n; i++) {
+      const Vip = V[i][p];
+      const Viq = V[i][q];
+      V[i][p] = c * Vip - s * Viq;
+      V[i][q] = s * Vip + c * Viq;
+    }
+  }
+  
+  // Extract eigenvalues from diagonal
+  const eigenvalues: number[] = [];
+  for (let i = 0; i < n; i++) {
+    eigenvalues.push(S[i][i]);
+  }
+  
+  return { eigenvalues, eigenvectors: V };
 }
 
 // Compute residual ||A * v|| for validation

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mera3D Pro - Matematični testi homografije</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #2c3e50; }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #34495e;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .test-case {
+            margin: 15px 0;
+            padding: 10px;
+            border-left: 4px solid #95a5a6;
+            background: #ecf0f1;
+        }
+        .test-case.pass { border-left-color: #27ae60; background: #d5f4e6; }
+        .test-case.fail { border-left-color: #e74c3c; background: #fadbd8; }
+        .test-title { font-weight: bold; margin-bottom: 5px; }
+        .test-details { font-size: 0.9em; color: #555; }
+        .matrix {
+            font-family: 'Courier New', monospace;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #2980b9; }
+        .summary {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .summary.pass { background: #27ae60; }
+        .summary.fail { background: #e74c3c; }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Mera3D Pro - Matematični testi homografije</h1>
+    
+    <div class="warning">
+        <strong>⚠️ Opozorilo:</strong> Ti testi preverjajo matematično pravilnost algoritmov na sintetičnih podatkih.
+        Za profesionalno validacijo je potrebno terensko testiranje na dejanskih fotografijah z znanimi referenčnimi dimenzijami.
+    </div>
+    
+    <button onclick="runAllTests()">▶ Zaženi vse teste</button>
+    <button onclick="clearResults()">🗑 Počisti rezultate</button>
+    
+    <div id="results"></div>
+    
+    <script type="module">
+        import { estimateHomography, ransacHomography } from './src/utils/cv.ts';
+        
+        let totalTests = 0;
+        let passedTests = 0;
+        let failedTests = 0;
+        
+        function assertApprox(actual, expected, tolerance, message) {
+            totalTests++;
+            const diff = Math.abs(actual - expected);
+            if (diff <= tolerance) {
+                passedTests++;
+                return { pass: true, message: `${message} ✓ (dejansko: ${actual.toFixed(6)}, pričakovano: ${expected.toFixed(6)})` };
+            } else {
+                failedTests++;
+                return { pass: false, message: `${message} ✗ (dejansko: ${actual.toFixed(6)}, pričakovano: ${expected.toFixed(6)}, razlika: ${diff.toFixed(6)})` };
+            }
+        }
+        
+        function assert(condition, message) {
+            totalTests++;
+            if (condition) {
+                passedTests++;
+                return { pass: true, message: `${message} ✓` };
+            } else {
+                failedTests++;
+                return { pass: false, message: `${message} ✗` };
+            }
+        }
+        
+        function applyHomography(H, x, y) {
+            const w = H[6] * x + H[7] * y + H[8];
+            if (Math.abs(w) < 1e-10) return null;
+            const u = (H[0] * x + H[1] * y + H[2]) / w;
+            const v = (H[3] * x + H[4] * y + H[5]) / w;
+            return { x: u, y: v };
+        }
+        
+        function testIdentity() {
+            const results = [];
+            const srcPoints = [
+                { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
+            ];
+            const dstPoints = [...srcPoints];
+            
+            const result = estimateHomography(srcPoints, dstPoints);
+            
+            if (!result) {
+                results.push(assert(false, 'Homografija mora biti izračunana'));
+                return results;
+            }
+            
+            results.push(assertApprox(result.matrix[0], 1, 0.01, 'H[0] ≈ 1'));
+            results.push(assertApprox(result.matrix[4], 1, 0.01, 'H[4] ≈ 1'));
+            results.push(assertApprox(result.matrix[8], 1, 0.01, 'H[8] ≈ 1'));
+            results.push(assertApprox(result.matrix[1], 0, 0.01, 'H[1] ≈ 0'));
+            results.push(assertApprox(result.matrix[2], 0, 0.01, 'H[2] ≈ 0'));
+            results.push(assert(result.rmse < 0.01, `RMSE < 0.01 (dejansko: ${result.rmse.toFixed(6)})`));
+            
+            // Test transformation
+            for (let i = 0; i < srcPoints.length; i++) {
+                const transformed = applyHomography(result.matrix, srcPoints[i].x, srcPoints[i].y);
+                if (transformed) {
+                    results.push(assertApprox(transformed.x, dstPoints[i].x, 0.01, 
+                        `Točka ${i}: x transformacija`));
+                    results.push(assertApprox(transformed.y, dstPoints[i].y, 0.01, 
+                        `Točka ${i}: y transformacija`));
+                }
+            }
+            
+            return results;
+        }
+        
+        function testTranslation() {
+            const results = [];
+            const tx = 10, ty = 20;
+            const srcPoints = [
+                { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
+            ];
+            const dstPoints = srcPoints.map(p => ({ x: p.x + tx, y: p.y + ty }));
+            
+            const result = estimateHomography(srcPoints, dstPoints);
+            
+            if (!result) {
+                results.push(assert(false, 'Homografija mora biti izračunana'));
+                return results;
+            }
+            
+            results.push(assertApprox(result.matrix[2], tx, 0.1, `H[2] ≈ ${tx} (translacija X)`));
+            results.push(assertApprox(result.matrix[5], ty, 0.1, `H[5] ≈ ${ty} (translacija Y)`));
+            results.push(assert(result.rmse < 0.1, `RMSE < 0.1 (dejansko: ${result.rmse.toFixed(6)})`));
+            
+            // Test transformation
+            for (let i = 0; i < srcPoints.length; i++) {
+                const transformed = applyHomography(result.matrix, srcPoints[i].x, srcPoints[i].y);
+                if (transformed) {
+                    results.push(assertApprox(transformed.x, dstPoints[i].x, 0.1, 
+                        `Točka ${i}: x ≈ ${dstPoints[i].x}`));
+                    results.push(assertApprox(transformed.y, dstPoints[i].y, 0.1, 
+                        `Točka ${i}: y ≈ ${dstPoints[i].y}`));
+                }
+            }
+            
+            return results;
+        }
+        
+        function testScale() {
+            const results = [];
+            const sx = 2, sy = 3;
+            const srcPoints = [
+                { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
+            ];
+            const dstPoints = srcPoints.map(p => ({ x: p.x * sx, y: p.y * sy }));
+            
+            const result = estimateHomography(srcPoints, dstPoints);
+            
+            if (!result) {
+                results.push(assert(false, 'Homografija mora biti izračunana'));
+                return results;
+            }
+            
+            results.push(assertApprox(result.matrix[0], sx, 0.1, `H[0] ≈ ${sx} (merilo X)`));
+            results.push(assertApprox(result.matrix[4], sy, 0.1, `H[4] ≈ ${sy} (merilo Y)`));
+            results.push(assert(result.rmse < 0.1, `RMSE < 0.1 (dejansko: ${result.rmse.toFixed(6)})`));
+            
+            return results;
+        }
+        
+        function testRotation() {
+            const results = [];
+            const theta = Math.PI / 4; // 45 degrees
+            const cos = Math.cos(theta);
+            const sin = Math.sin(theta);
+            
+            const srcPoints = [
+                { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
+            ];
+            const dstPoints = srcPoints.map(p => ({
+                x: p.x * cos - p.y * sin,
+                y: p.x * sin + p.y * cos
+            }));
+            
+            const result = estimateHomography(srcPoints, dstPoints);
+            
+            if (!result) {
+                results.push(assert(false, 'Homografija mora biti izračunana'));
+                return results;
+            }
+            
+            results.push(assertApprox(result.matrix[0], cos, 0.1, `H[0] ≈ cos(45°) = ${cos.toFixed(4)}`));
+            results.push(assertApprox(result.matrix[1], -sin, 0.1, `H[1] ≈ -sin(45°) = ${(-sin).toFixed(4)}`));
+            results.push(assertApprox(result.matrix[3], sin, 0.1, `H[3] ≈ sin(45°) = ${sin.toFixed(4)}`));
+            results.push(assertApprox(result.matrix[4], cos, 0.1, `H[4] ≈ cos(45°) = ${cos.toFixed(4)}`));
+            results.push(assert(result.rmse < 0.1, `RMSE < 0.1 (dejansko: ${result.rmse.toFixed(6)})`));
+            
+            return results;
+        }
+        
+        function testMinimalPoints() {
+            const results = [];
+            // Exactly 4 non-collinear points
+            const srcPoints = [
+                { x: 10, y: 20 }, { x: 150, y: 30 }, { x: 140, y: 180 }, { x: 20, y: 170 }
+            ];
+            const dstPoints = [
+                { x: 50, y: 60 }, { x: 200, y: 70 }, { x: 190, y: 220 }, { x: 60, y: 210 }
+            ];
+            
+            const result = estimateHomography(srcPoints, dstPoints);
+            
+            results.push(assert(result !== null, 'Homografija z 4 točkami mora biti izračunana'));
+            
+            if (result) {
+                results.push(assert(result.rmse < 1, `RMSE < 1 (dejansko: ${result.rmse.toFixed(6)})`));
+                
+                // Verify all points transform correctly
+                for (let i = 0; i < srcPoints.length; i++) {
+                    const transformed = applyHomography(result.matrix, srcPoints[i].x, srcPoints[i].y);
+                    if (transformed) {
+                        const err = Math.sqrt(
+                            (transformed.x - dstPoints[i].x) ** 2 + 
+                            (transformed.y - dstPoints[i].y) ** 2
+                        );
+                        results.push(assert(err < 1, `Točka ${i}: napaka < 1px (dejansko: ${err.toFixed(4)}px)`));
+                    }
+                }
+            }
+            
+            return results;
+        }
+        
+        function testNoisyPoints() {
+            const results = [];
+            const srcPoints = [
+                { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 },
+                { x: 50, y: 50 }, { x: 25, y: 75 }, { x: 75, y: 25 }
+            ];
+            const tx = 15, ty = 25;
+            const dstPoints = srcPoints.map(p => ({ x: p.x + tx, y: p.y + ty }));
+            
+            const result = estimateHomography(srcPoints, dstPoints);
+            
+            results.push(assert(result !== null, 'Homografija z več točkami mora biti izračunana'));
+            
+            if (result) {
+                results.push(assert(result.rmse < 0.5, `RMSE < 0.5 (dejansko: ${result.rmse.toFixed(6)})`));
+                results.push(assert(result.inliers.length === srcPoints.length, 
+                    `Vsi pari so inlierji (${result.inliers.length}/${srcPoints.length})`));
+            }
+            
+            return results;
+        }
+        
+        function testDegenerate() {
+            const results = [];
+            
+            // Collinear points
+            const srcPoints = [
+                { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }
+            ];
+            const dstPoints = [...srcPoints];
+            
+            const result = estimateHomography(srcPoints, dstPoints);
+            results.push(assert(result === null, 'Kolinearne točke morajo vrniti null'));
+            
+            // Too few points
+            const result2 = estimateHomography(
+                [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }],
+                [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }]
+            );
+            results.push(assert(result2 === null, 'Premalo točk (< 4) mora vrniti null'));
+            
+            return results;
+        }
+        
+        function testInvalidValues() {
+            const results = [];
+            
+            // NaN values
+            const result1 = estimateHomography(
+                [{ x: NaN, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }],
+                [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }]
+            );
+            results.push(assert(result1 === null, 'NaN vrednosti morajo vrniti null'));
+            
+            // Infinity values
+            const result2 = estimateHomography(
+                [{ x: Infinity, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }],
+                [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }]
+            );
+            results.push(assert(result2 === null, 'Infinity vrednosti morajo vrniti null'));
+            
+            return results;
+        }
+        
+        function testRANSAC() {
+            const results = [];
+            
+            // Points with outliers
+            const srcPoints = [
+                { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 },
+                { x: 50, y: 50 }, { x: 25, y: 75 }
+            ];
+            const tx = 10, ty = 20;
+            const dstPoints = [
+                { x: 10, y: 20 }, { x: 110, y: 20 }, { x: 110, y: 120 }, { x: 10, y: 120 },
+                { x: 60, y: 70 }, { x: 200, y: 200 } // Outlier
+            ];
+            
+            const result = ransacHomography(srcPoints, dstPoints, 100, 5.0);
+            
+            results.push(assert(result !== null, 'RANSAC mora najti model'));
+            
+            if (result) {
+                results.push(assert(result.inlierCount >= 4, 
+                    `Vsaj 4 inlierji (dejansko: ${result.inlierCount})`));
+                results.push(assert(result.inliers.length === srcPoints.length, 
+                    `Maska ima pravilno dolžino (${result.inliers.length})`));
+                results.push(assert(result.rmse < 5, 
+                    `RMSE < 5 (dejansko: ${result.rmse.toFixed(6)})`));
+                
+                // Verify consistency: matrix, inliers, count, RMSE describe same model
+                let computedCount = 0;
+                let computedSumSqErr = 0;
+                for (let i = 0; i < srcPoints.length; i++) {
+                    if (result.inliers[i]) {
+                        computedCount++;
+                        const transformed = applyHomography(result.matrix, srcPoints[i].x, srcPoints[i].y);
+                        if (transformed) {
+                            const err = Math.sqrt(
+                                (transformed.x - dstPoints[i].x) ** 2 + 
+                                (transformed.y - dstPoints[i].y) ** 2
+                            );
+                            computedSumSqErr += err * err;
+                        }
+                    }
+                }
+                
+                results.push(assert(computedCount === result.inlierCount, 
+                    `Število inlierjev je konsistentno (${computedCount} === ${result.inlierCount})`));
+                
+                const computedRMSE = Math.sqrt(computedSumSqErr / computedCount);
+                results.push(assertApprox(computedRMSE, result.rmse, 0.01, 
+                    'RMSE je konsistenten z masko inlierjev'));
+            }
+            
+            return results;
+        }
+        
+        window.runAllTests = function() {
+            totalTests = 0;
+            passedTests = 0;
+            failedTests = 0;
+            
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+            
+            const tests = [
+                { name: 'Identična transformacija', fn: testIdentity },
+                { name: 'Translacija', fn: testTranslation },
+                { name: 'Sprememba merila', fn: testScale },
+                { name: 'Rotacija (45°)', fn: testRotation },
+                { name: 'Natanko 4 točke', fn: testMinimalPoints },
+                { name: 'Več točk z majhnim šumom', fn: testNoisyPoints },
+                { name: 'Degenerirani primeri', fn: testDegenerate },
+                { name: 'Neveljavne vrednosti', fn: testInvalidValues },
+                { name: 'RANSAC z outliers', fn: testRANSAC }
+            ];
+            
+            tests.forEach(test => {
+                const section = document.createElement('div');
+                section.className = 'test-section';
+                section.innerHTML = `<h2>${test.name}</h2>`;
+                
+                const results = test.fn();
+                results.forEach(r => {
+                    const div = document.createElement('div');
+                    div.className = `test-case ${r.pass ? 'pass' : 'fail'}`;
+                    div.innerHTML = `<div class="test-details">${r.message}</div>`;
+                    section.appendChild(div);
+                });
+                
+                resultsDiv.appendChild(section);
+            });
+            
+            // Summary
+            const summary = document.createElement('div');
+            summary.className = `summary ${failedTests === 0 ? 'pass' : 'fail'}`;
+            summary.innerHTML = `
+                <h2>📊 Povzetek</h2>
+                <p><strong>Skupaj testov:</strong> ${totalTests}</p>
+                <p><strong>Uspešnih:</strong> ${passedTests}</p>
+                <p><strong>Neuspešnih:</strong> ${failedTests}</p>
+                <p><strong>Uspešnost:</strong> ${((passedTests / totalTests) * 100).toFixed(1)}%</p>
+                ${failedTests === 0 
+                    ? '<p>✓ VSI TESTI USPEŠNI</p>' 
+                    : '<p>✗ NEKATERI TESTI NEUSPEŠNI</p>'}
+            `;
+            resultsDiv.appendChild(summary);
+        };
+        
+        window.clearResults = function() {
+            document.getElementById('results').innerHTML = '';
+            totalTests = 0;
+            passedTests = 0;
+            failedTests = 0;
+        };
+    </script>
+</body>
+</html>
