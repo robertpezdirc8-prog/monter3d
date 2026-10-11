@@ -2,11 +2,11 @@
  * Mera3D Pro - Perspective Transform Tests
  * 
  * Tests for perspective warping with known coordinates.
- * Verifies geometric accuracy of the DLT algorithm.
+ * Verifies geometric accuracy of the DLT algorithm and JS fallback.
  */
 
 import { describe, it, expect } from 'vitest';
-import { computePerspectiveMatrix, computeMeasurementError } from '../utils/perspectiveTransform';
+import { computePerspectiveMatrix, computeMeasurementError, warpPerspective } from '../utils/perspectiveTransform';
 
 describe('Perspective Transform', () => {
   describe('DLT Algorithm', () => {
@@ -20,15 +20,14 @@ describe('Perspective Transform', () => {
       
       const matrix = computePerspectiveMatrix(corners, 100, 100);
       
-      // Should be close to identity matrix
       expect(matrix).toHaveLength(9);
-      expect(matrix[0]).toBeCloseTo(1, 1); // h00
-      expect(matrix[4]).toBeCloseTo(1, 1); // h11
-      expect(matrix[8]).toBeCloseTo(1, 1); // h22
-      expect(matrix[1]).toBeCloseTo(0, 1); // h01
-      expect(matrix[2]).toBeCloseTo(0, 1); // h02
-      expect(matrix[3]).toBeCloseTo(0, 1); // h10
-      expect(matrix[5]).toBeCloseTo(0, 1); // h12
+      expect(matrix[0]).toBeCloseTo(1, 1);
+      expect(matrix[4]).toBeCloseTo(1, 1);
+      expect(matrix[8]).toBeCloseTo(1, 1);
+      expect(matrix[1]).toBeCloseTo(0, 1);
+      expect(matrix[2]).toBeCloseTo(0, 1);
+      expect(matrix[3]).toBeCloseTo(0, 1);
+      expect(matrix[5]).toBeCloseTo(0, 1);
     });
 
     it('Test: Scale transform - small square to large rectangle', () => {
@@ -41,10 +40,9 @@ describe('Perspective Transform', () => {
       
       const matrix = computePerspectiveMatrix(corners, 200, 200);
       
-      // Should scale by 4x (50 -> 200)
       expect(matrix).toHaveLength(9);
-      expect(matrix[0]).toBeCloseTo(4, 0); // h00 ≈ 4
-      expect(matrix[4]).toBeCloseTo(4, 0); // h11 ≈ 4
+      expect(matrix[0]).toBeCloseTo(4, 0);
+      expect(matrix[4]).toBeCloseTo(4, 0);
     });
 
     it('Test: Translation transform', () => {
@@ -57,15 +55,12 @@ describe('Perspective Transform', () => {
       
       const matrix = computePerspectiveMatrix(corners, 100, 100);
       
-      // Should translate by (-100, -100)
       expect(matrix).toHaveLength(9);
-      // Translation is encoded in h02 and h12
-      expect(matrix[0]).toBeCloseTo(1, 0); // Scale X
-      expect(matrix[4]).toBeCloseTo(1, 0); // Scale Y
+      expect(matrix[0]).toBeCloseTo(1, 0);
+      expect(matrix[4]).toBeCloseTo(1, 0);
     });
 
     it('Test: Perspective distortion - trapezoid to rectangle', () => {
-      // Simulate a fence viewed at an angle (trapezoid shape)
       const corners = {
         topLeft: { x: 50, y: 20 },
         topRight: { x: 150, y: 20 },
@@ -75,25 +70,181 @@ describe('Perspective Transform', () => {
       
       const matrix = computePerspectiveMatrix(corners, 160, 160);
       
-      // Matrix should be valid (not all zeros)
       expect(matrix).toHaveLength(9);
       expect(matrix.some(v => Math.abs(v) > 0.001)).toBe(true);
-      
-      // h22 should be normalized to 1
       expect(matrix[8]).toBeCloseTo(1, 3);
+    });
+  });
+
+  describe('Corner Validation', () => {
+    it('Test: Reject collinear points', () => {
+      const corners = {
+        topLeft: { x: 0, y: 0 },
+        topRight: { x: 50, y: 0 },
+        bottomRight: { x: 100, y: 0 },
+        bottomLeft: { x: 0, y: 100 }
+      };
+      
+      // Create a test image
+      const canvas = document.createElement('canvas');
+      canvas.width = 200;
+      canvas.height = 200;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = 'red';
+      ctx.fillRect(0, 0, 200, 200);
+      
+      const img = new Image();
+      img.src = canvas.toDataURL();
+      
+      // Should throw for collinear points
+      expect(async () => {
+        await warpPerspective(img, corners, 100, 100, true);
+      }).rejects.toThrow();
+    });
+
+    it('Test: Reject duplicate points', () => {
+      const corners = {
+        topLeft: { x: 0, y: 0 },
+        topRight: { x: 0, y: 0 }, // Same as topLeft
+        bottomRight: { x: 100, y: 100 },
+        bottomLeft: { x: 0, y: 100 }
+      };
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = 200;
+      canvas.height = 200;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = 'blue';
+      ctx.fillRect(0, 0, 200, 200);
+      
+      const img = new Image();
+      img.src = canvas.toDataURL();
+      
+      expect(async () => {
+        await warpPerspective(img, corners, 100, 100, true);
+      }).rejects.toThrow();
+    });
+
+    it('Test: Reject NaN coordinates', () => {
+      const corners = {
+        topLeft: { x: NaN, y: 0 },
+        topRight: { x: 100, y: 0 },
+        bottomRight: { x: 100, y: 100 },
+        bottomLeft: { x: 0, y: 100 }
+      };
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = 200;
+      canvas.height = 200;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = 'green';
+      ctx.fillRect(0, 0, 200, 200);
+      
+      const img = new Image();
+      img.src = canvas.toDataURL();
+      
+      expect(async () => {
+        await warpPerspective(img, corners, 100, 100, true);
+      }).rejects.toThrow();
+    });
+  });
+
+  describe('JS Fallback Warp', () => {
+    it('Test: Warp produces valid output dimensions', async () => {
+      const corners = {
+        topLeft: { x: 10, y: 10 },
+        topRight: { x: 190, y: 10 },
+        bottomRight: { x: 190, y: 190 },
+        bottomLeft: { x: 10, y: 190 }
+      };
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = 200;
+      canvas.height = 200;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#ff0000';
+      ctx.fillRect(0, 0, 200, 200);
+      ctx.fillStyle = '#00ff00';
+      ctx.fillRect(50, 50, 100, 100);
+      
+      const img = new Image();
+      await new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        img.src = canvas.toDataURL();
+      });
+      
+      const result = await warpPerspective(img, corners, 100, 100, true);
+      
+      expect(result.width).toBe(100);
+      expect(result.height).toBe(100);
+      expect(result.imageData.width).toBe(100);
+      expect(result.imageData.height).toBe(100);
+      expect(result.engine).toBe('js-fallback');
+      expect(result.transformMatrix).toHaveLength(9);
+    });
+
+    it('Test: Warp preserves color content', async () => {
+      const corners = {
+        topLeft: { x: 0, y: 0 },
+        topRight: { x: 100, y: 0 },
+        bottomRight: { x: 100, y: 100 },
+        bottomLeft: { x: 0, y: 100 }
+      };
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = 100;
+      canvas.height = 100;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#ff0000';
+      ctx.fillRect(0, 0, 100, 100);
+      
+      const img = new Image();
+      await new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        img.src = canvas.toDataURL();
+      });
+      
+      const result = await warpPerspective(img, corners, 50, 50, true);
+      
+      // Center pixel should be red
+      const centerIdx = (25 * 50 + 25) * 4;
+      expect(result.imageData.data[centerIdx]).toBeGreaterThan(200); // R
+      expect(result.imageData.data[centerIdx + 1]).toBeLessThan(50); // G
+      expect(result.imageData.data[centerIdx + 2]).toBeLessThan(50); // B
+    });
+
+    it('Test: Output dimensions are limited', async () => {
+      const corners = {
+        topLeft: { x: 0, y: 0 },
+        topRight: { x: 100, y: 0 },
+        bottomRight: { x: 100, y: 100 },
+        bottomLeft: { x: 0, y: 100 }
+      };
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = 100;
+      canvas.height = 100;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, 100, 100);
+      
+      const img = new Image();
+      await new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        img.src = canvas.toDataURL();
+      });
+      
+      // Request very large output - should be scaled down
+      const result = await warpPerspective(img, corners, 5000, 5000, true);
+      
+      expect(result.width).toBeLessThanOrEqual(2048);
+      expect(result.height).toBeLessThanOrEqual(2048);
     });
   });
 
   describe('Measurement Error', () => {
     it('Test: Perfect measurement - zero error', () => {
-      const error = computeMeasurementError(
-        1000, // knownWidthMm
-        1000, // knownHeightMm
-        10,   // pixelToMmRatioX (10px = 1mm)
-        10,   // pixelToMmRatioY
-        100,  // measuredWidthPx
-        100   // measuredHeightPx
-      );
+      const error = computeMeasurementError(1000, 1000, 10, 10, 100, 100);
       
       expect(error.widthErrorMm).toBeCloseTo(0, 5);
       expect(error.heightErrorMm).toBeCloseTo(0, 5);
@@ -101,14 +252,7 @@ describe('Perspective Transform', () => {
     });
 
     it('Test: Small measurement error - 5mm', () => {
-      const error = computeMeasurementError(
-        1000, // knownWidthMm
-        1000, // knownHeightMm
-        10,   // pixelToMmRatioX
-        10,   // pixelToMmRatioY
-        100.5, // measuredWidthPx (0.5px error = 5mm)
-        100   // measuredHeightPx
-      );
+      const error = computeMeasurementError(1000, 1000, 10, 10, 100.5, 100);
       
       expect(error.widthErrorMm).toBeCloseTo(5, 1);
       expect(error.heightErrorMm).toBeCloseTo(0, 5);
@@ -116,34 +260,16 @@ describe('Perspective Transform', () => {
     });
 
     it('Test: Larger measurement error - realistic scenario', () => {
-      // Simulate a fence measurement with perspective distortion
-      const error = computeMeasurementError(
-        2000, // knownWidthMm (2m fence)
-        1000, // knownHeightMm (1m height)
-        5,    // pixelToMmRatioX (5px = 1mm)
-        5,    // pixelToMmRatioY
-        405,  // measuredWidthPx (expected 400px, 5px error = 25mm)
-        202   // measuredHeightPx (expected 200px, 2px error = 10mm)
-      );
+      const error = computeMeasurementError(2000, 1000, 5, 5, 405, 202);
       
       expect(error.widthErrorMm).toBeCloseTo(25, 0);
       expect(error.heightErrorMm).toBeCloseTo(10, 0);
-      // Total error is Euclidean distance
       expect(error.totalErrorMm).toBeCloseTo(Math.sqrt(25**2 + 10**2), 0);
     });
 
     it('Test: Error within acceptable tolerance for fence measurement', () => {
-      // For fence installation, ±50mm is typically acceptable
-      const error = computeMeasurementError(
-        3000, // knownWidthMm (3m fence)
-        1500, // knownHeightMm
-        3,    // pixelToMmRatioX
-        3,    // pixelToMmRatioY
-        1010, // measuredWidthPx (expected 1000px, 10px = 30mm error)
-        505   // measuredHeightPx (expected 500px, 5px = 15mm error)
-      );
+      const error = computeMeasurementError(3000, 1500, 3, 3, 1010, 505);
       
-      // Both errors should be within ±50mm tolerance
       expect(error.widthErrorMm).toBeLessThan(50);
       expect(error.heightErrorMm).toBeLessThan(50);
     });
@@ -175,9 +301,23 @@ describe('Perspective Transform', () => {
       const matrix = computePerspectiveMatrix(corners, 200, 100);
       
       expect(matrix).toHaveLength(9);
-      // Width scales 2x (100 -> 200), height scales 2x (50 -> 100)
       expect(matrix[0]).toBeCloseTo(2, 0);
       expect(matrix[4]).toBeCloseTo(2, 0);
+    });
+
+    it('Test: Strongly tilted quadrilateral', () => {
+      const corners = {
+        topLeft: { x: 80, y: 10 },
+        topRight: { x: 180, y: 30 },
+        bottomRight: { x: 150, y: 180 },
+        bottomLeft: { x: 20, y: 150 }
+      };
+      
+      const matrix = computePerspectiveMatrix(corners, 160, 160);
+      
+      expect(matrix).toHaveLength(9);
+      expect(matrix.every(v => isFinite(v))).toBe(true);
+      expect(matrix[8]).toBeCloseTo(1, 3);
     });
   });
 });

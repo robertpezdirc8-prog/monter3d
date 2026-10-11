@@ -13,10 +13,9 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { Photo } from '../types';
-import { ROKSAL_PROFILES, ROKSAL_COLORS, getVerticalProfiles, getHorizontalProfiles } from '../data/roksalCatalog';
-import type { RoksalProfile, RoksalColor } from '../data/roksalCatalog';
-import { computePerspectiveMatrix, type PerspectiveCorners } from '../utils/perspectiveTransform';
-import { loadOpenCV, isOpenCVLoaded, imageToMat, matToImageData } from '../utils/opencvLoader';
+import { ROKSAL_PROFILES, ROKSAL_COLORS } from '../data/roksalCatalog';
+import { warpPerspective, type PerspectiveCorners } from '../utils/perspectiveTransform';
+import { loadOpenCV, isOpenCVLoaded } from '../utils/opencvLoader';
 
 interface PerspectiveFenceVisualizerProps {
   photo: Photo;
@@ -33,6 +32,7 @@ export function PerspectiveFenceVisualizer({ photo, onClose }: PerspectiveFenceV
   const [currentCorner, setCurrentCorner] = useState<CornerKey>('topLeft');
   const [isWarping, setIsWarping] = useState(false);
   const [warpedImage, setWarpedImage] = useState<ImageData | null>(null);
+  const [warpEngine, setWarpEngine] = useState<'opencv' | 'js-fallback' | null>(null);
   const [opencvReady, setOpenCVReady] = useState(isOpenCVLoaded());
   const [error, setError] = useState<string | null>(null);
   
@@ -197,6 +197,8 @@ export function PerspectiveFenceVisualizer({ photo, onClose }: PerspectiveFenceV
     setCorners({});
     setCurrentCorner('topLeft');
     setWarpedImage(null);
+    setWarpEngine(null);
+    setError(null);
   }, []);
 
   // Perform perspective warp
@@ -217,88 +219,18 @@ export function PerspectiveFenceVisualizer({ photo, onClose }: PerspectiveFenceV
         bottomLeft: corners.bottomLeft
       };
       
-      // Calculate output dimensions
-      const widthTop = Math.sqrt(
-        (corners.topRight.x - corners.topLeft.x) ** 2 + 
-        (corners.topRight.y - corners.topLeft.y) ** 2
-      );
-      const widthBottom = Math.sqrt(
-        (corners.bottomRight.x - corners.bottomLeft.x) ** 2 + 
-        (corners.bottomRight.y - corners.bottomLeft.y) ** 2
-      );
-      const heightLeft = Math.sqrt(
-        (corners.bottomLeft.x - corners.topLeft.x) ** 2 + 
-        (corners.bottomLeft.y - corners.topLeft.y) ** 2
-      );
-      const heightRight = Math.sqrt(
-        (corners.bottomRight.x - corners.topRight.x) ** 2 + 
-        (corners.bottomRight.y - corners.topRight.y) ** 2
-      );
+      // Use unified warpPerspective function (auto-selects OpenCV or JS fallback)
+      const result = await warpPerspective(photo.dataUrl, perspectiveCorners);
       
-      const outputWidth = Math.round((widthTop + widthBottom) / 2);
-      const outputHeight = Math.round((heightLeft + heightRight) / 2);
-      
-      if (opencvReady) {
-        // Use OpenCV for accurate perspective warp
-        const cv = await loadOpenCV();
-        
-        const img = new Image();
-        await new Promise<void>((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = reject;
-          img.src = photo.dataUrl;
-        });
-        
-        const srcMat = imageToMat(cv, img);
-        const dstMat = new cv.Mat(outputHeight, outputWidth, cv.CV_8UC4);
-        
-        try {
-          const srcPoints = new cv.Mat(4, 1, cv.CV_32FC2);
-          srcPoints.data32F[0] = perspectiveCorners.topLeft.x;
-          srcPoints.data32F[1] = perspectiveCorners.topLeft.y;
-          srcPoints.data32F[2] = perspectiveCorners.topRight.x;
-          srcPoints.data32F[3] = perspectiveCorners.topRight.y;
-          srcPoints.data32F[4] = perspectiveCorners.bottomRight.x;
-          srcPoints.data32F[5] = perspectiveCorners.bottomRight.y;
-          srcPoints.data32F[6] = perspectiveCorners.bottomLeft.x;
-          srcPoints.data32F[7] = perspectiveCorners.bottomLeft.y;
-          
-          const dstPoints = new cv.Mat(4, 1, cv.CV_32FC2);
-          dstPoints.data32F[0] = 0;
-          dstPoints.data32F[1] = 0;
-          dstPoints.data32F[2] = outputWidth - 1;
-          dstPoints.data32F[3] = 0;
-          dstPoints.data32F[4] = outputWidth - 1;
-          dstPoints.data32F[5] = outputHeight - 1;
-          dstPoints.data32F[6] = 0;
-          dstPoints.data32F[7] = outputHeight - 1;
-          
-          const M = cv.getPerspectiveTransform(srcPoints, dstPoints);
-          cv.warpPerspective(srcMat, dstMat, M, new cv.Size(outputWidth, outputHeight));
-          
-          const resultImageData = matToImageData(cv, dstMat);
-          setWarpedImage(resultImageData);
-          
-          srcPoints.delete();
-          dstPoints.delete();
-          M.delete();
-        } finally {
-          srcMat.delete();
-          dstMat.delete();
-        }
-      } else {
-        // Fallback: use pure JS DLT
-        const matrix = computePerspectiveMatrix(perspectiveCorners, outputWidth, outputHeight);
-        console.log('Using JS DLT fallback, matrix:', matrix);
-        // TODO: Implement JS-based warp as fallback
-        setError('OpenCV.js ni na voljo. JS fallback še ni implementiran.');
-      }
+      setWarpedImage(result.imageData);
+      setWarpEngine(result.engine);
     } catch (err) {
-      setError(`Napaka pri perspektivni transformaciji: ${err instanceof Error ? err.message : 'Neznana napaka'}`);
+      const message = err instanceof Error ? err.message : 'Neznana napaka';
+      setError(`Napaka pri perspektivni transformaciji: ${message}. Poskusite ponovno ali označite vogale natančneje.`);
     } finally {
       setIsWarping(false);
     }
-  }, [corners, opencvReady, photo.dataUrl]);
+  }, [corners, photo.dataUrl]);
 
   const allCornersPlaced = corners.topLeft && corners.topRight && corners.bottomRight && corners.bottomLeft;
 
@@ -460,6 +392,14 @@ export function PerspectiveFenceVisualizer({ photo, onClose }: PerspectiveFenceV
                 />
                 <p className="text-xs text-slate-400 mt-1">
                   {warpedImage.width}×{warpedImage.height}px
+                  {warpEngine && (
+                    <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-mono" style={{
+                      backgroundColor: warpEngine === 'opencv' ? '#065f46' : '#78350f',
+                      color: warpEngine === 'opencv' ? '#6ee7b7' : '#fcd34d'
+                    }}>
+                      {warpEngine === 'opencv' ? 'OpenCV.js' : 'JS fallback'}
+                    </span>
+                  )}
                 </p>
               </div>
             )}
