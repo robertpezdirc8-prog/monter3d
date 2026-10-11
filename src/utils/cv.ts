@@ -1201,14 +1201,17 @@ export function calculateScaleFromReference(
   refPoint2: Point2D,
   realDistance: number
 ): number | null {
-  if (realDistance <= 0) return null;
+  // Validate inputs
+  if (!isFinite(realDistance) || realDistance <= 0) return null;
+  if (!isFinite(refPoint1.x) || !isFinite(refPoint1.y) || 
+      !isFinite(refPoint2.x) || !isFinite(refPoint2.y)) return null;
   
   const pixelDistance = Math.sqrt(
     (refPoint2.x - refPoint1.x) ** 2 + 
     (refPoint2.y - refPoint1.y) ** 2
   );
   
-  if (pixelDistance < 1) return null; // Too small to be meaningful
+  if (pixelDistance < 1 || !isFinite(pixelDistance)) return null; // Too small or invalid
   
   return realDistance / pixelDistance;
 }
@@ -1226,14 +1229,22 @@ export function calculateRealDistance(
   point2: Point2D,
   pixelToMeter: number
 ): number | null {
-  if (pixelToMeter <= 0 || !isFinite(pixelToMeter)) return null;
+  // Validate scale
+  if (!isFinite(pixelToMeter) || pixelToMeter <= 0) return null;
+  
+  // Validate points
+  if (!isFinite(point1.x) || !isFinite(point1.y) || 
+      !isFinite(point2.x) || !isFinite(point2.y)) return null;
   
   const pixelDistance = Math.sqrt(
     (point2.x - point1.x) ** 2 + 
     (point2.y - point1.y) ** 2
   );
   
-  return pixelDistance * pixelToMeter;
+  if (!isFinite(pixelDistance)) return null;
+  
+  const result = pixelDistance * pixelToMeter;
+  return isFinite(result) ? result : null;
 }
 
 /**
@@ -1254,7 +1265,23 @@ export function assessMeasurementReliability(
   const warnings: string[] = [];
   let reliability = 1.0;
   
+  // Validate inputs
+  if (!isFinite(pixelDistance) || pixelDistance < 0) {
+    return { reliability: 0, warnings: ['Neveljavna razdalja meritve'] };
+  }
+  if (!isFinite(imageWidth) || !isFinite(imageHeight) || imageWidth <= 0 || imageHeight <= 0) {
+    return { reliability: 0, warnings: ['Neveljavne dimenzije slike'] };
+  }
+  if (!isFinite(referenceDistance) || referenceDistance < 0) {
+    warnings.push('Neveljavna referenčna razdalja');
+    reliability *= 0.5;
+  }
+  
   const imageDiagonal = Math.sqrt(imageWidth ** 2 + imageHeight ** 2);
+  
+  if (!isFinite(imageDiagonal) || imageDiagonal <= 0) {
+    return { reliability: 0, warnings: ['Neveljavna diagonala slike'] };
+  }
   
   // Check if measurement is too small relative to image
   if (pixelDistance < imageDiagonal * 0.02) {
@@ -1267,9 +1294,6 @@ export function assessMeasurementReliability(
     reliability *= 0.7;
     warnings.push('Referenčna mera je majhna - priporočamo večjo referenco');
   }
-  
-  // Check if measurement extends near image edges (perspective distortion)
-  // This is a simplified check - full edge detection would be more accurate
   
   // Penalize if measurement is very large (likely perspective error)
   if (pixelDistance > imageDiagonal * 0.8) {

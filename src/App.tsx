@@ -184,12 +184,30 @@ function App() {
 
           setPhotos(prev => [...prev, photo]);
           if (!selectedPhoto) setSelectedPhoto(photo);
+          
+          // Save to IndexedDB if project exists
+          if (currentProject) {
+            savePhoto({ ...photo, projectId: currentProject.id }).catch(err => 
+              console.error('Failed to save photo:', err)
+            );
+            
+            // Update project with new photo
+            const updatedProject = {
+              ...currentProject,
+              photos: [...currentProject.photos, photo],
+              updatedAt: new Date()
+            };
+            setCurrentProject(updatedProject);
+            saveProject(updatedProject).catch(err => 
+              console.error('Failed to update project:', err)
+            );
+          }
         };
         img.src = dataUrl;
       };
       reader.readAsDataURL(file);
     });
-  }, [selectedPhoto]);
+  }, [selectedPhoto, currentProject]);
 
   // Handle camera capture
   const handleCameraCapture = useCallback((dataUrl: string, quality: ImageQuality) => {
@@ -213,6 +231,17 @@ function App() {
       if (currentProject) {
         savePhoto({ ...photo, projectId: currentProject.id }).catch(err => 
           console.error('Failed to save photo:', err)
+        );
+        
+        // Update project with new photo
+        const updatedProject = {
+          ...currentProject,
+          photos: [...currentProject.photos, photo],
+          updatedAt: new Date()
+        };
+        setCurrentProject(updatedProject);
+        saveProject(updatedProject).catch(err => 
+          console.error('Failed to update project:', err)
         );
       }
     };
