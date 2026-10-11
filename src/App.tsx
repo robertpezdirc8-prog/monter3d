@@ -12,6 +12,7 @@ import { FenceVisualization } from './components/FenceVisualization';
 import { CoverageMapView, CameraGuide } from './components/CoverageMap';
 import { FeatureMatchingView } from './components/FeatureMatching';
 import { ProjectSummary } from './components/ProjectSummary';
+import { MathTestRunner } from './components/MathTestRunner';
 
 // Icons as simple SVG components
 const IconCamera = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
@@ -26,6 +27,12 @@ const IconPlus = () => <svg className="w-6 h-6" fill="none" stroke="currentColor
 const IconSave = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>;
 
 function App() {
+  const [showTests, setShowTests] = useState(() => window.location.hash === '#tests');
+  useEffect(() => {
+    const handler = () => setShowTests(window.location.hash === '#tests');
+    window.addEventListener('hashchange', handler);
+    return () => window.removeEventListener('hashchange', handler);
+  }, []);
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('new_project');
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
@@ -446,6 +453,18 @@ function App() {
     { key: 'estimate', label: 'Predračun', icon: '💰' },
     { key: 'export', label: 'Izvoz', icon: '📤' },
   ];
+
+  // Show test runner if URL hash is #tests
+  if (showTests) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100">
+        <div className="p-4">
+          <a href="#" className="text-blue-400 hover:text-blue-300 mb-4 inline-block">← Nazaj na aplikacijo</a>
+        </div>
+        <MathTestRunner />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
