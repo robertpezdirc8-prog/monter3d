@@ -18,6 +18,7 @@ import { MeasurementOverlay } from './components/MeasurementOverlay';
 import { MeasurementAccuracyTests } from './components/MeasurementAccuracyTests';
 import { GuidedCapture } from './components/GuidedCapture';
 import { PhotoMatchingView } from './components/PhotoMatchingView';
+import { FenceVisualizer } from './components/FenceVisualizer';
 import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId } from './utils/storage';
 
 // Icons as simple SVG components
@@ -83,6 +84,7 @@ function App() {
   const [capturedSteps, setCapturedSteps] = useState<string[]>([]);
   const [currentCaptureStep, setCurrentCaptureStep] = useState<string | null>(null);
   const [photoMatchings, setPhotoMatchings] = useState<any[]>([]);
+  const [showFenceVisualizer, setShowFenceVisualizer] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -641,6 +643,13 @@ function App() {
         />
       )}
 
+      {showFenceVisualizer && selectedPhoto && (
+        <FenceVisualizer
+          photo={selectedPhoto}
+          onClose={() => setShowFenceVisualizer(false)}
+        />
+      )}
+
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -834,9 +843,17 @@ function App() {
               {/* New Measurement Overlay */}
               {selectedPhoto && (
                 <div className="mt-6 border-t border-slate-700 pt-6">
-                  <h3 className="text-lg font-bold text-emerald-400 mb-4">
-                    📐 Napredno merjenje z referenco
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-emerald-400">
+                      📐 Napredno merjenje z referenco
+                    </h3>
+                    <button
+                      onClick={() => setShowFenceVisualizer(true)}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm font-medium transition-colors"
+                    >
+                      🏗️ Roksal Visualizer
+                    </button>
+                  </div>
                   <MeasurementOverlay
                     imageUrl={selectedPhoto.dataUrl}
                     imageWidth={selectedPhoto.width || 800}
