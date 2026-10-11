@@ -200,7 +200,8 @@ describe('calculateStairsPlan — validacija in robni primeri', () => {
   it('handrailHeight validacija', () => {
     // nizka ograja -> opozorilo; neveljavna -> napaka (glej implementacijo)
     const low = calculateStairsPlan(10, 1.7, 3.0, 0.7);
-    expect(low.warnings?.some(w => /0\.9|90/.test(w))).toBe(true);
+    // Ustrezen regex: pika v "0,9 m" je razlagana dobesedno (ne kot joker).
+    expect(low.warnings?.some(w => /0,9|90/.test(w))).toBe(true);
   });
 });
 
