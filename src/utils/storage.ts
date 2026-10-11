@@ -43,13 +43,26 @@ export function initDB(): Promise<IDBDatabase> {
 const DATE_FIELDS = ['createdAt', 'updatedAt', 'timestamp', 'verifiedAt'] as const;
 
 function reviveDates<T>(obj: T): T {
+  // FAZA 1 popravilo: pravi Date objekti (IndexedDB strukturno kopija ohrani instanceof)
+  // morajo ostati nespremenjeni — sicer bi jih rekurzija spremenila v PRAZEN objekt {}
+  // in App.tsx createdAt.toLocaleDateString() bi bil pokvarjen.
+  if (obj instanceof Date) return obj;
   if (Array.isArray(obj)) return obj.map(reviveDates) as unknown as T;
   if (obj && typeof obj === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-      if (typeof v === 'string' && (DATE_FIELDS as readonly string[]).includes(k) && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
-        const d = new Date(v);
-        out[k] = isNaN(d.getTime()) ? v : d;
+      if ((DATE_FIELDS as readonly string[]).includes(k)) {
+        if (v instanceof Date) {
+          out[k] = v; // že veljaven Date — ohrani
+        } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+          const d = new Date(v);
+          out[k] = isNaN(d.getTime()) ? v : d; // neveljaven niz ostane niz, brez InvalidDate
+        } else if (typeof v === 'number' && Number.isFinite(v)) {
+          const d = new Date(v);
+          out[k] = isNaN(d.getTime()) ? v : d;
+        } else {
+          out[k] = v; // null/undefined/neveljavna vrednost — pusti, ne ustvari lažnega datuma
+        }
       } else {
         out[k] = reviveDates(v);
       }

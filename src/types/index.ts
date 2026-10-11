@@ -123,7 +123,8 @@ export interface FenceSegment {
   mountingType: 'level' | 'stepped' | 'raked';
   numPanels: number;
   numPosts: number;
-  panelWidth: number;
+  panelWidth: number; // DEJANSKA sirina panela po modelu N*panel + (N+1)*post = L (m)
+  nominalPanelWidth: number; // nacrtovana/izbrana sirina profila (m)
   postSpacing: number;
 }
 
@@ -138,9 +139,14 @@ export interface FencePlan {
   postHeight: number;
   maxGap: number;
   totalPanels: number;
+  /** Skupno stevilo stebrov — vogalni stebri, ki si jih delita sosednja segmenta, steje samo enkrat. */
   totalPosts: number;
+  sharedCornerPosts: number;
   totalRails: number;
   totalFasteners: number;
+  /** FAZA 1: napake pomenijo, da veljaven nacrt ni bil mogoce (npr. neveljavnih vhodov). */
+  errors?: string[];
+  warnings?: string[];
 }
 
 export interface StairStep {
