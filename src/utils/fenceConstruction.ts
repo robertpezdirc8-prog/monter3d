@@ -60,6 +60,29 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   const warnings: string[] = [];
   const errors: string[] = [];
   
+  // Validate input parameters
+  if (!isFinite(fenceHeight) || fenceHeight <= 0) {
+    errors.push(`Neveljavna višina ograje: ${fenceHeight}mm`);
+  }
+  
+  if (!isFinite(fenceLength) || fenceLength <= 0) {
+    errors.push(`Neveljavna dolžina ograje: ${fenceLength}mm`);
+  }
+  
+  if (!isFinite(boardSpacing) || boardSpacing < 0) {
+    errors.push(`Neveljaven razmik med deskami: ${boardSpacing}mm`);
+  }
+  
+  if (visibleWidth !== undefined && (!isFinite(visibleWidth) || visibleWidth <= 0)) {
+    errors.push(`Neveljavna vidna širina: ${visibleWidth}mm`);
+  }
+  
+  if (config.postSpacing !== undefined) {
+    if (!isFinite(config.postSpacing) || config.postSpacing <= 0) {
+      errors.push(`Neveljaven razmak stebričkov: ${config.postSpacing}mm`);
+    }
+  }
+  
   // Check orientation compatibility
   if (profile.orientation === 'vertical' && orientation === 'horizontal') {
     errors.push(`Profil ${profile.name} je namenjen samo pokončni postavitvi`);
@@ -123,33 +146,85 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
     errors.push(`Razmak nosilcev (${beamSpacing}mm) presega maksimalni dovoljeni razmak (${maxBeamSpacing}mm)`);
   }
   
-  // Calculate boards - ensure full coverage without gaps
-  let numberOfBoards: number;
-  let actualBoardSpacing: number;
+  // Calculate boards - find valid solution with spacing in allowed range
+  let numberOfBoards: number = 0;
+  let actualBoardSpacing: number = 0;
   let uncoveredWidth: number = 0;
   const totalDimension = orientation === 'vertical' ? fenceLength : fenceHeight;
   
-  // Calculate how many boards we need
-  const totalBoardWidth = effectiveWidth + boardSpacing;
-  numberOfBoards = Math.ceil(totalDimension / totalBoardWidth);
+  // Validate input dimensions
+  if (!isFinite(totalDimension) || totalDimension <= 0) {
+    errors.push(`Neveljavna dimenzija ograje: ${totalDimension}mm`);
+  }
   
-  // Calculate actual spacing to fit exactly
-  if (numberOfBoards === 1) {
-    actualBoardSpacing = 0;
-    uncoveredWidth = totalDimension - effectiveWidth;
-  } else {
-    const totalBoardsWidth = numberOfBoards * effectiveWidth;
-    const totalSpacing = totalDimension - totalBoardsWidth;
-    actualBoardSpacing = totalSpacing / (numberOfBoards - 1);
+  if (!isFinite(effectiveWidth) || effectiveWidth <= 0) {
+    errors.push(`Neveljavna širina deske: ${effectiveWidth}mm`);
+  }
+  
+  // Find valid number of boards with spacing in allowed range
+  let solutionFound = false;
+  
+  // Try different numbers of boards to find one that gives valid spacing
+  const maxPossibleBoards = Math.floor(totalDimension / (effectiveWidth + profile.minBoardSpacing));
+  const minPossibleBoards = Math.ceil(totalDimension / (effectiveWidth + profile.maxBoardSpacing));
+  
+  for (let n = Math.max(1, minPossibleBoards); n <= maxPossibleBoards; n++) {
+    const totalBoardsWidth = n * effectiveWidth;
+    const remainingSpace = totalDimension - totalBoardsWidth;
     
-    // Check if spacing is negative (impossible configuration)
-    if (actualBoardSpacing < 0) {
-      errors.push(`Konfiguracija ni mogoča: ${numberOfBoards} desk širine ${effectiveWidth}mm ne more pokriti ${totalDimension}mm z negativnim razmikom`);
-      actualBoardSpacing = 0;
-      uncoveredWidth = totalDimension - (numberOfBoards * effectiveWidth);
+    if (n === 1) {
+      // Single board - no spacing needed
+      if (remainingSpace >= 0 && remainingSpace <= profile.maxBoardSpacing) {
+        numberOfBoards = n;
+        actualBoardSpacing = 0;
+        uncoveredWidth = remainingSpace;
+        solutionFound = true;
+        break;
+      }
     } else {
-      uncoveredWidth = 0;
+      // Multiple boards - calculate spacing
+      const spacing = remainingSpace / (n - 1);
+      
+      if (spacing >= profile.minBoardSpacing && spacing <= profile.maxBoardSpacing) {
+        numberOfBoards = n;
+        actualBoardSpacing = spacing;
+        uncoveredWidth = 0;
+        solutionFound = true;
+        break;
+      }
     }
+  }
+  
+  // If no solution found with preferred spacing, try with user's requested spacing
+  if (!solutionFound && boardSpacing >= profile.minBoardSpacing && boardSpacing <= profile.maxBoardSpacing) {
+    const totalBoardWidth = effectiveWidth + boardSpacing;
+    numberOfBoards = Math.ceil(totalDimension / totalBoardWidth);
+    
+    if (numberOfBoards === 1) {
+      actualBoardSpacing = 0;
+      uncoveredWidth = totalDimension - effectiveWidth;
+    } else {
+      const totalBoardsWidth = numberOfBoards * effectiveWidth;
+      const totalSpacing = totalDimension - totalBoardsWidth;
+      actualBoardSpacing = totalSpacing / (numberOfBoards - 1);
+      
+      if (actualBoardSpacing < 0) {
+        errors.push(`Konfiguracija ni mogoča: ${numberOfBoards} desk širine ${effectiveWidth}mm ne more pokriti ${totalDimension}mm z negativnim razmikom`);
+        actualBoardSpacing = 0;
+        uncoveredWidth = totalDimension - (numberOfBoards * effectiveWidth);
+      } else {
+        uncoveredWidth = 0;
+        solutionFound = true;
+      }
+    }
+  }
+  
+  // If still no solution, report error
+  if (!solutionFound && numberOfBoards === 0) {
+    errors.push(`Ni mogoče najti veljavne konfiguracije desk za dolžino ${totalDimension}mm z širino deske ${effectiveWidth}mm in razmikom ${profile.minBoardSpacing}-${profile.maxBoardSpacing}mm`);
+    numberOfBoards = Math.ceil(totalDimension / (effectiveWidth + boardSpacing));
+    actualBoardSpacing = 0;
+    uncoveredWidth = totalDimension - (numberOfBoards * effectiveWidth);
   }
   
   const boardSpacingValid = actualBoardSpacing >= profile.minBoardSpacing && 
@@ -160,9 +235,9 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   }
   
   if (actualBoardSpacing < profile.minBoardSpacing && numberOfBoards > 1) {
-    warnings.push(`Razmik med deskami (${actualBoardSpacing.toFixed(1)}mm) je manjši od minimalnega (${profile.minBoardSpacing}mm)`);
+    errors.push(`Razmik med deskami (${actualBoardSpacing.toFixed(1)}mm) je manjši od minimalnega (${profile.minBoardSpacing}mm)`);
   } else if (actualBoardSpacing > profile.maxBoardSpacing && numberOfBoards > 1) {
-    warnings.push(`Razmik med deskami (${actualBoardSpacing.toFixed(1)}mm) je večji od maksimalnega (${profile.maxBoardSpacing}mm)`);
+    errors.push(`Razmik med deskami (${actualBoardSpacing.toFixed(1)}mm) je večji od maksimalnega (${profile.maxBoardSpacing}mm)`);
   }
   
   // Calculate material with cutting plan
@@ -170,20 +245,38 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   const totalBoardLength = numberOfBoards * boardLength;
   const profileLength = profile.length;
   
-  // Simple cutting plan: how many boards of boardLength can we cut from one profile?
-  const cutsPerProfile = Math.floor(profileLength / boardLength);
+  // Saw blade width (typical value for circular saw)
+  const sawBladeWidth = 3; // mm - width of cut
+  
+  // Calculate how many boards can be cut from one profile
+  // Account for saw blade width between cuts
+  let cutsPerProfile: number;
+  if (boardLength > profileLength) {
+    // Board is longer than profile - need special handling
+    cutsPerProfile = 0;
+    warnings.push(`Posamezna deska (${boardLength}mm) je daljša od profila (${profileLength}mm). Potrebno spajanje.`);
+  } else {
+    // Calculate considering saw blade width
+    // First cut doesn't need extra space, subsequent cuts need sawBladeWidth
+    cutsPerProfile = Math.floor((profileLength + sawBladeWidth) / (boardLength + sawBladeWidth));
+  }
   
   // Calculate how many profiles we need
   let profilesNeeded: number;
   if (cutsPerProfile === 0) {
-    // Board is longer than profile - need special handling
+    // Board is longer than profile
     profilesNeeded = numberOfBoards;
-    warnings.push(`Posamezna deska (${boardLength}mm) je daljša od profila (${profileLength}mm). Potrebno spajanje.`);
   } else {
     profilesNeeded = Math.ceil(numberOfBoards / cutsPerProfile);
   }
   
+  // Calculate waste (material that cannot be used)
   const waste = (profilesNeeded * profileLength) - totalBoardLength;
+  
+  // Ensure waste is never negative
+  if (waste < 0) {
+    warnings.push(`Opozorilo: Izračun odpada je negativen (${waste}mm). Preverite dimenzije.`);
+  }
   
   // Additional requirements
   const requiresAluminumTube = profile.requiresAluminumTube;
