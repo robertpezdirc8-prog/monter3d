@@ -389,9 +389,9 @@ export function estimateHomography(
   return { matrix: H_normalized, inliers, rmse };
 }
 
-// Solve homogeneous system Ah = 0 using one-sided Jacobi SVD on original matrix A
-// This avoids squaring the condition number (which happens with A^T*A methods)
-// For homography with 4 points: m=8 rows, n=9 columns (valid minimal case)
+// Solve homogeneous system Ah = 0
+// Uses hybrid approach: one-sided Jacobi SVD for tall matrices, Jacobi eigensolver for wide matrices
+// For homography with 4 points: m=8 rows, n=9 columns (valid minimal case, underdetermined)
 function solveHomogeneousSystem(A: number[][]): number[] | null {
   const m = A.length;
   const n = A[0].length;
@@ -407,27 +407,66 @@ function solveHomogeneousSystem(A: number[][]): number[] | null {
     }
   }
   
-  // One-sided Jacobi SVD on A
-  // Computes A = U * Σ * V^T, returns V (right singular vectors)
-  const result = oneSidedJacobiSVD(A, 100, 1e-10);
-  if (!result) return null;
+  let v: number[];
   
-  const { singularValues, V } = result;
-  
-  // Find index of smallest singular value
-  let minIdx = 0;
-  let minVal = Math.abs(singularValues[0]);
-  for (let i = 1; i < singularValues.length; i++) {
-    if (Math.abs(singularValues[i]) < minVal) {
-      minVal = Math.abs(singularValues[i]);
-      minIdx = i;
+  if (m >= n) {
+    // Tall or square matrix: use one-sided Jacobi SVD on A
+    const result = oneSidedJacobiSVD(A, 100, 1e-10);
+    if (!result) return null;
+    
+    const { singularValues, V } = result;
+    
+    // Find index of smallest singular value
+    let minIdx = 0;
+    let minVal = Math.abs(singularValues[0]);
+    for (let i = 1; i < singularValues.length; i++) {
+      if (Math.abs(singularValues[i]) < minVal) {
+        minVal = Math.abs(singularValues[i]);
+        minIdx = i;
+      }
     }
-  }
-  
-  // Extract right singular vector corresponding to smallest singular value
-  const v: number[] = [];
-  for (let i = 0; i < n; i++) {
-    v.push(V[i][minIdx]);
+    
+    // Extract right singular vector
+    v = [];
+    for (let i = 0; i < n; i++) {
+      v.push(V[i][minIdx]);
+    }
+  } else {
+    // Wide matrix (underdetermined system, e.g., 8x9 for 4 points)
+    // Use Jacobi eigensolver on A^T * A (n x n symmetric matrix)
+    // Null space of A = eigenspace of A^T*A with eigenvalue 0
+    const ATA: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
+    for (let i = 0; i < n; i++) {
+      for (let j = i; j < n; j++) {
+        let sum = 0;
+        for (let k = 0; k < m; k++) {
+          sum += A[k][i] * A[k][j];
+        }
+        ATA[i][j] = sum;
+        ATA[j][i] = sum;
+      }
+    }
+    
+    const result = jacobiEigenSolver(ATA, 100, 1e-10);
+    if (!result) return null;
+    
+    const { eigenvalues, eigenvectors } = result;
+    
+    // Find index of smallest eigenvalue
+    let minIdx = 0;
+    let minVal = Math.abs(eigenvalues[0]);
+    for (let i = 1; i < eigenvalues.length; i++) {
+      if (Math.abs(eigenvalues[i]) < minVal) {
+        minVal = Math.abs(eigenvalues[i]);
+        minIdx = i;
+      }
+    }
+    
+    // Extract eigenvector
+    v = [];
+    for (let i = 0; i < n; i++) {
+      v.push(eigenvectors[i][minIdx]);
+    }
   }
   
   // Verify result is valid
@@ -528,6 +567,81 @@ function oneSidedJacobiSVD(
   }
   
   return { singularValues, V };
+}
+
+// Jacobi eigenvalue algorithm for symmetric matrices
+// Returns eigenvalues and eigenvectors
+function jacobiEigenSolver(
+  A: number[][], 
+  maxIterations: number = 100, 
+  tolerance: number = 1e-10
+): { eigenvalues: number[]; eigenvectors: number[][] } | null {
+  const n = A.length;
+  
+  // Create copy of A
+  const S = A.map(row => [...row]);
+  
+  // Initialize eigenvector matrix as identity
+  const V: number[][] = Array.from({ length: n }, (_, i) => 
+    Array.from({ length: n }, (_, j) => i === j ? 1 : 0)
+  );
+  
+  for (let iter = 0; iter < maxIterations; iter++) {
+    // Find largest off-diagonal element
+    let maxVal = 0;
+    let p = 0, q = 1;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        if (Math.abs(S[i][j]) > maxVal) {
+          maxVal = Math.abs(S[i][j]);
+          p = i;
+          q = j;
+        }
+      }
+    }
+    
+    // Check convergence
+    if (maxVal < tolerance) break;
+    
+    // Compute rotation angle
+    const theta = (S[q][q] - S[p][p]) / (2 * S[p][q]);
+    const t = Math.sign(theta) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+    const c = 1 / Math.sqrt(t * t + 1);
+    const s = t * c;
+    
+    // Update S (only affected rows/columns)
+    const Sp = [...S[p]];
+    const Sq = [...S[q]];
+    
+    for (let i = 0; i < n; i++) {
+      if (i !== p && i !== q) {
+        const Sip = S[i][p];
+        const Siq = S[i][q];
+        S[i][p] = S[p][i] = c * Sip - s * Siq;
+        S[i][q] = S[q][i] = s * Sip + c * Siq;
+      }
+    }
+    
+    S[p][p] = c * c * Sp[p] - 2 * s * c * Sp[q] + s * s * Sq[q];
+    S[q][q] = s * s * Sp[p] + 2 * s * c * Sp[q] + c * c * Sq[q];
+    S[p][q] = S[q][p] = 0;
+    
+    // Update eigenvector matrix
+    for (let i = 0; i < n; i++) {
+      const Vip = V[i][p];
+      const Viq = V[i][q];
+      V[i][p] = c * Vip - s * Viq;
+      V[i][q] = s * Vip + c * Viq;
+    }
+  }
+  
+  // Extract eigenvalues from diagonal
+  const eigenvalues: number[] = [];
+  for (let i = 0; i < n; i++) {
+    eigenvalues.push(S[i][i]);
+  }
+  
+  return { eigenvalues, eigenvectors: V };
 }
 
 // Compute residual ||A * v|| for validation
