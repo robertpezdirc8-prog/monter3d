@@ -16,6 +16,8 @@ import {
   toGrayscale
 } from './cv';
 
+import type { Point2D } from './cv';
+
 export interface PhotoPairMatching {
   photo1Id: string;
   photo2Id: string;
@@ -27,6 +29,10 @@ export interface PhotoPairMatching {
   reprojError: number | null;
   status: 'good' | 'poor' | 'failed';
   message: string;
+  // Data for visualization
+  features1Points?: Point2D[];
+  features2Points?: Point2D[];
+  inlierMatches?: MatchResult[];
 }
 
 /**
@@ -140,7 +146,10 @@ export async function matchPhotoPair(
     };
   }
 
-  const { matrix: homography, inlierCount, rmse } = ransacResult;
+  const { matrix: homography, inlierCount, inliers, rmse } = ransacResult;
+
+  // Extract inlier matches for visualization
+  const inlierMatches = goodMatches.filter((_, idx) => inliers[idx]);
 
   // Determine status based on inlier ratio and reprojection error
   const inlierRatio = inlierCount / goodMatches.length;
@@ -169,7 +178,11 @@ export async function matchPhotoPair(
     homography,
     reprojError: rmse,
     status,
-    message
+    message,
+    // Data for visualization
+    features1Points: features1.map(f => f.point),
+    features2Points: features2.map(f => f.point),
+    inlierMatches
   };
 }
 

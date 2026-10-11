@@ -36,8 +36,8 @@ type Mode = 'idle' | 'reference' | 'measure';
 
 export function MeasurementOverlay({
   imageUrl,
-  imageWidth,
-  imageHeight,
+  imageWidth: propWidth,
+  imageHeight: propHeight,
   onMeasurementsChange
 }: MeasurementOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -50,6 +50,34 @@ export function MeasurementOverlay({
   const [measurePoints, setMeasurePoints] = useState<MeasurementPoint[]>([]);
   const [segments, setSegments] = useState<MeasurementSegment[]>([]);
   const [displayScale, setDisplayScale] = useState(1);
+  
+  // Get actual image dimensions if props are missing or fallback values
+  const [actualDimensions, setActualDimensions] = useState<{ width: number; height: number } | null>(null);
+  
+  useEffect(() => {
+    // If props have valid dimensions (> 1), use them
+    if (propWidth > 1 && propHeight > 1) {
+      setActualDimensions({ width: propWidth, height: propHeight });
+      return;
+    }
+    
+    // Otherwise, load image to get actual dimensions
+    const img = new Image();
+    img.onload = () => {
+      setActualDimensions({ width: img.width, height: img.height });
+    };
+    img.onerror = () => {
+      // Fallback to props or default
+      setActualDimensions({ 
+        width: propWidth > 1 ? propWidth : 800, 
+        height: propHeight > 1 ? propHeight : 600 
+      });
+    };
+    img.src = imageUrl;
+  }, [imageUrl, propWidth, propHeight]);
+  
+  const imageWidth = actualDimensions?.width || propWidth;
+  const imageHeight = actualDimensions?.height || propHeight;
 
   // Calculate display scale to fit image in container
   useEffect(() => {

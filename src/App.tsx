@@ -189,6 +189,13 @@ function App() {
             height: img.height
           };
 
+          // Ensure dimensions are always set
+          if (!photo.width || !photo.height) {
+            console.warn('Photo dimensions missing, using image dimensions:', img.width, img.height);
+            photo.width = img.width;
+            photo.height = img.height;
+          }
+
           setPhotos(prev => [...prev, photo]);
           if (!selectedPhoto) setSelectedPhoto(photo);
           
