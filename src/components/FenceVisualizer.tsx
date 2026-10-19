@@ -12,38 +12,32 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { Photo, ProjectMontageInput } from '../types';
-import { getVerticalProfiles, getHorizontalProfiles } from '../data/roksalCatalog';
-import type { RoksalProfile, RoksalColor } from '../data/roksalCatalog';
+import {
+  FENCE_HEIGHT_STEP_MM,
+  MAX_FENCE_HEIGHT_MM,
+  MIN_FENCE_HEIGHT_MM,
+  getFenceProfiles,
+  resolveFenceVisualizerConfig,
+  type FenceVisualizerInitialConfig,
+  type ResolvedFenceVisualizerConfig
+} from '../utils/visualizerConfig';
 import { buildFenceQuads, type Point, type Quad } from '../utils/fenceVisualization';
 
 interface FenceVisualizerProps {
   photo: Photo;
   onClose: () => void;
   onSaveMontage?: (montage: ProjectMontageInput) => void;
+  /** Začetne nastavitve iz ponudbe ali načrta projekta. */
+  initialConfig?: FenceVisualizerInitialConfig;
 }
 
-interface FenceConfig {
-  profile: RoksalProfile;
-  color: RoksalColor;
-  orientation: 'vertical' | 'horizontal';
-  boardSpacing: number; // mm
-  fenceHeight: number; // mm
-}
+type FenceConfig = ResolvedFenceVisualizerConfig;
 
 type Mode = 'idle' | 'corners' | 'calibrate';
 
 const MAX_CANVAS_WIDTH = 900;
 const MAX_CANVAS_HEIGHT = 620;
 const CORNER_NAMES = ['zgoraj levo', 'zgoraj desno', 'spodaj desno', 'spodaj levo'];
-
-function fenceProfiles(orientation: 'vertical' | 'horizontal'): RoksalProfile[] {
-  const profiles = orientation === 'vertical' ? getVerticalProfiles() : getHorizontalProfiles();
-  return profiles.filter(p => p.kind !== 'partition');
-}
-
-function pickInitialProfile(): RoksalProfile {
-  return fenceProfiles('vertical')[0];
-}
 
 function drawQuads(
   ctx: CanvasRenderingContext2D,
@@ -139,7 +133,7 @@ function drawGuides(
   }
 }
 
-export function FenceVisualizer({ photo, onClose, onSaveMontage }: FenceVisualizerProps) {
+export function FenceVisualizer({ photo, onClose, onSaveMontage, initialConfig }: FenceVisualizerProps) {
   const baseCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const guideCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -157,16 +151,9 @@ export function FenceVisualizer({ photo, onClose, onSaveMontage }: FenceVisualiz
   const [sliderPosition, setSliderPosition] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const [config, setConfig] = useState<FenceConfig>(() => {
-    const profile = pickInitialProfile();
-    return {
-      profile,
-      color: profile.colors[0],
-      orientation: 'vertical',
-      boardSpacing: profile.recommendedBoardSpacing,
-      fenceHeight: 1000
-    };
-  });
+  const [config, setConfig] = useState<FenceConfig>(() =>
+    resolveFenceVisualizerConfig(initialConfig)
+  );
 
   // Naloži fotografijo in določi velikost platna
   useEffect(() => {
@@ -452,10 +439,10 @@ export function FenceVisualizer({ photo, onClose, onSaveMontage }: FenceVisualiz
     setNotice('✓ Montaža je shranjena v projekt. Vidna bo tudi v izvozu in PDF.');
   };
 
-  const availableProfiles = fenceProfiles(config.orientation);
+  const availableProfiles = getFenceProfiles(config.orientation);
 
   const changeOrientation = (orientation: 'vertical' | 'horizontal') => {
-    const profiles = fenceProfiles(orientation);
+    const profiles = getFenceProfiles(orientation);
     setConfig(prev => {
       const profile = profiles.find(p => p.id === prev.profile.id) ?? profiles[0] ?? prev.profile;
       const color = profile.colors.find(c => c.id === prev.color.id) ?? profile.colors[0] ?? prev.color;
@@ -771,17 +758,17 @@ export function FenceVisualizer({ photo, onClose, onSaveMontage }: FenceVisualiz
               </label>
               <input
                 type="range"
-                min="800"
-                max="2000"
-                step="50"
+                min={MIN_FENCE_HEIGHT_MM}
+                max={MAX_FENCE_HEIGHT_MM}
+                step={FENCE_HEIGHT_STEP_MM}
                 value={config.fenceHeight}
                 disabled={!pxPerMeter}
                 onChange={e => setConfig({ ...config, fenceHeight: Number(e.target.value) })}
                 className={`w-full accent-emerald-500 ${pxPerMeter ? '' : 'opacity-40'}`}
               />
               <div className="flex justify-between text-xs text-slate-400 mt-1">
-                <span>800 mm</span>
-                <span>2000 mm</span>
+                <span>{MIN_FENCE_HEIGHT_MM} mm</span>
+                <span>{MAX_FENCE_HEIGHT_MM} mm</span>
               </div>
               {!pxPerMeter && (
                 <p className="mt-1 text-xs text-amber-400">

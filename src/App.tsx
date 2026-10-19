@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type {
   Project, Photo, Measurement, WorkflowStep, ObjectType,
   MeasurementStatus, ScaleSource, FencePlan, StairsPlan,
@@ -9,7 +9,6 @@ import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetect
 import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, formatMeasurement, exportMeasurementsCSV } from './utils/geometry';
 import { generatePDFReport } from './utils/pdfExport';
 import { v4 as uuidv4 } from 'uuid';
-import { FenceVisualization } from './components/FenceVisualization';
 import { CoverageMapView, CameraGuide } from './components/CoverageMap';
 import { FeatureMatchingView } from './components/FeatureMatching';
 import { ProjectSummary } from './components/ProjectSummary';
@@ -20,6 +19,8 @@ import { MeasurementAccuracyTests } from './components/MeasurementAccuracyTests'
 import { GuidedCapture } from './components/GuidedCapture';
 import { PhotoMatchingView } from './components/PhotoMatchingView';
 import { FenceVisualizer } from './components/FenceVisualizer';
+import { VisualizationView } from './components/VisualizationView';
+import { MontageGallery } from './components/MontageGallery';
 import { RoksalGalleryView } from './components/RoksalGalleryView';
 import { FenceConfigurator } from './components/FenceConfigurator';
 import type { FenceConfiguratorApplyPayload } from './components/FenceConfigurator';
@@ -103,11 +104,6 @@ function App() {
   const [laborRate, setLaborRate] = useState(35);
   const [laborHours, setLaborHours] = useState(8);
   const [taxRate, setTaxRate] = useState(22);
-  const [vizStartPoint, setVizStartPoint] = useState<{x: number; y: number} | null>(null);
-  const [vizEndPoint, setVizEndPoint] = useState<{x: number; y: number} | null>(null);
-  const [vizFenceHeight, setVizFenceHeight] = useState(1.5);
-  const [vizNumBoards, setVizNumBoards] = useState(12);
-  const [vizColor, setVizColor] = useState('#2d3436');
   const [comparePhoto, setComparePhoto] = useState<Photo | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [showMeasurement, setShowMeasurement] = useState(false);
@@ -299,6 +295,22 @@ function App() {
     setProjects(prev => prev.map(p => (p.id === updated.id ? updated : p)));
     saveProject(updated).catch(err => console.error('Failed to delete montage:', err));
   }, [currentProject]);
+
+  const visualizerInitialConfig = useMemo(() => {
+    if (roksalQuote) {
+      return {
+        profileId: roksalQuote.configuration.profileId,
+        colorId: roksalQuote.configuration.colorId,
+        orientation: roksalQuote.configuration.orientation,
+        boardSpacingMm: roksalQuote.configuration.boardSpacingMm,
+        fenceHeightMm: roksalQuote.configuration.fenceHeightMm
+      };
+    }
+    if (fencePlan) {
+      return { fenceHeightMm: Math.round(fencePlan.panelHeight * 1000) };
+    }
+    return undefined;
+  }, [roksalQuote, fencePlan]);
 
   // Handle photo capture/upload
   const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -836,6 +848,7 @@ function App() {
           photo={selectedPhoto}
           onClose={() => setShowFenceVisualizer(false)}
           onSaveMontage={currentProject ? handleSaveMontage : undefined}
+          initialConfig={visualizerInitialConfig}
         />
       )}
 
@@ -1146,23 +1159,15 @@ function App() {
 
           {/* Visualization */}
           {currentStep === 'visualization' && (
-            <div>
-              <h2 className="text-xl font-bold text-emerald-400 mb-4">🎨 Vizualizacija</h2>
-              <FenceVisualization
-                photoUrl={selectedPhoto?.dataUrl || null}
-                fencePlan={fencePlan}
-                startPoint={vizStartPoint}
-                endPoint={vizEndPoint}
-                onStartPointChange={setVizStartPoint}
-                onEndPointChange={setVizEndPoint}
-                fenceHeight={vizFenceHeight}
-                onFenceHeightChange={setVizFenceHeight}
-                numBoards={vizNumBoards}
-                onNumBoardsChange={setVizNumBoards}
-                color={vizColor}
-                onColorChange={setVizColor}
-              />
-            </div>
+            <VisualizationView
+              photo={selectedPhoto}
+              fencePlan={fencePlan}
+              roksalQuote={roksalQuote}
+              montages={currentProject?.montages ?? []}
+              onOpenVisualizer={() => setShowFenceVisualizer(true)}
+              onGoToCapture={() => setCurrentStep('capture')}
+              onDeleteMontage={handleDeleteMontage}
+            />
           )}
 
           {/* Quantity Calculation */}
@@ -2360,61 +2365,11 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
       )}
 
       {currentProject && (currentProject.montages?.length ?? 0) > 0 && (
-        <div className="bg-slate-800 rounded-lg p-4 mt-4">
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">📸 Shranjene fotomontaže</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {currentProject.montages!.map(montage => {
-              const created = new Date(montage.createdAt);
-              const dateLabel = Number.isNaN(created.getTime())
-                ? ''
-                : created.toLocaleDateString('sl-SI');
-              const fileDate = Number.isNaN(created.getTime())
-                ? 'montaza'
-                : created.toISOString().slice(0, 10);
-
-              return (
-                <figure
-                  key={montage.id}
-                  className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700"
-                >
-                  <img
-                    src={montage.dataUrl}
-                    alt={`Fotomontaža ${montage.profileName}`}
-                    className="w-full h-auto"
-                    loading="lazy"
-                  />
-                  <figcaption className="p-3 text-xs text-slate-400 space-y-2">
-                    <div>
-                      <p className="text-sm font-medium text-slate-200">
-                        {montage.profileName} · {montage.colorName}
-                      </p>
-                      <p>
-                        {montage.orientation === 'vertical' ? 'Pokončno' : 'Prečno'} · višina{' '}
-                        {(montage.fenceHeightMm / 1000).toFixed(2)} m · razmik{' '}
-                        {montage.boardSpacingMm} mm
-                      </p>
-                      {dateLabel && <p>Shranjeno {dateLabel}</p>}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <a
-                        href={montage.dataUrl}
-                        download={`roksal-montaza-${fileDate}.png`}
-                        className="rounded bg-blue-600 px-3 py-1.5 font-medium text-white hover:bg-blue-700"
-                      >
-                        💾 Prenesi
-                      </a>
-                      <button
-                        onClick={() => onDeleteMontage(montage.id)}
-                        className="rounded bg-slate-700 px-3 py-1.5 font-medium text-slate-200 hover:bg-red-700 hover:text-white"
-                      >
-                        🗑️ Odstrani
-                      </button>
-                    </div>
-                  </figcaption>
-                </figure>
-              );
-            })}
-          </div>
+        <div className="mt-4">
+          <MontageGallery
+            montages={currentProject.montages ?? []}
+            onDelete={onDeleteMontage}
+          />
         </div>
       )}
 
