@@ -86,7 +86,6 @@ function App() {
   const [showInstructions, setShowInstructions] = useState(true);
   const [measuringMode, setMeasuringMode] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<{x: number; y: number}[]>([]);
-  const [referenceLength, setReferenceLength] = useState<string>('');
   const [pixelToMeter, setPixelToMeter] = useState<number | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [fenceConfig, setFenceConfig] = useState({
@@ -164,7 +163,6 @@ function App() {
     setSelectedPhoto(null);
     setPixelToMeter(null);
     setMeasurePoints([]);
-    setReferenceLength('');
     setCapturedSteps([]);
     setCurrentCaptureStep(null);
     setPhotoMatchings([]);
@@ -278,9 +276,8 @@ function App() {
     img.onload = () => {
       if (cancelled || canvasRef.current !== canvas) return;
 
-      const scale = Math.min(1, 1000 / img.width, 700 / img.height);
-      canvas.width = Math.max(1, Math.round(img.width * scale));
-      canvas.height = Math.max(1, Math.round(img.height * scale));
+      canvas.width = Math.max(1, img.width);
+      canvas.height = Math.max(1, img.height);
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
@@ -533,44 +530,55 @@ function App() {
           : p
       ));
 
-      // Draw features on canvas
+      // Draw features on canvas v polni ločljivosti fotografije.
+      // Tako so koordinate meritev v istem merilu kot pri naprednem merilniku.
       if (canvasRef.current) {
-        canvasRef.current.width = canvas.width;
-        canvasRef.current.height = canvas.height;
+        const featureScale = 1 / scale;
+        const infoScale = Math.max(1, img.width / 1200);
+
+        canvasRef.current.width = img.width;
+        canvasRef.current.height = img.height;
         const displayCtx = canvasRef.current.getContext('2d')!;
-        displayCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        displayCtx.drawImage(img, 0, 0, img.width, img.height);
         
         // Draw feature points
         displayCtx.fillStyle = '#00ff88';
         features.forEach(f => {
           displayCtx.beginPath();
-          displayCtx.arc(f.point.x, f.point.y, 3, 0, Math.PI * 2);
+          displayCtx.arc(
+            f.point.x * featureScale,
+            f.point.y * featureScale,
+            3 * featureScale,
+            0,
+            Math.PI * 2
+          );
           displayCtx.fill();
         });
 
         // Draw detected lines
         displayCtx.strokeStyle = '#ff6600';
-        displayCtx.lineWidth = 1;
+        displayCtx.lineWidth = Math.max(1, featureScale);
         lines.slice(0, 10).forEach(line => {
           const cos = Math.cos(line.angle * Math.PI / 180);
           const sin = Math.sin(line.angle * Math.PI / 180);
-          const x0 = cos * line.rho;
-          const y0 = sin * line.rho;
+          const x0 = cos * line.rho * featureScale;
+          const y0 = sin * line.rho * featureScale;
+          const reach = 1000 * featureScale;
           displayCtx.beginPath();
-          displayCtx.moveTo(x0 - 1000 * sin, y0 + 1000 * cos);
-          displayCtx.lineTo(x0 + 1000 * sin, y0 - 1000 * cos);
+          displayCtx.moveTo(x0 - reach * sin, y0 + reach * cos);
+          displayCtx.lineTo(x0 + reach * sin, y0 - reach * cos);
           displayCtx.stroke();
         });
 
         // Info overlay
         displayCtx.fillStyle = 'rgba(0,0,0,0.7)';
-        displayCtx.fillRect(5, 5, 200, 80);
+        displayCtx.fillRect(5 * infoScale, 5 * infoScale, 200 * infoScale, 80 * infoScale);
         displayCtx.fillStyle = '#fff';
-        displayCtx.font = '12px monospace';
-        displayCtx.fillText(`Značilnice: ${features.length}`, 10, 22);
-        displayCtx.fillText(`Linije: ${lines.length}`, 10, 38);
-        displayCtx.fillText(`Kakovost: ${(photo.quality.overallScore * 100).toFixed(0)}%`, 10, 54);
-        displayCtx.fillText(`Ostrina: ${(photo.quality.sharpness * 100).toFixed(0)}%`, 10, 70);
+        displayCtx.font = `${12 * infoScale}px monospace`;
+        displayCtx.fillText(`Značilnice: ${features.length}`, 10 * infoScale, 22 * infoScale);
+        displayCtx.fillText(`Linije: ${lines.length}`, 10 * infoScale, 38 * infoScale);
+        displayCtx.fillText(`Kakovost: ${(photo.quality.overallScore * 100).toFixed(0)}%`, 10 * infoScale, 54 * infoScale);
+        displayCtx.fillText(`Ostrina: ${(photo.quality.sharpness * 100).toFixed(0)}%`, 10 * infoScale, 70 * infoScale);
 
         displayedCanvasRef.current = { photoId: photo.id, element: canvasRef.current };
       }
@@ -582,8 +590,9 @@ function App() {
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!measuringMode) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const pxScale = e.currentTarget.width / rect.width;
+    const x = (e.clientX - rect.left) * pxScale;
+    const y = (e.clientY - rect.top) * pxScale;
     
     setMeasurePoints(prev => {
       const newPoints = [...prev, { x, y }];
@@ -596,9 +605,10 @@ function App() {
         // Draw measurement line
         if (canvasRef.current) {
           const ctx = canvasRef.current.getContext('2d')!;
+          const uiScale = canvasRef.current.width / rect.width;
           ctx.strokeStyle = '#00ff00';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([5, 5]);
+          ctx.lineWidth = 2 * uiScale;
+          ctx.setLineDash([5 * uiScale, 5 * uiScale]);
           ctx.beginPath();
           ctx.moveTo(newPoints[0].x, newPoints[0].y);
           ctx.lineTo(newPoints[1].x, newPoints[1].y);
@@ -609,7 +619,7 @@ function App() {
           ctx.fillStyle = '#ff0000';
           newPoints.forEach(p => {
             ctx.beginPath();
-            ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, 5 * uiScale, 0, Math.PI * 2);
             ctx.fill();
           });
           
@@ -618,8 +628,8 @@ function App() {
           const midY = (newPoints[0].y + newPoints[1].y) / 2;
           const metricDist = pixelToMeter ? (pixelDist * pixelToMeter).toFixed(3) : `${pixelDist.toFixed(0)} px`;
           ctx.fillStyle = '#00ff00';
-          ctx.font = 'bold 14px sans-serif';
-          ctx.fillText(`${metricDist}${pixelToMeter ? ' m' : ''}`, midX + 5, midY - 5);
+          ctx.font = `bold ${14 * uiScale}px sans-serif`;
+          ctx.fillText(`${metricDist}${pixelToMeter ? ' m' : ''}`, midX + 5 * uiScale, midY - 5 * uiScale);
         }
         
         // Create measurement record
@@ -643,41 +653,6 @@ function App() {
       return newPoints;
     });
   }, [measuringMode, pixelToMeter, selectedPhoto]);
-
-  // Set reference scale
-  const setScale = useCallback(() => {
-    if (measurePoints.length !== 2 || !referenceLength) return;
-    const dx = measurePoints[1].x - measurePoints[0].x;
-    const dy = measurePoints[1].y - measurePoints[0].y;
-    const pixelDist = Math.sqrt(dx * dx + dy * dy);
-    const meters = parseFloat(referenceLength);
-    if (meters > 0 && pixelDist > 0) {
-      setPixelToMeter(meters / pixelDist);
-      
-      // Create calibration measurement
-      const calibMeasurement: Measurement = {
-        id: uuidv4(),
-        type: 'length',
-        value: meters,
-        unit: 'm',
-        source: 'manual',
-        scaleSource: 'manual_reference',
-        status: 'verified',
-        uncertainty: 2,
-        confidence: 0.9,
-        photoIds: selectedPhoto ? [selectedPhoto.id] : [],
-        algorithm: 'reference_calibration',
-        calibration: {
-          method: 'manual_reference',
-          referenceLength: meters,
-          pixelToMeterRatio: meters / pixelDist
-        },
-        createdAt: new Date(),
-        verifiedAt: new Date()
-      };
-      setMeasurements(prev => [...prev, calibMeasurement]);
-    }
-  }, [measurePoints, referenceLength, selectedPhoto]);
 
   // Calculate fence plan
   const calculateFence = useCallback(() => {
@@ -1102,28 +1077,21 @@ function App() {
           {/* Scale Verification */}
           {currentStep === 'scale_verification' && (
             <div className="space-y-4">
-              <ScaleView
-                selectedPhoto={selectedPhoto}
-                canvasRef={canvasRef}
-                measuringMode={measuringMode}
-                onToggleMeasuring={() => setMeasuringMode(!measuringMode)}
-                measurePoints={measurePoints}
-                referenceLength={referenceLength}
-                onSetReferenceLength={setReferenceLength}
-                onSetScale={setScale}
-                pixelToMeter={pixelToMeter}
-                onCanvasClick={handleCanvasClick}
-                onAnalyze={analyzePhoto}
-              />
-              
-              {/* New Measurement Overlay */}
-              {selectedPhoto && (
-                <div className="mt-6 border-t border-slate-700 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-emerald-400">
-                      📐 Napredno merjenje z referenco
-                    </h3>
-                    <div className="flex gap-2">
+              <div>
+                <h2 className="text-xl font-bold text-emerald-400">📏 Kalibracija in meritve</h2>
+                <p className="text-sm text-slate-400 mt-1">
+                  Označite referenco na fotografiji, nato merite razdalje. Vsaka meritev se
+                  samodejno shrani v projekt.
+                </p>
+              </div>
+
+              {selectedPhoto ? (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-slate-400">
+                      Fotografija: {selectedPhoto.width ?? 0} × {selectedPhoto.height ?? 0} px
+                    </p>
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => setShowFenceConfigurator(true)}
                         className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm font-medium transition-colors"
@@ -1144,12 +1112,28 @@ function App() {
                       </button>
                     </div>
                   </div>
+
                   <MeasurementOverlay
                     imageUrl={selectedPhoto.dataUrl}
                     imageWidth={selectedPhoto.width || 800}
                     imageHeight={selectedPhoto.height || 600}
                     onMeasurementsChange={handleOverlayMeasurementsChange}
+                    initialPixelToMeter={pixelToMeter}
+                    onScaleChange={setPixelToMeter}
                   />
+                </>
+              ) : (
+                <div className="bg-slate-800 rounded-lg p-8 text-center text-slate-400">
+                  <p>Izberite fotografijo za kalibracijo in meritve.</p>
+                  <p className="text-xs mt-2">
+                    Fotografija mora vsebovati znan referenčni objekt (npr. višino vrat).
+                  </p>
+                  <button
+                    onClick={() => setCurrentStep('capture')}
+                    className="mt-4 rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                  >
+                    📷 Pojdi na zajem
+                  </button>
                 </div>
               )}
 
@@ -1658,130 +1642,6 @@ function StatusIcon({ status }: { status: string }) {
   if (status === 'analyzed') return <span className="text-emerald-400"><IconCheck /></span>;
   if (status === 'rejected') return <span className="text-red-400"><IconX /></span>;
   return <span className="text-amber-400"><IconWarning /></span>;
-}
-
-function ScaleView({ selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, measurePoints, referenceLength, onSetReferenceLength, onSetScale, pixelToMeter, onCanvasClick, onAnalyze }: {
-  selectedPhoto: Photo | null;
-  canvasRef: React.RefObject<HTMLCanvasElement>;
-  measuringMode: boolean;
-  onToggleMeasuring: () => void;
-  measurePoints: {x: number; y: number}[];
-  referenceLength: string;
-  onSetReferenceLength: (v: string) => void;
-  onSetScale: () => void;
-  pixelToMeter: number | null;
-  onCanvasClick: (e: React.MouseEvent<HTMLCanvasElement>) => void;
-  onAnalyze: (p: Photo) => void;
-}) {
-  return (
-    <div>
-      <h2 className="text-xl font-bold text-emerald-400 mb-4">📏 Kalibracija merila</h2>
-      
-      {!selectedPhoto ? (
-        <div className="bg-slate-800 rounded-lg p-8 text-center text-slate-400">
-          <p>Izberite fotografijo za kalibracijo merila.</p>
-          <p className="text-xs mt-2">Fotografija mora vsebovati znan referenčni objekt.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-blue-300 mb-2">Postopek kalibracije</h3>
-            <ol className="text-xs text-blue-200 space-y-1 list-decimal list-inside">
-              <li>Vključite način merjenja</li>
-              <li>Kliknite začetno in končno točko znanega objekta</li>
-              <li>Vnesite dejansko dolžino v metrih</li>
-              <li>Potrdite kalibracijo</li>
-            </ol>
-          </div>
-
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={onToggleMeasuring}
-              className={`px-4 py-2 rounded font-medium text-sm ${
-                measuringMode ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300'
-              }`}
-            >
-              {measuringMode ? '🎯 Merjenje aktivno' : '📏 Vključi merjenje'}
-            </button>
-            {pixelToMeter && (
-              <span className="px-3 py-2 bg-emerald-900/30 text-emerald-300 rounded text-sm">
-                Merilo: {pixelToMeter.toFixed(5)} m/px ✓
-              </span>
-            )}
-          </div>
-
-          <canvas
-            ref={canvasRef}
-            onClick={onCanvasClick}
-            className={`w-full rounded border-2 max-h-96 object-contain ${
-              measuringMode ? 'border-emerald-500 cursor-crosshair' : 'border-slate-700'
-            }`}
-          />
-
-          {measurePoints.length > 0 && (
-            <div className="bg-slate-800 rounded-lg p-4">
-              <p className="text-sm text-slate-300 mb-2">
-                Točke: {measurePoints.length}/2
-                {measurePoints.length === 2 && ' ✓'}
-              </p>
-              {measurePoints.length === 2 && (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={referenceLength}
-                    onChange={e => onSetReferenceLength(e.target.value)}
-                    placeholder="Dolžina v metrih"
-                    className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm"
-                  />
-                  <span className="text-slate-400 text-sm">m</span>
-                  <button
-                    onClick={onSetScale}
-                    disabled={!referenceLength}
-                    className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 px-4 py-2 rounded text-sm text-white font-medium"
-                  >
-                    Potrdi merilo
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="bg-slate-800 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-slate-300 mb-2">Vir merila</h3>
-            <div className="space-y-1 text-xs">
-              <ScaleRow label="Demo merilo" status={pixelToMeter ? 'inactive' : 'available'} />
-              <ScaleRow label="Ročno vnesena referenca" status={pixelToMeter ? 'active' : 'available'} />
-              <ScaleRow label="Kalibracijski marker" status="unavailable" />
-              <ScaleRow label="Preverjeno merilo modela" status="unavailable" />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ScaleRow({ label, status }: { label: string; status: 'active' | 'available' | 'inactive' | 'unavailable' }) {
-  const colors = {
-    active: 'text-emerald-400 bg-emerald-900/20',
-    available: 'text-slate-300 bg-slate-700/50',
-    inactive: 'text-slate-500 bg-slate-800/50',
-    unavailable: 'text-slate-600 bg-slate-800/30'
-  };
-  const labels = {
-    active: '✓ Aktivno',
-    available: 'Na voljo',
-    inactive: 'Ni aktivno',
-    unavailable: 'Ni na voljo'
-  };
-  return (
-    <div className="flex items-center justify-between py-1">
-      <span className="text-slate-300">{label}</span>
-      <span className={`px-2 py-0.5 rounded text-xs ${colors[status]}`}>{labels[status]}</span>
-    </div>
-  );
 }
 
 function MeasurementsView({ measurements, selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, measurePoints, onCanvasClick, pixelToMeter, onAnalyze }: {

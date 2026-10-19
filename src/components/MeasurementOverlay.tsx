@@ -30,6 +30,10 @@ interface MeasurementOverlayProps {
   imageWidth: number;
   imageHeight: number;
   onMeasurementsChange?: (segments: MeasurementSegment[]) => void;
+  /** Merilo, ki je bilo že določeno v hitri kalibraciji zgoraj. */
+  initialPixelToMeter?: number | null;
+  /** Posreduje novo merilo v skupno stanje projekta. */
+  onScaleChange?: (pixelToMeter: number) => void;
 }
 
 type Mode = 'idle' | 'reference' | 'measure';
@@ -38,7 +42,9 @@ export function MeasurementOverlay({
   imageUrl,
   imageWidth: propWidth,
   imageHeight: propHeight,
-  onMeasurementsChange
+  onMeasurementsChange,
+  initialPixelToMeter,
+  onScaleChange
 }: MeasurementOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -46,7 +52,7 @@ export function MeasurementOverlay({
   const [mode, setMode] = useState<Mode>('idle');
   const [referencePoints, setReferencePoints] = useState<Point2D[]>([]);
   const [referenceDistance, setReferenceDistance] = useState<string>('');
-  const [pixelToMeter, setPixelToMeter] = useState<number | null>(null);
+  const [pixelToMeter, setPixelToMeter] = useState<number | null>(initialPixelToMeter ?? null);
   const [measurePoints, setMeasurePoints] = useState<MeasurementPoint[]>([]);
   const [segments, setSegments] = useState<MeasurementSegment[]>([]);
   const [displayScale, setDisplayScale] = useState(1);
@@ -78,6 +84,18 @@ export function MeasurementOverlay({
   
   const imageWidth = actualDimensions?.width || propWidth;
   const imageHeight = actualDimensions?.height || propHeight;
+
+  // Prevzemi merilo iz hitre kalibracije, dokler uporabnik ne nastavi svoje reference.
+  useEffect(() => {
+    if (
+      initialPixelToMeter &&
+      initialPixelToMeter > 0 &&
+      pixelToMeter === null &&
+      referencePoints.length === 0
+    ) {
+      setPixelToMeter(initialPixelToMeter);
+    }
+  }, [initialPixelToMeter, pixelToMeter, referencePoints.length]);
 
   // Calculate display scale to fit image in container
   useEffect(() => {
@@ -260,9 +278,11 @@ export function MeasurementOverlay({
     if (isNaN(dist) || dist <= 0 || referencePoints.length !== 2) return;
 
     const scale = calculateScaleFromReference(referencePoints[0], referencePoints[1], dist);
+    if (scale === null) return;
     setPixelToMeter(scale);
+    onScaleChange?.(scale);
     setMode('measure');
-  }, [referenceDistance, referencePoints]);
+  }, [referenceDistance, referencePoints, onScaleChange]);
 
   // Reset reference
   const resetReference = useCallback(() => {
