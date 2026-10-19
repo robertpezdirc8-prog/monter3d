@@ -105,6 +105,7 @@ export function normalizeSettings(raw?: Partial<ProjectSettings> | null): Projec
       maxGap: maxGap >= 0 ? maxGap : DEFAULT_FENCE_CONFIG.maxGap,
       mountingStyle,
       slopeThreshold: num(fence.slopeThreshold, DEFAULT_FENCE_CONFIG.slopeThreshold),
+      ...(typeof fence.profileId === 'string' && fence.profileId ? { profileId: fence.profileId } : {}),
     },
     stairsConfig: {
       numSteps: Math.max(1, Math.round(positive(stairs.numSteps, DEFAULT_STAIRS_CONFIG.numSteps))),

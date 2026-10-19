@@ -104,11 +104,21 @@ Običajni izvoz JSON ni vseboval slik, obnova projekta ni bila mogoča.
 
 ## Kaj ostane (P2)
 
-1. **Dva izračuna ograje**: `geometry.calculateFencePlan` (predračun) in
-   `fenceConstruction.calculateFenceConstruction` (tehnična pravila Roksal) sta še
-   ločena — pravila iz kataloga bi morala postati del načrta (preverjanje razmakov,
-   višine, profilov) in vplivati na predračun.
-2. **Galerija slik** še vroče-povezuje 18 slik z `roksal.com` (licenca, offline).
-3. **`App.tsx` je 2200+ vrstic** — smiselna razdelitev na komponente po korakih.
-4. **Testi komponent**: vitest je v `node` okolju; za UI bi koristil `jsdom` +
+1. **Galerija slik** še vroče-povezuje 18 slik z `roksal.com` (licenca, offline).
+2. **`App.tsx` je 2200+ vrstic** — smiselna razdelitev na komponente po korakih.
+3. **Testi komponent**: vitest je v `node` okolju; za UI bi koristil `jsdom` +
    Testing Library (preverjanje tokov: zajem → merilo → predračun).
+4. **Skupni model ograje**: `fenceConstruction` (deskna ograja) in `calculateFencePlan`
+   (panelna ograja) sta še različna modela; zdaj ju povezuje `roksalRules.ts`, ki izbrani
+   profil preveri proti načrtu (razmak stebrov, tehnične zahteve). Celotno poenotenje
+   modelov (ena ograja, dva načina montaže) je večja sprememba.
+
+## FAZA 8 (P2) — tehnična pravila Roksal povezana s predračunom
+
+- Nov modul `src/utils/roksalRules.ts`: `validateFencePlanAgainstProfile()` preveri
+  **razmak stebrov** glede na izbrani katalogovni profil (ločen limit za ograje do/nad
+  150 cm) in prenese tehnične zahteve profila (npr. obvezna ALU cev).
+- V koraku Materiali je dodana **izbira Roksal profila**; kršitev pravil je **napaka**
+  v načrtu, zato predračuna ni — kot pri drugih napakah v načrtu.
+- Npr. ograja 3,78 m (2 panela po 1,80 m) ima razmak stebrov 1860 mm, kar pri profilu
+  POLNA DESKA 57/32 (limit 1500 mm) pomeni »ni predračuna«.

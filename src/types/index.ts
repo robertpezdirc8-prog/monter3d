@@ -31,6 +31,8 @@ export interface FenceConfig {
   maxGap: number;
   mountingStyle: 'level' | 'stepped' | 'mixed';
   slopeThreshold: number;
+  /** FAZA 8 (P2): ID Roksal profila — omogoča preverjanje tehničnih pravil. */
+  profileId?: string;
 }
 
 /** Konfiguracija izračuna stopnic (mere v metrih). */

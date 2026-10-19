@@ -40,6 +40,8 @@ import {
   type ProjectStateSnapshot,
 } from './utils/projectState';
 import { buildFenceGeometry } from './utils/fenceGeometry';
+import { validateFencePlanAgainstProfile } from './utils/roksalRules';
+import { getProfileById, ROKSAL_PROFILES } from './data/roksalCatalog';
 import { createBackup, restoreBackup } from './utils/backup';
 
 const STATUS_TO_STEP: Record<string, WorkflowStep> = {
@@ -695,6 +697,21 @@ function App() {
     if (geometry.warnings.length > 0) {
       plan.warnings = [...(plan.warnings ?? []), ...geometry.warnings];
     }
+
+    // FAZA 8 (P2): preverjanje proti tehničnim pravilom Roksal (izbrani profil).
+    // Kršitev pravil je napaka, zato predračuna ni — enako kot pri drugih napakah.
+    const profile = fenceConfig.profileId ? getProfileById(fenceConfig.profileId) : undefined;
+    const ruleCheck = validateFencePlanAgainstProfile(plan, profile, { fenceHeightM: fenceConfig.panelHeight });
+    if (ruleCheck.errors.length > 0) {
+      plan.errors = [...(plan.errors ?? []), ...ruleCheck.errors];
+    }
+    if (ruleCheck.warnings.length > 0) {
+      plan.warnings = [...(plan.warnings ?? []), ...ruleCheck.warnings];
+    }
+    if (ruleCheck.notes.length > 0) {
+      plan.warnings = [...(plan.warnings ?? []), ...ruleCheck.notes];
+    }
+
     setFencePlan(plan);
 
     // Calculate materials — cene so iz nastavitev projekta (ne več trdo zapisane)
@@ -1939,6 +1956,33 @@ function MaterialView({ currentProject, fenceConfig, onFenceConfigChange, stairs
         <div className="space-y-4">
           <div className="bg-slate-800 rounded-lg p-4">
             <h3 className="text-sm font-semibold text-slate-300 mb-3">Konfiguracija ograje</h3>
+
+            {/* FAZA 8 (P2): izbira profila omogoča preverjanje tehničnih pravil */}
+            <div className="mb-3">
+              <label className="text-xs text-slate-400">Roksal profil (za preverjanje pravil)</label>
+              <select
+                value={fenceConfig.profileId ?? ''}
+                onChange={e => onFenceConfigChange({
+                  ...fenceConfig,
+                  profileId: e.target.value || undefined,
+                })}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white mt-1"
+              >
+                <option value="">Brez profila (pravila niso preverjena)</option>
+                {ROKSAL_PROFILES.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} — max razmak stebrov {p.maxPostSpacingLow} mm
+                    {p.maxPostSpacingHigh !== p.maxPostSpacingLow ? ` / ${p.maxPostSpacingHigh} mm (>150 cm)` : ''}
+                  </option>
+                ))}
+              </select>
+              {fenceConfig.profileId && (
+                <p className="text-xs text-slate-400 mt-1">
+                  Preveri se razmak stebrov in tehnične zahteve profila. Kršitev = ni predračuna.
+                </p>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-400">Širina panela (m)</label>
