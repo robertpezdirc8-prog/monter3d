@@ -40,7 +40,7 @@ export function initDB(): Promise<IDBDatabase> {
 // FAZA 1: IndexedDB hrani strukturirane vrednosti, a Date objekti preživijo le,
 // če jih ne pretvarjamo skozi JSON. Vsebujoči delovni tok (App.tsx) projekte serializira,
 // zato ob branju obnovimo znana časovna polja iz ISO nizov v prave Date objekte.
-const DATE_FIELDS = ['createdAt', 'updatedAt', 'timestamp', 'verifiedAt'] as const;
+const DATE_FIELDS = ['createdAt', 'updatedAt', 'timestamp', 'verifiedAt', 'validUntil'] as const;
 
 function reviveDates<T>(obj: T): T {
   // FAZA 1 popravilo: pravi Date objekti (IndexedDB strukturno kopija ohrani instanceof)

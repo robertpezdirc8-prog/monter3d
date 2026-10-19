@@ -10,12 +10,26 @@ import { ROKSAL_PROFILES, ROKSAL_COLORS, getProfileById } from '../data/roksalCa
 import type { RoksalProfile, RoksalColor } from '../data/roksalCatalog';
 import { parseFenceConfiguration, validateConfiguration, getExamplePrompts } from '../utils/naturalLanguageParser';
 import { calculateFenceConstruction, validateFenceConfiguration } from '../utils/fenceConstruction';
+import type { ConstructionResult, FenceConfiguration } from '../utils/fenceConstruction';
+import { createRoksalQuote, nextQuoteNumber } from '../utils/roksalQuote';
+import { DEFAULT_ROKSAL_PRICE_LIST } from '../data/roksalPrices';
+import type { Customer, RoksalQuote } from '../types';
+
+export interface FenceConfiguratorApplyPayload {
+  config: FenceConfiguration;
+  construction: ConstructionResult;
+  color: RoksalColor;
+  quote: RoksalQuote;
+}
 
 interface FenceConfiguratorProps {
   onClose?: () => void;
+  onApply?: (payload: FenceConfiguratorApplyPayload) => void;
+  customer?: Customer;
+  projectName?: string;
 }
 
-export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
+export function FenceConfigurator({ onClose, onApply, customer, projectName }: FenceConfiguratorProps) {
   const [naturalLanguageInput, setNaturalLanguageInput] = useState('');
   const [selectedProfile, setSelectedProfile] = useState<RoksalProfile | null>(null);
   const [selectedColor, setSelectedColor] = useState<RoksalColor | null>(null);
@@ -23,6 +37,10 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
   const [fenceHeight, setFenceHeight] = useState(1000); // mm
   const [fenceLength, setFenceLength] = useState(3000); // mm
   const [boardSpacing, setBoardSpacing] = useState(20); // mm
+  const [postSpacingInput, setPostSpacingInput] = useState(''); // mm, prazno = samodejno
+  const [laborHours, setLaborHours] = useState(0);
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [applyNotice, setApplyNotice] = useState<string | null>(null);
   const [parseResult, setParseResult] = useState<any>(null);
   const [validationResult, setValidationResult] = useState<any>(null);
 
@@ -33,10 +51,10 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
     const result = parseFenceConfiguration(naturalLanguageInput);
     setParseResult(result);
 
-    // Apply parsed values
+    // Apply parsed values (pregradni sistemi, npr. KUBO, niso del ograjnega konfiguratorja)
     if (result.profileId) {
       const profile = getProfileById(result.profileId);
-      if (profile) {
+      if (profile && profile.kind !== 'partition') {
         setSelectedProfile(profile);
         // Set first available color for this profile
         if (profile.colors.length > 0) {
@@ -76,31 +94,79 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
     }
   }, []);
 
-  // Calculate construction using technical rules
-  const construction = useMemo(() => {
+  // Razmak stebričkov iz vnosnega polja (prazno = samodejni izračun)
+  const parsedPostSpacing = useMemo(() => {
+    const trimmed = postSpacingInput.trim();
+    if (!trimmed) return undefined;
+    const value = Number(trimmed);
+    return isFinite(value) && value > 0 ? value : undefined;
+  }, [postSpacingInput]);
+
+  // Skupna konfiguracija, ki jo uporabljata izračun in ponudba
+  const config = useMemo<FenceConfiguration | null>(() => {
     if (!selectedProfile) return null;
-    
-    return calculateFenceConstruction({
+    return {
       profile: selectedProfile,
       orientation,
       fenceHeight,
       fenceLength,
-      boardSpacing
-    });
-  }, [selectedProfile, orientation, fenceHeight, fenceLength, boardSpacing]);
+      boardSpacing,
+      postSpacing: parsedPostSpacing,
+      colorId: selectedColor?.id
+    };
+  }, [selectedProfile, orientation, fenceHeight, fenceLength, boardSpacing, parsedPostSpacing, selectedColor]);
+
+  // Calculate construction using technical rules
+  const construction = useMemo(() => {
+    if (!config) return null;
+    return calculateFenceConstruction(config);
+  }, [config]);
 
   // Validate configuration
   const validation = useMemo(() => {
-    if (!selectedProfile) return null;
-    
-    return validateFenceConfiguration({
-      profile: selectedProfile,
-      orientation,
-      fenceHeight,
-      fenceLength,
-      boardSpacing
+    if (!config) return null;
+    return validateFenceConfiguration(config);
+  }, [config]);
+
+  // Osnutek ponudbe (številka se dodeli šele ob uporabi v projektu)
+  const draftQuote = useMemo(() => {
+    if (!config || !selectedColor || !construction) return null;
+    return createRoksalQuote({
+      customer: customer ?? { name: projectName ?? '' },
+      configuration: config,
+      construction,
+      color: selectedColor,
+      priceList: DEFAULT_ROKSAL_PRICE_LIST,
+      quoteNumber: 'OSNUTEK',
+      laborHours,
+      discountPercent
     });
-  }, [selectedProfile, orientation, fenceHeight, fenceLength, boardSpacing]);
+  }, [config, selectedColor, construction, customer, projectName, laborHours, discountPercent]);
+
+  const handleApply = useCallback(() => {
+    if (!onApply || !config || !selectedColor || !construction) return;
+    if (!construction.valid) {
+      setApplyNotice('Konfiguracija ni veljavna - najprej odpravite napake.');
+      return;
+    }
+    if (config.profile.kind === 'partition') {
+      setApplyNotice('KUBO je pregradni sistem in ni del ograjnega projekta.');
+      return;
+    }
+    const quote = createRoksalQuote({
+      customer: customer ?? { name: projectName ?? '' },
+      configuration: config,
+      construction,
+      color: selectedColor,
+      priceList: DEFAULT_ROKSAL_PRICE_LIST,
+      quoteNumber: nextQuoteNumber(),
+      laborHours,
+      discountPercent
+    });
+    onApply({ config, construction, color: selectedColor, quote });
+    setApplyNotice(`Ponudba ${quote.number} je pripravljena in shranjena v projekt (korak Predračun/Izvoz).`);
+  }, [onApply, config, selectedColor, construction, customer, projectName, laborHours, discountPercent]);
+
   const examplePrompts = getExamplePrompts();
 
   return (
@@ -203,12 +269,15 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
                   className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"
                 >
                   <option value="">Izberite profil</option>
-                  {ROKSAL_PROFILES.map(profile => (
+                  {ROKSAL_PROFILES.filter(profile => profile.kind !== 'partition').map(profile => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name} ({profile.width}×{profile.thickness}×{profile.length}mm)
                     </option>
                   ))}
                 </select>
+                <p className="text-xs text-slate-500 mt-1">
+                  KUBO 80/42 je sistem za pregradne stene in se ureja ločeno (ni na voljo v ograjnem konfiguratorju).
+                </p>
                 {selectedProfile && (
                   <p className="text-xs text-slate-400 mt-1">{selectedProfile.notes}</p>
                 )}
@@ -316,6 +385,25 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
                   onChange={(e) => setBoardSpacing(Number(e.target.value))}
                   className="w-full"
                 />
+              </div>
+
+              {/* Post Spacing (optional) */}
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">
+                  Razmak stebričkov (mm) - prazno = samodejno
+                </label>
+                <input
+                  type="number"
+                  min="100"
+                  step="50"
+                  value={postSpacingInput}
+                  onChange={(e) => setPostSpacingInput(e.target.value)}
+                  placeholder={construction ? `samodejno (~${construction.actualPostSpacing}mm)` : 'samodejno'}
+                  className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Dejanski razmak se enakomerno porazdeli po celotni dolžini.
+                </p>
               </div>
             </div>
 
@@ -647,12 +735,134 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
               </div>
             )}
 
+            {/* Kosovnica in ponudba */}
+            {draftQuote && construction && selectedProfile && selectedColor && (
+              <div className="bg-slate-900 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-slate-300 mb-3">
+                  🧾 Kosovnica in ponudba
+                </h3>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-slate-400 border-b border-slate-700">
+                        <th className="text-left py-1 pr-2">Postavka</th>
+                        <th className="text-right py-1 px-2">Kol.</th>
+                        <th className="text-right py-1 px-2">Cena</th>
+                        <th className="text-right py-1 pl-2">Skupaj</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {draftQuote.items.map(item => (
+                        <tr key={item.id} className="border-b border-slate-800">
+                          <td className="py-1 pr-2 text-slate-300">{item.name}</td>
+                          <td className="py-1 px-2 text-right text-slate-300">
+                            {item.quantity} {item.unit}
+                          </td>
+                          <td className="py-1 px-2 text-right text-slate-300">
+                            {item.unitPrice.toFixed(2)} €
+                          </td>
+                          <td className="py-1 pl-2 text-right text-white">
+                            {item.totalPrice.toFixed(2)} €
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Delovne ure</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={laborHours}
+                      onChange={(e) => setLaborHours(Math.max(0, Number(e.target.value) || 0))}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Popust (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={discountPercent}
+                      onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Material:</span>
+                    <span className="text-white">{draftQuote.materialsSubtotal.toFixed(2)} €</span>
+                  </div>
+                  {draftQuote.labor && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">
+                        Delo ({draftQuote.labor.hours}h × {draftQuote.labor.rate.toFixed(2)} €):
+                      </span>
+                      <span className="text-white">{draftQuote.labor.total.toFixed(2)} €</span>
+                    </div>
+                  )}
+                  {draftQuote.discount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Popust ({draftQuote.discountPercent}%):</span>
+                      <span className="text-emerald-400">-{draftQuote.discount.toFixed(2)} €</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">DDV ({(draftQuote.taxRate * 100).toFixed(0)}%):</span>
+                    <span className="text-white">{draftQuote.tax.toFixed(2)} €</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-700 pt-1 mt-1">
+                    <span className="text-slate-200 font-semibold">Skupaj z DDV:</span>
+                    <span className="text-emerald-400 font-bold">{draftQuote.total.toFixed(2)} €</span>
+                  </div>
+                </div>
+
+                {draftQuote.isDemoPrices && (
+                  <p className="text-xs text-amber-400 mt-2">
+                    ⚠️ Uporabljene so DEMO cene - zamenjajte jih z uradnim Roksal cenikom.
+                  </p>
+                )}
+                {(!construction.valid || selectedProfile.kind === 'partition') && (
+                  <p className="text-xs text-red-400 mt-2">
+                    {selectedProfile.kind === 'partition'
+                      ? 'KUBO je pregradni sistem - ni del ograjnega projekta.'
+                      : 'Konfiguracija ni veljavna - ponudbe ni mogoče uporabiti v projektu.'}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Export Button */}
             {construction && selectedProfile && selectedColor && (
               <div className="bg-slate-900 rounded-lg p-4">
                 <h3 className="text-sm font-semibold text-slate-300 mb-3">
-                  📄 Izvoz konfiguracije
+                  📄 Uporaba konfiguracije
                 </h3>
+                {onApply && (
+                  <button
+                    onClick={handleApply}
+                    disabled={!construction.valid || selectedProfile.kind === 'partition'}
+                    className={`w-full px-4 py-3 rounded text-sm font-semibold transition-colors mb-3 ${
+                      construction.valid && selectedProfile.kind !== 'partition'
+                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                        : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    ✅ Uporabi v projektu in pripravi ponudbo
+                  </button>
+                )}
+                {applyNotice && (
+                  <p className="text-xs text-emerald-400 mb-3">{applyNotice}</p>
+                )}
                 <button
                   onClick={() => {
                     const exportData = {
@@ -689,6 +899,15 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
                         requiresBrackets: construction.requiresBrackets,
                         screwType: construction.screwType === 'visible' ? 'Vidno vijačenje' : 'Skrito vijačenje'
                       },
+                      kosovnica: draftQuote?.items.map(item => ({
+                        naziv: item.name,
+                        kategorija: item.category,
+                        kolicina: item.quantity,
+                        enota: item.unit,
+                        cena: item.unitPrice,
+                        skupaj: item.totalPrice
+                      })) || [],
+                      skupniZnesek: draftQuote?.total ?? 0,
                       warnings: validation?.warnings || [],
                       notes: [
                         'HEX barve so približki za zaslonski prikaz',
@@ -713,7 +932,8 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
                   💾 Izvozi konfiguracijo (JSON)
                 </button>
                 <p className="text-xs text-slate-500 mt-2">
-                  Izvozi podroben popis materiala in tehnične podatke
+                  "Uporabi v projektu" shrani konfiguracijo in ponudbo v projekt (PDF v koraku Izvoz).
+                  JSON izvoz je namenjen arhivu ali prenosu podatkov.
                 </p>
               </div>
             )}

@@ -1,5 +1,78 @@
 // Mera3D Pro - Type Definitions
 
+export interface Customer {
+  name: string;
+  address?: string;
+  postalCode?: string;
+  city?: string;
+  phone?: string;
+  email?: string;
+  taxNumber?: string;
+}
+
+/**
+ * Izbor Roksal izdelka, ki se shrani v projekt in je osnova za kosovnico
+ * ter ponudbo. Mere so v milimetrih, ker je katalog Roksal v mm.
+ */
+export interface RoksalConfiguration {
+  profileId: string;
+  profileName: string;
+  colorId: string;
+  colorName: string;
+  colorHex: string;
+  orientation: 'vertical' | 'horizontal';
+  fenceHeightMm: number;
+  fenceLengthMm: number;
+  boardSpacingMm: number;
+  postSpacingMm?: number;
+  visibleWidthMm?: number;
+}
+
+export interface QuoteItem {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  totalPrice: number;
+  notes?: string;
+}
+
+/**
+ * Roksal ponudba je ločena od splošnega CostEstimate, ker vsebuje
+ * podatke o stranki, številko ponudbe, veljavnost in Roksal kosovnico.
+ */
+export interface RoksalQuote {
+  id: string;
+  number: string;
+  createdAt: Date;
+  validUntil: Date;
+  status: 'draft' | 'sent' | 'accepted' | 'rejected';
+  customer: Customer;
+  configuration: RoksalConfiguration;
+  items: QuoteItem[];
+  labor?: {
+    hours: number;
+    rate: number;
+    total: number;
+  };
+  materialsSubtotal: number;
+  laborTotal: number;
+  subtotal: number;
+  discountPercent: number;
+  discount: number;
+  taxRate: number; // decimal, npr. 0.22
+  tax: number;
+  total: number;
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  isDemoPrices: boolean;
+  notes?: string;
+  terms?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -13,6 +86,9 @@ export interface Project {
   terrainPlan?: TerrainPlan;
   materials: MaterialSelection;
   estimate?: CostEstimate;
+  customer?: Customer;
+  roksalConfig?: RoksalConfiguration;
+  roksalQuote?: RoksalQuote;
   status: ProjectStatus;
 }
 

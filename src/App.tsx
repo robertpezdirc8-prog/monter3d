@@ -2,7 +2,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import type {
   Project, Photo, Measurement, WorkflowStep, ObjectType,
   MeasurementStatus, ScaleSource, FencePlan, StairsPlan,
-  CostEstimate, MaterialItem, ImageQuality, FeaturePoint
+  CostEstimate, MaterialItem, ImageQuality, FeaturePoint,
+  Customer, RoksalQuote
 } from './types';
 import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetection } from './utils/cv';
 import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, formatMeasurement, exportMeasurementsCSV } from './utils/geometry';
@@ -21,6 +22,7 @@ import { PhotoMatchingView } from './components/PhotoMatchingView';
 import { FenceVisualizer } from './components/FenceVisualizer';
 import { RoksalGalleryView } from './components/RoksalGalleryView';
 import { FenceConfigurator } from './components/FenceConfigurator';
+import type { FenceConfiguratorApplyPayload } from './components/FenceConfigurator';
 import TradeMenu from './components/TradeMenu';
 import TradeCapture from './components/TradeCapture';
 import type { TradeId } from './utils/cameraSDK';
@@ -109,13 +111,15 @@ function App() {
   const [showFenceVisualizer, setShowFenceVisualizer] = useState(false);
   const [showRoksalGallery, setShowRoksalGallery] = useState(false);
   const [showFenceConfigurator, setShowFenceConfigurator] = useState(false);
+  const [roksalQuote, setRoksalQuote] = useState<RoksalQuote | null>(null);
+  const [customer, setCustomer] = useState<Customer>({ name: '' });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Create new project
-  const createProject = useCallback((name: string, type: ObjectType) => {
+  const createProject = useCallback((name: string, type: ObjectType, customerData?: Customer) => {
     const project: Project = {
       id: uuidv4(),
       name,
@@ -132,8 +136,26 @@ function App() {
         postMaterial: 'Aluminij',
         fastenerType: 'A2 inox'
       },
+      customer: customerData,
       status: 'capture'
     };
+
+    // Nov projekt mora počistiti stanje prejšnjega projekta.
+    setPhotos([]);
+    setMeasurements([]);
+    setFencePlan(null);
+    setStairsPlan(null);
+    setEstimate(null);
+    setSelectedPhoto(null);
+    setPixelToMeter(null);
+    setMeasurePoints([]);
+    setReferenceLength('');
+    setCapturedSteps([]);
+    setCurrentCaptureStep(null);
+    setPhotoMatchings([]);
+    setRoksalQuote(null);
+    setCustomer(customerData ?? { name: '' });
+
     setCurrentProject(project);
     setProjects(prev => [...prev, project]);
     setCurrentStep('capture');
@@ -157,6 +179,8 @@ function App() {
             const lastProject = await getProject(lastProjectId);
             if (lastProject) {
               setCurrentProject(lastProject);
+              setCustomer(lastProject.customer ?? { name: '' });
+              setRoksalQuote(lastProject.roksalQuote ?? null);
               // Map project status to workflow step
               const statusToStep: Record<string, WorkflowStep> = {
                 'capture': 'capture',
@@ -182,6 +206,35 @@ function App() {
     
     loadProjects();
   }, []);
+
+  // Samodejno shranjevanje projekta (z zakasnitvijo), da preživijo tudi
+  // stranka, Roksal konfiguracija in ponudba.
+  useEffect(() => {
+    if (!currentProject) return;
+    const timeout = setTimeout(() => {
+      saveProject({ ...currentProject, updatedAt: new Date() })
+        .catch(err => console.error('Autosave failed:', err));
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [currentProject]);
+
+  // Uporaba Roksal konfiguracije v projektu
+  const handleApplyRoksalConfig = useCallback((payload: FenceConfiguratorApplyPayload) => {
+    setRoksalQuote(payload.quote);
+    setCustomer(payload.quote.customer);
+    if (currentProject) {
+      const updated: Project = {
+        ...currentProject,
+        customer: payload.quote.customer,
+        roksalConfig: payload.quote.configuration,
+        roksalQuote: payload.quote,
+        updatedAt: new Date()
+      };
+      setCurrentProject(updated);
+      setProjects(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+      saveProject(updated).catch(err => console.error('Failed to save Roksal quote:', err));
+    }
+  }, [currentProject]);
 
   // Handle photo capture/upload
   const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -615,13 +668,14 @@ function App() {
         fencePlan,
         stairsPlan,
         estimate,
+        roksalQuote,
         exportedAt: new Date().toISOString()
       };
       downloadFile(JSON.stringify(exportObj, null, 2), 'mera3d_project.json', 'application/json');
     } else if (format === 'pdf') {
-      generatePDFReport(currentProject, measurements, fencePlan, stairsPlan, estimate);
+      generatePDFReport(currentProject, measurements, fencePlan, stairsPlan, estimate, roksalQuote);
     }
-  }, [measurements, currentProject, photos, fencePlan, stairsPlan, estimate]);
+  }, [measurements, currentProject, photos, fencePlan, stairsPlan, estimate, roksalQuote]);
 
   const downloadFile = (content: string, filename: string, type: string) => {
     const blob = new Blob([content], { type });
@@ -697,6 +751,9 @@ function App() {
       {showFenceConfigurator && (
         <FenceConfigurator
           onClose={() => setShowFenceConfigurator(false)}
+          onApply={handleApplyRoksalConfig}
+          customer={customer}
+          projectName={currentProject?.name}
         />
       )}
 
@@ -1015,6 +1072,7 @@ function App() {
               onLaborHoursChange={setLaborHours}
               onTaxRateChange={setTaxRate}
               onRecalculate={calculateFence}
+              roksalQuote={roksalQuote}
             />
           )}
 
@@ -1028,6 +1086,7 @@ function App() {
               stairsPlan={stairsPlan}
               estimate={estimate}
               pixelToMeter={pixelToMeter}
+              roksalQuote={roksalQuote}
             />
           )}
 
@@ -1060,11 +1119,15 @@ function App() {
 // ==================== SUB-COMPONENTS ====================
 
 function NewProjectView({ onCreateProject, projects }: {
-  onCreateProject: (name: string, type: ObjectType) => void;
+  onCreateProject: (name: string, type: ObjectType, customer?: Customer) => void;
   projects: Project[];
 }) {
   const [name, setName] = useState('');
   const [type, setType] = useState<ObjectType>('fence');
+  const [customerName, setCustomerName] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -1079,6 +1142,52 @@ function NewProjectView({ onCreateProject, projects }: {
           placeholder="npr. Ograja - Družina Novak"
           className="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
         />
+
+        <div className="border-t border-slate-700 mt-6 pt-4">
+          <h3 className="text-sm font-semibold text-slate-300 mb-3">Podatki o stranki (za ponudbo)</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Naročnik</label>
+              <input
+                type="text"
+                value={customerName}
+                onChange={e => setCustomerName(e.target.value)}
+                placeholder="Ime in priimek / podjetje"
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Naslov</label>
+              <input
+                type="text"
+                value={customerAddress}
+                onChange={e => setCustomerAddress(e.target.value)}
+                placeholder="Ulica in kraj"
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Telefon</label>
+              <input
+                type="tel"
+                value={customerPhone}
+                onChange={e => setCustomerPhone(e.target.value)}
+                placeholder="040 123 456"
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">E-pošta</label>
+              <input
+                type="email"
+                value={customerEmail}
+                onChange={e => setCustomerEmail(e.target.value)}
+                placeholder="ime@example.com"
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 text-sm"
+              />
+            </div>
+          </div>
+        </div>
         
         <label className="block text-sm font-medium text-slate-300 mt-4 mb-2">Tip objekta</label>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -1105,7 +1214,12 @@ function NewProjectView({ onCreateProject, projects }: {
         </div>
 
         <button
-          onClick={() => name && onCreateProject(name, type)}
+          onClick={() => name && onCreateProject(name, type, {
+            name: customerName.trim() || name,
+            address: customerAddress.trim() || undefined,
+            phone: customerPhone.trim() || undefined,
+            email: customerEmail.trim() || undefined
+          })}
           disabled={!name}
           className="mt-6 w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:text-slate-400 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
         >
@@ -1906,7 +2020,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function EstimateView({ estimate, measurements, laborRate, laborHours, taxRate, onLaborRateChange, onLaborHoursChange, onTaxRateChange, onRecalculate }: {
+function EstimateView({ estimate, measurements, laborRate, laborHours, taxRate, onLaborRateChange, onLaborHoursChange, onTaxRateChange, onRecalculate, roksalQuote }: {
   estimate: CostEstimate | null;
   measurements: Measurement[];
   laborRate: number;
@@ -1916,10 +2030,51 @@ function EstimateView({ estimate, measurements, laborRate, laborHours, taxRate, 
   onLaborHoursChange: (v: number) => void;
   onTaxRateChange: (v: number) => void;
   onRecalculate: () => void;
+  roksalQuote: RoksalQuote | null;
 }) {
   return (
     <div>
       <h2 className="text-xl font-bold text-emerald-400 mb-4">💰 Predračun</h2>
+
+      {/* Roksal ponudba */}
+      <div className={`bg-slate-800 rounded-lg p-4 mb-4 border ${roksalQuote ? 'border-emerald-800/60' : 'border-slate-700'}`}>
+        <h3 className="text-sm font-semibold text-slate-300 mb-2">🧾 Roksal ponudba</h3>
+        {roksalQuote ? (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+              <StatCard label="Številka" value={roksalQuote.number} />
+              <StatCard label="Stranka" value={roksalQuote.customer.name} />
+              <StatCard label="Velja do" value={new Date(roksalQuote.validUntil).toLocaleDateString('sl-SI')} />
+              <StatCard label="Skupaj z DDV" value={`${roksalQuote.total.toFixed(2)} €`} />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className={`px-2 py-1 rounded ${roksalQuote.valid ? 'bg-emerald-900/40 text-emerald-300' : 'bg-red-900/40 text-red-300'}`}>
+                {roksalQuote.valid ? '✓ Veljavna' : '✗ Neveljavna'}
+              </span>
+              <span className="px-2 py-1 rounded bg-slate-700 text-slate-300">
+                {roksalQuote.configuration.profileName} • {roksalQuote.configuration.colorName}
+              </span>
+              <span className="px-2 py-1 rounded bg-slate-700 text-slate-300">
+                {roksalQuote.configuration.orientation === 'vertical' ? 'Pokončno' : 'Prečno'} •{' '}
+                {(roksalQuote.configuration.fenceLengthMm / 1000).toFixed(2)} m × {(roksalQuote.configuration.fenceHeightMm / 1000).toFixed(2)} m
+              </span>
+              {roksalQuote.isDemoPrices && (
+                <span className="px-2 py-1 rounded bg-amber-900/40 text-amber-300">DEMO cene</span>
+              )}
+            </div>
+            {roksalQuote.errors.length > 0 && (
+              <ul className="text-xs text-red-400 mt-2 space-y-0.5">
+                {roksalQuote.errors.map((e, i) => <li key={i}>• {e}</li>)}
+              </ul>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-slate-400">
+            Roksal konfiguracija še ni bila uporabljena v tem projektu. Odprite konfigurator
+            (gumb "Roksal konfigurator") in kliknite "Uporabi v projektu".
+          </p>
+        )}
+      </div>
 
       {/* Measurement validity check */}
       <div className="bg-slate-800 rounded-lg p-4 mb-4">
@@ -2047,7 +2202,7 @@ function EstimateView({ estimate, measurements, laborRate, laborHours, taxRate, 
   );
 }
 
-function ExportView({ onExport, measurements, currentProject, fencePlan, stairsPlan, estimate, pixelToMeter }: {
+function ExportView({ onExport, measurements, currentProject, fencePlan, stairsPlan, estimate, pixelToMeter, roksalQuote }: {
   onExport: (format: 'csv' | 'json' | 'pdf') => void;
   measurements: Measurement[];
   currentProject: Project | null;
@@ -2055,6 +2210,7 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
   stairsPlan: StairsPlan | null;
   estimate: CostEstimate | null;
   pixelToMeter: number | null;
+  roksalQuote: RoksalQuote | null;
 }) {
   return (
     <div>
@@ -2069,6 +2225,25 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
         estimate={estimate}
         pixelToMeter={pixelToMeter}
       />
+
+      {/* Roksal ponudba */}
+      {roksalQuote && (
+        <div className="bg-slate-800 rounded-lg p-4 mt-4">
+          <h3 className="text-sm font-semibold text-slate-300 mb-2">
+            🧾 Ponudba {roksalQuote.number}
+          </h3>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            <span className="text-slate-300">Stranka: <strong className="text-white">{roksalQuote.customer.name}</strong></span>
+            <span className="text-slate-300">Skupaj z DDV: <strong className="text-white">{roksalQuote.total.toFixed(2)} €</strong></span>
+            <span className={roksalQuote.valid ? 'text-emerald-400' : 'text-red-400'}>
+              {roksalQuote.valid ? '✓ Veljavna za izvoz' : '✗ Neveljavna - izvoz PDF je blokiran'}
+            </span>
+          </div>
+          {roksalQuote.isDemoPrices && (
+            <p className="text-xs text-amber-400 mt-1">⚠️ Uporabljene so DEMO cene - PDF bo to označil.</p>
+          )}
+        </div>
+      )}
 
       <div className="mt-4">
 

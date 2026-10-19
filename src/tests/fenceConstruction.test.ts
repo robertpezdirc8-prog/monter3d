@@ -395,4 +395,123 @@ describe('Fence Construction Calculator', () => {
       expect(validation.errors.length).toBeGreaterThan(0);
     });
   });
+
+  describe('BOM popravki (P0)', () => {
+    it('Zahtevani razmak stebričkov se enakomerno porazdeli (3001mm)', () => {
+      const result = calculateFenceConstruction({
+        profile: polna100,
+        orientation: 'vertical',
+        fenceHeight: 1000,
+        fenceLength: 3001,
+        boardSpacing: 20,
+        postSpacing: 1500
+      });
+
+      // ceil(3001 / 1500) + 1 = 4 stebrički, dejanski razmak 3001/3 = 1000.33 -> 1000
+      expect(result.numberOfPosts).toBe(4);
+      expect(result.actualPostSpacing).toBeLessThanOrEqual(1500);
+      expect(result.postSpacingValid).toBe(true);
+    });
+
+    it('Zahtevani razmak desk je prioriteta (424mm, 128mm, 20mm)', () => {
+      const result = calculateFenceConstruction({
+        profile: polna128,
+        orientation: 'vertical',
+        fenceHeight: 1200,
+        fenceLength: 424,
+        boardSpacing: 20
+      });
+
+      expect(result.numberOfBoards).toBe(3);
+      expect(result.actualBoardSpacing).toBe(20);
+      expect(result.valid).toBe(true);
+    });
+
+    it('Prečna deska, daljša od profila, zahteva več kosov profila', () => {
+      // DESKA 150: profil 4000mm; ograja 8000mm -> vsaka deska potrebuje 2 profila
+      const result = calculateFenceConstruction({
+        profile: deska150,
+        orientation: 'horizontal',
+        fenceHeight: 1000,
+        fenceLength: 8000,
+        boardSpacing: 20
+      });
+
+      expect(result.numberOfBoards).toBeGreaterThanOrEqual(5);
+      expect(result.profilesNeeded).toBeGreaterThanOrEqual(result.numberOfBoards * 2);
+      expect(result.valid).toBe(true);
+      expect(result.warnings.some(w => w.includes('spajanje') || w.includes('daljša'))).toBe(true);
+    });
+
+    it('ROMB prečno 1600mm - samo opozorilo, ne napaka', () => {
+      const result = calculateFenceConstruction({
+        profile: romb67,
+        orientation: 'horizontal',
+        fenceHeight: 1000,
+        fenceLength: 1600,
+        boardSpacing: 20,
+        postSpacing: 1600
+      });
+
+      expect(result.valid).toBe(true);
+      expect(result.errors.length).toBe(0);
+      expect(result.warnings.some(w => w.includes('dodatna'))).toBe(true);
+    });
+
+    it('Barva, ki ni na voljo za profil, je napaka', () => {
+      const result = calculateFenceConstruction({
+        profile: polna57,
+        orientation: 'vertical',
+        fenceHeight: 1000,
+        fenceLength: 3000,
+        boardSpacing: 20,
+        colorId: 'anthracite' // POLNA 57/32 ni na voljo v anthracite
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.toLowerCase().includes('barva'))).toBe(true);
+    });
+
+    it('Pravilna barva je sprejeta', () => {
+      const result = calculateFenceConstruction({
+        profile: polna57,
+        orientation: 'vertical',
+        fenceHeight: 1000,
+        fenceLength: 3000,
+        boardSpacing: 20,
+        colorId: 'amazon-wood'
+      });
+
+      expect(result.valid).toBe(true);
+    });
+
+    it('ROMB vrne količine za ALU cev, kotnike in vijake', () => {
+      const result = calculateFenceConstruction({
+        profile: romb67,
+        orientation: 'vertical',
+        fenceHeight: 1500,
+        fenceLength: 3000,
+        boardSpacing: 20
+      });
+
+      expect(result.requiresAluminumTube).toBe(true);
+      expect(result.aluminumTubeLengthM).toBeGreaterThan(0);
+      expect(result.numberOfBrackets).toBe(result.numberOfPosts * 2);
+      expect(result.numberOfScrews).toBeGreaterThan(0);
+      expect(result.numberOfEndCaps).toBe(result.numberOfPosts * 2);
+      expect(result.totalProfileLengthM).toBeGreaterThan(0);
+    });
+
+    it('KUBO je označen kot pregradni sistem', () => {
+      const result = calculateFenceConstruction({
+        profile: kubo,
+        orientation: 'vertical',
+        fenceHeight: 1500,
+        fenceLength: 2000,
+        boardSpacing: 40
+      });
+
+      expect(result.warnings.some(w => w.includes('pregradne'))).toBe(true);
+    });
+  });
 });

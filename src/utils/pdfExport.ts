@@ -1,12 +1,32 @@
-import type { Project, Measurement, FencePlan, StairsPlan, CostEstimate } from '../types';
+import type { Project, Measurement, FencePlan, StairsPlan, CostEstimate, RoksalQuote } from '../types';
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 export function generatePDFReport(
   project: Project,
   measurements: Measurement[],
   fencePlan: FencePlan | null,
   stairsPlan: StairsPlan | null,
-  estimate: CostEstimate | null
+  estimate: CostEstimate | null,
+  roksalQuote?: RoksalQuote | null
 ): void {
+  // Blokada izvoza: neveljavne konfiguracije ali praznega predračuna ne tiskamo.
+  if (roksalQuote && (!roksalQuote.valid || roksalQuote.items.length === 0)) {
+    alert('Ponudbe ni mogoče izvoziti: konfiguracija ni veljavna ali kosovnica je prazna.');
+    return;
+  }
+  if (!roksalQuote && (!estimate || estimate.materials.length === 0 || estimate.total <= 0)) {
+    alert('Predračuna ni mogoče izvoziti: ni veljavnih postavk. Najprej izračunajte količine.');
+    return;
+  }
+
   // Create a new window for printing
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
@@ -23,7 +43,7 @@ export function generatePDFReport(
 <html lang="sl">
 <head>
   <meta charset="UTF-8">
-  <title>Predračun - ${project.name}</title>
+  <title>${roksalQuote ? `Ponudba ${escapeHtml(roksalQuote.number)}` : 'Predračun'} - ${escapeHtml(project.name)}</title>
   <style>
     @page {
       size: A4;
@@ -160,16 +180,79 @@ export function generatePDFReport(
   </div>
 
   <div class="header">
-    <h1>PREDRAČUN</h1>
-    <div class="subtitle">Mera3D Pro — Profesionalne 3D-meritve in montaža</div>
+    <h1>${roksalQuote ? 'PONUDBA' : 'PREDRAČUN'}</h1>
+    ${roksalQuote ? `<div style="font-size: 13pt; font-weight: 600; margin-bottom: 6px;">${escapeHtml(roksalQuote.number)}</div>` : ''}
+    <div class="subtitle">${roksalQuote ? 'Roksal Kranj — WoodCore WPC sistemi' : 'Mera3D Pro — Profesionalne meritve in montaža'}</div>
   </div>
+
+  ${roksalQuote ? `
+  <div class="section">
+    <h2>Naročnik in ponudba</h2>
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">Naročnik</div>
+        <div class="info-value">${escapeHtml(roksalQuote.customer.name)}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Naslov</div>
+        <div class="info-value">${escapeHtml(roksalQuote.customer.address || '—')}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Telefon</div>
+        <div class="info-value">${escapeHtml(roksalQuote.customer.phone || '—')}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">E-pošta</div>
+        <div class="info-value">${escapeHtml(roksalQuote.customer.email || '—')}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Datum ponudbe</div>
+        <div class="info-value">${new Date(roksalQuote.createdAt).toLocaleDateString('sl-SI')}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Velja do</div>
+        <div class="info-value">${new Date(roksalQuote.validUntil).toLocaleDateString('sl-SI')}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Konfiguracija ograje</h2>
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">Profil</div>
+        <div class="info-value">${escapeHtml(roksalQuote.configuration.profileName)}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Barva</div>
+        <div class="info-value">${escapeHtml(roksalQuote.configuration.colorName)}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Orientacija</div>
+        <div class="info-value">${roksalQuote.configuration.orientation === 'vertical' ? 'Pokončno' : 'Prečno'}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Dolžina × višina</div>
+        <div class="info-value">${(roksalQuote.configuration.fenceLengthMm / 1000).toFixed(2)} m × ${(roksalQuote.configuration.fenceHeightMm / 1000).toFixed(2)} m</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Razmik desk</div>
+        <div class="info-value">${roksalQuote.configuration.boardSpacingMm} mm</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Razmik stebrov</div>
+        <div class="info-value">${roksalQuote.configuration.postSpacingMm ? `${roksalQuote.configuration.postSpacingMm} mm (zahteva)` : 'samodejno'}</div>
+      </div>
+    </div>
+  </div>
+  ` : ''}
 
   <div class="section">
     <h2>Podatki o projektu</h2>
     <div class="info-grid">
       <div class="info-item">
         <div class="info-label">Ime projekta</div>
-        <div class="info-value">${project.name}</div>
+        <div class="info-value">${escapeHtml(project.name)}</div>
       </div>
       <div class="info-item">
         <div class="info-label">Tip objekta</div>
@@ -318,7 +401,105 @@ export function generatePDFReport(
     ` : ''}
   </div>
 
-  ${estimate ? `
+  ${roksalQuote ? `
+  <div class="section">
+    <h2>KOSOVNICA</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Postavka</th>
+          <th style="text-align: right;">Kol.</th>
+          <th style="text-align: right;">Enota</th>
+          <th style="text-align: right;">Cena</th>
+          <th style="text-align: right;">Skupaj</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${roksalQuote.items.map(item => `
+        <tr>
+          <td>${escapeHtml(item.name)}${item.notes ? `<br><small style="color: #6b7280;">${escapeHtml(item.notes)}</small>` : ''}</td>
+          <td style="text-align: right;">${item.quantity}</td>
+          <td style="text-align: right;">${escapeHtml(item.unit)}</td>
+          <td style="text-align: right;">${item.unitPrice.toFixed(2)} €</td>
+          <td style="text-align: right;">${item.totalPrice.toFixed(2)} €</td>
+        </tr>
+        `).join('')}
+        ${roksalQuote.labor ? `
+        <tr>
+          <td>Montaža</td>
+          <td style="text-align: right;">${roksalQuote.labor.hours} h</td>
+          <td style="text-align: right;">—</td>
+          <td style="text-align: right;">${roksalQuote.labor.rate.toFixed(2)} €/h</td>
+          <td style="text-align: right;">${roksalQuote.labor.total.toFixed(2)} €</td>
+        </tr>
+        ` : ''}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="4" style="text-align: right; font-weight: 600;">Material:</td>
+          <td style="text-align: right;">${roksalQuote.materialsSubtotal.toFixed(2)} €</td>
+        </tr>
+        ${roksalQuote.labor ? `
+        <tr>
+          <td colspan="4" style="text-align: right; font-weight: 600;">Delo:</td>
+          <td style="text-align: right;">${roksalQuote.laborTotal.toFixed(2)} €</td>
+        </tr>
+        ` : ''}
+        ${roksalQuote.discount > 0 ? `
+        <tr>
+          <td colspan="4" style="text-align: right; font-weight: 600;">Popust (${roksalQuote.discountPercent}%):</td>
+          <td style="text-align: right;">-${roksalQuote.discount.toFixed(2)} €</td>
+        </tr>
+        ` : ''}
+        <tr>
+          <td colspan="4" style="text-align: right; font-weight: 600;">DDV (${(roksalQuote.taxRate * 100).toFixed(0)}%):</td>
+          <td style="text-align: right;">${roksalQuote.tax.toFixed(2)} €</td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="4" style="text-align: right;">SKUPAJ Z DDV:</td>
+          <td style="text-align: right;">${roksalQuote.total.toFixed(2)} €</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    ${roksalQuote.isDemoPrices ? `
+    <div class="warning-box">
+      <strong>⚠ DEMO CENE:</strong> Ponudba uporablja demo cenik in ni uradni Roksal cenik.
+      Pred uporabo pri stranki ga zamenjajte z veljavnim cenikom.
+    </div>
+    ` : ''}
+
+    ${roksalQuote.warnings.length > 0 ? `
+    <div class="warning-box">
+      <strong>Opozorila:</strong>
+      <ul style="margin: 8px 0 0 18px;">
+        ${roksalQuote.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}
+      </ul>
+    </div>
+    ` : ''}
+
+    ${roksalQuote.notes ? `
+    <div style="margin-top: 15px;">
+      <strong>Opombe:</strong>
+      <p style="white-space: pre-line;">${escapeHtml(roksalQuote.notes)}</p>
+    </div>
+    ` : ''}
+
+    ${roksalQuote.terms ? `
+    <div style="margin-top: 15px;">
+      <strong>Pogoji poslovanja:</strong>
+      <p style="white-space: pre-line; font-size: 10pt; color: #374151;">${escapeHtml(roksalQuote.terms)}</p>
+    </div>
+    ` : ''}
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 50px;">
+      <div style="border-top: 1px solid #9ca3af; padding-top: 6px; font-size: 9pt; color: #6b7280;">Naročnik</div>
+      <div style="border-top: 1px solid #9ca3af; padding-top: 6px; font-size: 9pt; color: #6b7280;">Roksal Kranj</div>
+    </div>
+  </div>
+  ` : ''}
+
+  ${estimate && !roksalQuote ? `
   <div class="section">
     <h2>PREDRAČUN</h2>
     <table>
@@ -381,11 +562,12 @@ export function generatePDFReport(
   ` : ''}
 
   <div class="footer">
-    <p><strong>Mera3D Pro</strong> — Profesionalne 3D-meritve in montaža</p>
+    <p><strong>${roksalQuote ? 'Roksal Kranj' : 'Mera3D Pro'}</strong> — ${roksalQuote ? 'WoodCore WPC sistemi' : 'Profesionalne meritve in montaža'}</p>
     <p>Dokument izdelan: ${new Date().toLocaleString('sl-SI')}</p>
     <p style="margin-top: 10px; font-size: 8pt;">
-      Ta dokument je bil samodejno generiran. Meritve so bile izvedene z uporabo klasične računalniške vizije. 
-      Priporočamo preverjanje ključnih meritev z referenčnimi merili pred začetkom montaže.
+      ${roksalQuote
+        ? 'Ponudba je informativne narave. Končni obračun se izvede po dejansko opravljenih delih in vgrajenem materialu.'
+        : 'Ta dokument je bil samodejno generiran. Meritve so bile izvedene z uporabo klasične računalniške vizije. Priporočamo preverjanje ključnih meritev z referenčnimi merili pred začetkom montaže.'}
     </p>
   </div>
 </body>

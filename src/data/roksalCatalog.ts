@@ -30,6 +30,8 @@ export interface RoksalProfile {
   thickness: number; // mm
   length: number; // mm
   orientation: 'vertical' | 'horizontal' | 'both';
+  /** 'fence' = ograjni sistem, 'partition' = pregradni sistem (npr. KUBO). */
+  kind?: 'fence' | 'partition';
   maxPostSpacing: number; // mm - maksimalni razmak med stebrički
   maxBeamSpacing: number; // mm - maksimalni razmak med vodoravnimi nosilci
   minBoardSpacing: number; // mm - minimalni razmik med deskami
@@ -334,6 +336,7 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     thickness: 42,
     length: 2900,
     orientation: 'both',
+    kind: 'partition',
     maxPostSpacing: 1200, // max razmak brez ojačitve
     maxBeamSpacing: 1200, // max razmak brez ojačitve
     minBoardSpacing: 20,
