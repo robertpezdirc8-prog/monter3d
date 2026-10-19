@@ -3,7 +3,7 @@ import type {
   Project, Photo, Measurement, WorkflowStep, ObjectType,
   MeasurementStatus, ScaleSource, FencePlan, StairsPlan,
   CostEstimate, MaterialItem, ImageQuality, FeaturePoint,
-  FenceConfig, StairsConfig, ProjectSettings
+  FenceConfig, StairsConfig, ProjectSettings, FenceSegmentInput, MaterialPrices
 } from './types';
 import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetection } from './utils/cv';
 import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, formatMeasurement, exportMeasurementsCSV, selectFenceLengthMeasurements } from './utils/geometry';
@@ -22,6 +22,7 @@ import { PhotoMatchingView } from './components/PhotoMatchingView';
 import { FenceVisualizer } from './components/FenceVisualizer';
 import { RoksalGalleryView } from './components/RoksalGalleryView';
 import { FenceConfigurator } from './components/FenceConfigurator';
+import { FenceSegmentEditor } from './components/FenceSegmentEditor';
 import TradeMenu from './components/TradeMenu';
 import TradeCapture from './components/TradeCapture';
 import type { TradeId } from './utils/cameraSDK';
@@ -30,6 +31,7 @@ import {
   DEFAULT_FENCE_CONFIG,
   DEFAULT_STAIRS_CONFIG,
   DEFAULT_SETTINGS,
+  DEFAULT_MATERIAL_PRICES,
   normalizeSettings,
   snapshotProjectState,
   applySnapshotToProject,
@@ -37,6 +39,7 @@ import {
   emptySnapshot,
   type ProjectStateSnapshot,
 } from './utils/projectState';
+import { buildFenceGeometry } from './utils/fenceGeometry';
 import { createBackup, restoreBackup } from './utils/backup';
 
 const STATUS_TO_STEP: Record<string, WorkflowStep> = {
@@ -103,6 +106,9 @@ function App() {
   const [laborRate, setLaborRate] = useState(DEFAULT_SETTINGS.laborRate);
   const [laborHours, setLaborHours] = useState(DEFAULT_SETTINGS.laborHours);
   const [taxRate, setTaxRate] = useState(DEFAULT_SETTINGS.taxRate);
+  // FAZA 8 (P1): segmenti ograje (azimut + dvig) in cene materialov
+  const [fenceSegments, setFenceSegments] = useState<FenceSegmentInput[]>([]);
+  const [materialPrices, setMaterialPrices] = useState<MaterialPrices>(DEFAULT_MATERIAL_PRICES);
   const [vizStartPoint, setVizStartPoint] = useState<{x: number; y: number} | null>(null);
   const [vizEndPoint, setVizEndPoint] = useState<{x: number; y: number} | null>(null);
   const [vizFenceHeight, setVizFenceHeight] = useState(1.5);
@@ -115,6 +121,9 @@ function App() {
   const [capturedSteps, setCapturedSteps] = useState<string[]>([]);
   const [currentCaptureStep, setCurrentCaptureStep] = useState<string | null>(null);
   const [photoMatchings, setPhotoMatchings] = useState<any[]>([]);
+  // FAZA 8 (P1): opozorila o shrambi (npr. polna kvota) — prikazana kot pasica,
+  // ne kot blokirajoč alert, da uporabnik ne izgubi dela.
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const [showFenceVisualizer, setShowFenceVisualizer] = useState(false);
   const [showRoksalGallery, setShowRoksalGallery] = useState(false);
   const [showFenceConfigurator, setShowFenceConfigurator] = useState(false);
@@ -158,6 +167,8 @@ function App() {
     setLaborHours(snapshot.settings.laborHours);
     setTaxRate(snapshot.settings.taxRate);
     setCapturedSteps(snapshot.settings.capturedSteps);
+    setFenceSegments(snapshot.settings.fenceSegments);
+    setMaterialPrices(snapshot.settings.materialPrices);
     setMeasurePoints([]);
     setMeasuringMode(false);
     setComparePhoto(null);
@@ -203,6 +214,8 @@ function App() {
     setLaborHours(DEFAULT_SETTINGS.laborHours);
     setTaxRate(DEFAULT_SETTINGS.taxRate);
     setCapturedSteps([]);
+    setFenceSegments([]);
+    setMaterialPrices(DEFAULT_MATERIAL_PRICES);
     setPhotos([]);
     setSelectedPhoto(null);
     setMeasurePoints([]);
@@ -279,6 +292,8 @@ function App() {
       laborHours,
       taxRate,
       capturedSteps,
+      fenceSegments,
+      materialPrices,
     };
     const snapshot: ProjectStateSnapshot = {
       measurements,
@@ -295,8 +310,13 @@ function App() {
     const updated = applySnapshotToProject(project, snapshot);
     currentProjectRef.current = updated;
     setCurrentProject(updated);
-    saveProject(updated).catch(err => console.error('Failed to save project state:', err));
-  }, [measurements, fencePlan, stairsPlan, estimate, pixelToMeter, fenceConfig, stairsConfig, laborRate, laborHours, taxRate, capturedSteps]);
+    saveProject(updated)
+      .then(() => setStorageWarning(null))
+      .catch(err => {
+        console.error('Failed to save project state:', err);
+        setStorageWarning('Projekta ni bilo mogoče shraniti. Meritve so v tej seji še vidne — izvozi varnostno kopijo.');
+      });
+  }, [measurements, fencePlan, stairsPlan, estimate, pixelToMeter, fenceConfig, stairsConfig, laborRate, laborHours, taxRate, capturedSteps, fenceSegments, materialPrices]);
 
   // Load projects from IndexedDB on mount
   useEffect(() => {
@@ -318,6 +338,23 @@ function App() {
 
     loadProjects();
   }, [openProject]);
+
+  /**
+   * FAZA 8 (P1): shranjevanje fotografije z obravnavo napak (npr. polna kvota
+   * IndexedDB). Fotografija ostane v stanju aplikacije, uporabnik pa dobi
+   * razumljivo opozorilo, ne okna z napako.
+   */
+  const persistPhoto = useCallback((photo: Photo) => {
+    const projectId = currentProjectRef.current?.id;
+    if (!projectId) return;
+    savePhoto({ ...photo, projectId }).catch(err => {
+      console.error('Failed to save photo:', err);
+      const quotaExceeded = err && (err.name === 'QuotaExceededError' || err.code === 22);
+      setStorageWarning(quotaExceeded
+        ? 'Shramba v napravi je polna — fotografija ni bila shranjena. Izvozi varnostno kopijo ali izbriši star projekt.'
+        : 'Fotografija ni bila shranjena. Meritve in načrt so varno shranjeni.');
+    });
+  }, []);
 
   // Handle photo capture/upload
   const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -363,18 +400,13 @@ function App() {
 
           // FAZA 7 (P0): fotografija se shrani SAMO v shrambo fotografij.
           // Prej se je ista slika (z dataUrl) zapisala še v projekt — dvojna poraba kvote.
-          const projectId = currentProjectRef.current?.id;
-          if (projectId) {
-            savePhoto({ ...photo, projectId }).catch(err =>
-              console.error('Failed to save photo:', err)
-            );
-          }
+          persistPhoto(photo);
         };
         img.src = dataUrl;
       };
       reader.readAsDataURL(file);
     });
-  }, [selectedPhoto]);
+  }, [selectedPhoto, persistPhoto]);
 
   // Handle camera capture
   const handleCameraCapture = useCallback((dataUrl: string, quality: ImageQuality, stepId?: string) => {
@@ -402,15 +434,10 @@ function App() {
       }
 
       // FAZA 7 (P0): fotografija samo v shrambo fotografij (brez podvajanja v projektu).
-      const projectId = currentProjectRef.current?.id;
-      if (projectId) {
-        savePhoto({ ...photo, projectId }).catch(err =>
-          console.error('Failed to save photo:', err)
-        );
-      }
+      persistPhoto(photo);
     };
     img.src = dataUrl;
-  }, [selectedPhoto]);
+  }, [selectedPhoto, persistPhoto]);
 
   // Compute photo matchings
   const computePhotoMatchings = useCallback(async () => {
@@ -636,44 +663,42 @@ function App() {
       return;
     }
 
-    // Use ONLY valid measurements to create segments
-    // Segments are connected sequentially: end of segment i = start of segment i+1
-    let currentX = 0;
-    let currentHeight = 0;
-    const segments = validMeasurements.map((m, i) => {
-      // Validate measurement value
-      if (!isFinite(m.value) || m.value <= 0) {
-        return null; // Skip invalid measurements
-      }
-      
-      const startPoint: [number, number] = [currentX, currentHeight];
-      const endPoint: [number, number] = [currentX + m.value, currentHeight];
-      
-      // Update position for next segment
-      currentX += m.value;
-      
-      // Height change is not derived from length measurements
-      // It should come from separate height measurements or be 0
-      const heightChange = 0;
-      
+    // FAZA 8 (P1): segmenti so povezani in imajo lasten SMER (azimut) ter dvig,
+    // zato je mogoče modelirati tudi kote (L-oblike) in terenske razlike.
+    const overrides = new Map(fenceSegments.map(s => [s.id, s]));
+    const inputs: FenceSegmentInput[] = validMeasurements.map(m => {
+      const override = overrides.get(m.id);
       return {
-        startPoint,
-        endPoint,
-        heightChange
+        id: m.id,
+        length: m.value,
+        bearingDeg: override?.bearingDeg ?? 0,
+        heightChange: override?.heightChange ?? 0,
       };
-    }).filter((s): s is NonNullable<typeof s> => s !== null); // Remove null entries
+    });
+
+    const geometry = buildFenceGeometry(inputs);
+    if (geometry.errors.length > 0) {
+      console.error('Invalid fence geometry:', geometry.errors);
+      setFencePlan(null);
+      setEstimate(null);
+      return;
+    }
+
+    const segments = geometry.segments.map(s => ({
+      startPoint: s.startPoint,
+      endPoint: s.endPoint,
+      heightChange: s.heightChange,
+    }));
 
     const plan = calculateFencePlan(segments, fenceConfig);
+    // Opozorila iz geometrije (sklenjena ograja, končna višina) pridejo v načrt.
+    if (geometry.warnings.length > 0) {
+      plan.warnings = [...(plan.warnings ?? []), ...geometry.warnings];
+    }
     setFencePlan(plan);
 
-    // Calculate materials
-    const materialItems = estimateFenceMaterials(plan, {
-      panelPricePerM2: 85,
-      postPriceEach: 45,
-      railPricePerM: 12,
-      fastenerPriceEach: 0.5,
-      endCapPriceEach: 8
-    });
+    // Calculate materials — cene so iz nastavitev projekta (ne več trdo zapisane)
+    const materialItems = estimateFenceMaterials(plan, materialPrices);
 
     const costEstimate = buildCostEstimate(
       materialItems,
@@ -686,7 +711,7 @@ function App() {
         .map(m => ({ status: m.status, scaleSource: m.scaleSource }))
     );
     setEstimate(costEstimate);
-  }, [measurements, fenceConfig, laborHours, laborRate, taxRate]);
+  }, [measurements, fenceConfig, laborHours, laborRate, taxRate, fenceSegments, materialPrices]);
 
   // Calculate stairs
   const calculateStairs = useCallback(() => {
@@ -764,7 +789,7 @@ function App() {
     }
     try {
       const json = createBackup(currentProject, photos);
-      const safeName = currentProject.name.replace(/[^\w\-]+/g, '_').slice(0, 40) || 'projekt';
+      const safeName = currentProject.name.replace(/[^\w-]+/g, '_').slice(0, 40) || 'projekt';
       downloadFile(json, `mera3d_kopija_${safeName}.json`, 'application/json');
     } catch (err) {
       console.error('Failed to create backup:', err);
@@ -985,6 +1010,21 @@ function App() {
 
         {/* Main Panel */}
         <div className="flex-1 overflow-y-auto p-4">
+          {/* FAZA 8 (P1): opozorilo o shrambi (npr. polna kvota) */}
+          {storageWarning && (
+            <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-700 bg-amber-950/60 px-4 py-3 text-sm text-amber-200">
+              <span aria-hidden>⚠</span>
+              <span className="flex-1">{storageWarning}</span>
+              <button
+                onClick={() => setStorageWarning(null)}
+                className="text-xs text-amber-300 hover:text-amber-100 px-2 py-1 rounded"
+                aria-label="Zapri opozorilo"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* New Project Step */}
           {currentStep === 'new_project' && (
             <NewProjectView
@@ -1150,6 +1190,11 @@ function App() {
               onStairsConfigChange={setStairsConfig}
               onCalculateFence={calculateFence}
               onCalculateStairs={calculateStairs}
+              measurements={measurements}
+              fenceSegments={fenceSegments}
+              onFenceSegmentsChange={setFenceSegments}
+              materialPrices={materialPrices}
+              onMaterialPricesChange={setMaterialPrices}
             />
           )}
 
@@ -1227,7 +1272,7 @@ function App() {
           <span className="text-emerald-400">Lokalno delovanje ✓</span>
         </div>
         <div>
-          <span>Mera3D Pro v4.1 — Brez AI-modelov v končnem izdelku</span>
+          <span>Mera3D Pro v4.1 — lokalno delovanje, AI detekcija je izbirna</span>
         </div>
       </footer>
     </div>
@@ -1851,7 +1896,7 @@ function MeasurementsView({ measurements, selectedPhoto, canvasRef, measuringMod
   );
 }
 
-function MaterialView({ currentProject, fenceConfig, onFenceConfigChange, stairsConfig, onStairsConfigChange, onCalculateFence, onCalculateStairs }: {
+function MaterialView({ currentProject, fenceConfig, onFenceConfigChange, stairsConfig, onStairsConfigChange, onCalculateFence, onCalculateStairs, measurements, fenceSegments, onFenceSegmentsChange, materialPrices, onMaterialPricesChange }: {
   currentProject: Project | null;
   fenceConfig: any;
   onFenceConfigChange: (c: any) => void;
@@ -1859,6 +1904,11 @@ function MaterialView({ currentProject, fenceConfig, onFenceConfigChange, stairs
   onStairsConfigChange: (c: any) => void;
   onCalculateFence: () => void;
   onCalculateStairs: () => void;
+  measurements: Measurement[];
+  fenceSegments: FenceSegmentInput[];
+  onFenceSegmentsChange: (segments: FenceSegmentInput[]) => void;
+  materialPrices: MaterialPrices;
+  onMaterialPricesChange: (prices: MaterialPrices) => void;
 }) {
   const [activeSection, setActiveSection] = useState<'fence' | 'stairs'>('fence');
 
@@ -1950,6 +2000,15 @@ function MaterialView({ currentProject, fenceConfig, onFenceConfigChange, stairs
               Izračunaj ograjo
             </button>
           </div>
+
+          {/* FAZA 8 (P1): segmenti (koti/dvig) in cene materialov */}
+          <FenceSegmentEditor
+            measurements={measurements.filter(m => selectFenceLengthMeasurements([m]).length > 0)}
+            segments={fenceSegments}
+            onSegmentsChange={onFenceSegmentsChange}
+            prices={materialPrices}
+            onPricesChange={onMaterialPricesChange}
+          />
         </div>
       )}
 

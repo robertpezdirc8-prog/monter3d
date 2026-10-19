@@ -17,6 +17,7 @@ import type {
   CostEstimate,
   FenceConfig,
   StairsConfig,
+  MaterialPrices,
 } from '../types';
 
 export interface ProjectStateSnapshot {
@@ -43,6 +44,14 @@ export const DEFAULT_STAIRS_CONFIG: StairsConfig = {
   handrailHeight: 0.9,
 };
 
+export const DEFAULT_MATERIAL_PRICES: MaterialPrices = {
+  panelPricePerM2: 85,
+  postPriceEach: 45,
+  railPricePerM: 12,
+  fastenerPriceEach: 0.5,
+  endCapPriceEach: 8,
+};
+
 export const DEFAULT_SETTINGS: ProjectSettings = {
   pixelToMeter: null,
   fenceConfig: DEFAULT_FENCE_CONFIG,
@@ -51,6 +60,8 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
   laborHours: 8,
   taxRate: 22,
   capturedSteps: [],
+  fenceSegments: [],
+  materialPrices: DEFAULT_MATERIAL_PRICES,
 };
 
 const num = (value: unknown, fallback: number): number =>
@@ -107,6 +118,23 @@ export function normalizeSettings(raw?: Partial<ProjectSettings> | null): Projec
     capturedSteps: Array.isArray(raw?.capturedSteps)
       ? raw!.capturedSteps!.filter((s): s is string => typeof s === 'string')
       : [],
+    fenceSegments: Array.isArray(raw?.fenceSegments)
+      ? raw!.fenceSegments!
+          .filter(s => s && typeof s.id === 'string' && isFinite(s.length) && s.length > 0)
+          .map(s => ({
+            id: s.id,
+            length: s.length,
+            bearingDeg: isFinite(s.bearingDeg as number) ? (s.bearingDeg as number) : 0,
+            heightChange: isFinite(s.heightChange as number) ? (s.heightChange as number) : 0,
+          }))
+      : [],
+    materialPrices: {
+      panelPricePerM2: nonNegative(raw?.materialPrices?.panelPricePerM2, DEFAULT_MATERIAL_PRICES.panelPricePerM2),
+      postPriceEach: nonNegative(raw?.materialPrices?.postPriceEach, DEFAULT_MATERIAL_PRICES.postPriceEach),
+      railPricePerM: nonNegative(raw?.materialPrices?.railPricePerM, DEFAULT_MATERIAL_PRICES.railPricePerM),
+      fastenerPriceEach: nonNegative(raw?.materialPrices?.fastenerPriceEach, DEFAULT_MATERIAL_PRICES.fastenerPriceEach),
+      endCapPriceEach: nonNegative(raw?.materialPrices?.endCapPriceEach, DEFAULT_MATERIAL_PRICES.endCapPriceEach),
+    },
   };
 }
 

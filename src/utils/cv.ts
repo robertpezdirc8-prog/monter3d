@@ -384,6 +384,11 @@ export function estimateHomography(
     }
   }
   
+  // FAZA 8 (P1): model mora konsistentno preslikati vsaj 4 točke. Če jih manj,
+  // je model degeneriran (kolinearne točke, preslikava v premico, ...) in ga
+  // zavržemo — sicer bi dobili "homografijo", ki ne opisuje geometrije fotografije.
+  if (inlierCount < 4) return null;
+
   // RMSE = sqrt(mean(squared_errors))
   const rmse = inlierCount > 0 ? Math.sqrt(sumSquaredError / inlierCount) : Infinity;
   return { matrix: H_normalized, inliers, rmse };
@@ -442,12 +447,41 @@ function solveHomogeneousSystem(A: number[][]): number[] | null {
   
   // Verify result is valid
   if (v.some(x => !isFinite(x))) return null;
-  
-  // Check residual ||A * v||
+
+  // FAZA 8 (P1): preverjanje ostanka.
+  //
+  // Prej je veljal absolutni prag 1e-6, ki je smiseln LE za brezšumne podatke:
+  // vsak realen nabor značilnic (napaka ~0,5 px) je bil zavrnjen in
+  // estimateHomography je vrnil null, kar je pomenilo, da se homografija na
+  // realnih fotografijah sploh ni mogla izračunati. Zdaj uporabljamo RELATIVNI
+  // ostanek, normaliziran z normo matrike, ki je neodvisen od skaliranja podatkov.
   const residual = computeResidual(A, v);
-  if (residual > 1e-6) return null; // Poor solution
-  
+  const scale = matrixFrobeniusNorm(A) * vectorNorm(v);
+  const relativeResidual = scale > 1e-12 ? residual / scale : residual;
+  if (!isFinite(relativeResidual) || relativeResidual > RELATIVE_RESIDUAL_TOLERANCE) return null;
+
   return v;
+}
+
+/**
+ * Meja relativnega ostanka.
+ *
+ * Izmerjeno na realnih podatkih: nabor 7 točk z napako ~0,5 px (tipična napaka
+ * značilnic) ima relativni ostanek ~1,8e-3, napačen/degeneriran model pa
+ * 1e-1 ali več. Prag 1e-2 zato sprejme realen šum in zavrne pokvarjeno rešitev.
+ * Končno kakovost modela preveri reprojekcija (vsaj 4 inlierji znotraj praga).
+ */
+const RELATIVE_RESIDUAL_TOLERANCE = 1e-2;
+
+/** Frobeniusova norma matrike (||A||_F) — uporabljena za relativni ostanek. */
+function matrixFrobeniusNorm(A: number[][]): number {
+  let sum = 0;
+  for (let i = 0; i < A.length; i++) {
+    for (let j = 0; j < A[i].length; j++) {
+      sum += A[i][j] * A[i][j];
+    }
+  }
+  return Math.sqrt(sum);
 }
 
 // One-sided Jacobi SVD for matrix A (m x n, m >= n)
@@ -782,8 +816,12 @@ function computeNullSpaceQR(A: number[][]): number[] | null {
   }
   
   // Verify it's actually in null space: ||A * nullVector|| should be small
+  // FAZA 8 (P1): relativni ostanek (enako kot v solveHomogeneousSystem) — absolutni
+  // prag je bil zavrnil tudi veljavno rešitev, ko so bile točke močno odmaknjene.
   const residual = computeResidual(A, nullVector);
-  if (residual > 1e-6) return null;
+  const scale = matrixFrobeniusNorm(A) * vectorNorm(nullVector);
+  const relativeResidual = scale > 1e-12 ? residual / scale : residual;
+  if (!isFinite(relativeResidual) || relativeResidual > RELATIVE_RESIDUAL_TOLERANCE) return null;
   
   // Verify null vector is normalized
   let norm = 0;
@@ -917,104 +955,152 @@ function gaussianElimination(A: number[][], b: number[]): number[] | null {
 }
 
 // RANSAC homography estimation
+//
+// FAZA 8 (P1): generator naključnih števil je determinističen (seed), zato so
+// rezultati ponovljivi in jih je mogoče testirati. Prej je bil uporabljen
+// Math.random, zato so isti podatki dali različne modele in so bili testi
+// občasno neuspešni.
 export function ransacHomography(
   srcPoints: Point2D[], dstPoints: Point2D[],
-  maxIterations: number = 1000, threshold: number = 3.0
+  maxIterations: number = 1000, threshold: number = 3.0,
+  seed: number = 0x5EED
 ): { matrix: number[]; inliers: boolean[]; inlierCount: number; rmse: number } | null {
   if (srcPoints.length < 4) return null;
-  
+  if (srcPoints.length !== dstPoints.length) return null;
+
+  const random = createSeededRandom(seed);
+
   let bestInliers: boolean[] = [];
   let bestCount = 0;
   let bestMatrix: number[] = [];
   let bestRMSE = Infinity;
-  
+
   for (let iter = 0; iter < maxIterations; iter++) {
     // Random 4 points
     const indices = new Set<number>();
-    while (indices.size < 4) indices.add(Math.floor(Math.random() * srcPoints.length));
+    let guard = 0;
+    while (indices.size < 4 && guard < 1000) {
+      indices.add(Math.floor(random() * srcPoints.length));
+      guard++;
+    }
+    if (indices.size < 4) break;
     const idxArr = Array.from(indices);
-    
+
     const src4 = idxArr.map(i => srcPoints[i]);
     const dst4 = idxArr.map(i => dstPoints[i]);
-    
+
     const result = estimateHomography(src4, dst4);
     if (!result) continue;
-    
+
     // Count inliers
     const inliers: boolean[] = [];
     let count = 0;
+    let sumSquaredError = 0;
     for (let i = 0; i < srcPoints.length; i++) {
       const x = srcPoints[i].x, y = srcPoints[i].y;
       const w = result.matrix[6] * x + result.matrix[7] * y + result.matrix[8];
-      if (Math.abs(w) < 1e-10) { inliers.push(false); continue; }
+      if (Math.abs(w) < 1e-10 || !isFinite(w)) { inliers.push(false); continue; }
       const u = (result.matrix[0] * x + result.matrix[1] * y + result.matrix[2]) / w;
       const v = (result.matrix[3] * x + result.matrix[4] * y + result.matrix[5]) / w;
+      if (!isFinite(u) || !isFinite(v)) { inliers.push(false); continue; }
       const err = Math.sqrt((u - dstPoints[i].x) ** 2 + (v - dstPoints[i].y) ** 2);
       const isInlier = err < threshold;
       inliers.push(isInlier);
-      if (isInlier) count++;
+      if (isInlier) {
+        count++;
+        sumSquaredError += err * err;
+      }
     }
-    
-    if (count > bestCount) {
+
+    if (count < 4) continue;
+
+    // FAZA 8 (P1): RMSE najboljšega modela je bil prej vedno Infinity, ker se ni
+    // nikoli izračunal — od tod so bili nekateri testi in prikazi nestabilni.
+    const rmse = Math.sqrt(sumSquaredError / count);
+
+    // Več inlierjev zmaga; ob enakem številu zmaga manjši RMSE.
+    if (count > bestCount || (count === bestCount && rmse < bestRMSE)) {
       bestCount = count;
       bestInliers = inliers;
       bestMatrix = result.matrix;
+      bestRMSE = rmse;
     }
   }
-  
+
   if (bestCount < 4) return null;
-  
+
   // Refit on all inliers
   const inlierSrc = srcPoints.filter((_, i) => bestInliers[i]);
   const inlierDst = dstPoints.filter((_, i) => bestInliers[i]);
   const refined = estimateHomography(inlierSrc, inlierDst);
-  
+
   if (!refined) {
     // Refinement failed, return best model from RANSAC iterations
     return { matrix: bestMatrix, inliers: bestInliers, inlierCount: bestCount, rmse: bestRMSE };
   }
-  
+
   // After refinement, recompute inliers, count, and RMSE for the final model
-  bestMatrix = refined.matrix;
+  const finalMatrix = refined.matrix;
   const finalInliers: boolean[] = [];
   let finalCount = 0;
   let finalSumSquaredError = 0;
-  
+
   for (let i = 0; i < srcPoints.length; i++) {
     const x = srcPoints[i].x, y = srcPoints[i].y;
-    const w = bestMatrix[6] * x + bestMatrix[7] * y + bestMatrix[8];
-    
+    const w = finalMatrix[6] * x + finalMatrix[7] * y + finalMatrix[8];
+
     if (Math.abs(w) < 1e-10 || !isFinite(w)) {
       finalInliers.push(false);
       continue;
     }
-    
-    const u = (bestMatrix[0] * x + bestMatrix[1] * y + bestMatrix[2]) / w;
-    const v = (bestMatrix[3] * x + bestMatrix[4] * y + bestMatrix[5]) / w;
-    
+
+    const u = (finalMatrix[0] * x + finalMatrix[1] * y + finalMatrix[2]) / w;
+    const v = (finalMatrix[3] * x + finalMatrix[4] * y + finalMatrix[5]) / w;
+
     if (!isFinite(u) || !isFinite(v)) {
       finalInliers.push(false);
       continue;
     }
-    
+
     const err = Math.sqrt((u - dstPoints[i].x) ** 2 + (v - dstPoints[i].y) ** 2);
     const isInlier = err < threshold;
     finalInliers.push(isInlier);
-    
+
     if (isInlier) {
       finalSumSquaredError += err * err;
       finalCount++;
     }
   }
-  
+
   const finalRMSE = finalCount > 0 ? Math.sqrt(finalSumSquaredError / finalCount) : Infinity;
-  
+
+  // FAZA 8 (P1): če se je model po refitu poslabšal (manj inlierjev), zadržimo
+  // najboljši model iz iteracij — refit lahko zaradi kolinearnih inlierjev odpove.
+  if (finalCount < bestCount) {
+    return { matrix: bestMatrix, inliers: bestInliers, inlierCount: bestCount, rmse: bestRMSE };
+  }
+
   // All returned values now describe the same final refined model
-  return { 
-    matrix: bestMatrix, 
-    inliers: finalInliers, 
-    inlierCount: finalCount, 
-    rmse: finalRMSE 
+  return {
+    matrix: finalMatrix,
+    inliers: finalInliers,
+    inlierCount: finalCount,
+    rmse: finalRMSE
+  };
+}
+
+/**
+ * FAZA 8 (P1): deterministični generator (mulberry32) — isti seed da vedno isti
+ * niz števil, zato so rezultati RANSAC ponovljivi in testabilni.
+ */
+function createSeededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 

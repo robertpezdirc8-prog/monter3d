@@ -160,11 +160,11 @@ console.log('\nTest 5: Več točk z majhnim šumom (7 točk)');
     { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 },
     { x: 50, y: 50 }, { x: 25, y: 75 }, { x: 75, y: 25 }
   ];
-  const tx = 15, ty = 25;
+  // (tx=15, ty=25) premaknit je ze uporabljeno v dstPoints
   const noise = 0.5;
   const dstPoints = srcPoints.map((p, i) => ({
-    x: p.x + tx + (i % 2 === 0 ? noise : -noise),
-    y: p.y + ty + (i % 3 === 0 ? noise : -noise)
+    x: p.x + 15 + (i % 2 === 0 ? noise : -noise),
+    y: p.y + 25 + (i % 3 === 0 ? noise : -noise)
   }));
   
   const result = estimateHomography(srcPoints, dstPoints);
@@ -222,12 +222,11 @@ console.log('\nTest 8: RANSAC z znanimi napačnimi ujemanji');
     { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 },
     { x: 50, y: 50 }, { x: 25, y: 75 }
   ];
-  const tx = 10, ty = 20;
+  // (tx=10, ty=20) premaknitev je ze uporabljena v dstPoints
   const dstPoints = [
     { x: 10, y: 20 }, { x: 110, y: 20 }, { x: 110, y: 120 }, { x: 10, y: 120 },
     { x: 60, y: 70 }, { x: 200, y: 200 } // Outlier
-  ];
-  
+  ];  
   const result = ransacHomography(srcPoints, dstPoints, 100, 5.0);
   
   if (!result) {
@@ -350,7 +349,7 @@ console.log('\nTest 12: RANSAC z več napačnimi ujemanji');
     { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 },
     { x: 50, y: 50 }, { x: 25, y: 75 }, { x: 75, y: 25 }, { x: 50, y: 0 }
   ];
-  const tx = 15, ty = 25;
+  // (tx=15, ty=25) premaknit je ze uporabljeno v dstPoints
   const dstPoints = [
     { x: 15, y: 25 }, { x: 115, y: 25 }, { x: 115, y: 125 }, { x: 15, y: 125 },
     { x: 65, y: 75 }, { x: 200, y: 200 }, { x: 300, y: 300 }, { x: 500, y: 500 }

@@ -115,7 +115,7 @@ function solveHomogeneousSystem(A) {
   for (let i = 0; i < n; i++) ATA[i][i] += reg;
   
   let prevV = [...v];
-  let converged = false;
+  let _converged = false;
   for (let iter = 0; iter < 300; iter++) {
     const w = gaussianElimination(ATA, v);
     if (!w) return null;
@@ -130,7 +130,7 @@ function solveHomogeneousSystem(A) {
     const angleChange = Math.acos(Math.min(1, Math.max(-1, Math.abs(dotProduct))));
     
     if (iter > 20 && angleChange < 1e-10) {
-      converged = true;
+      _converged = true;
       v = w;
       break;
     }

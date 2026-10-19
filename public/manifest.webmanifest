@@ -1,0 +1,20 @@
+{
+  "name": "Mera3D Pro — meritve za monterje",
+  "short_name": "Mera3D",
+  "description": "Zajem, merjenje, izračun konstrukcije ograje in predračun — deluje brez povezave.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "sl",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

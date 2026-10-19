@@ -8,14 +8,16 @@ lokalni (IndexedDB) in ne zapustijo naprave.
 
 ```bash
 npm ci
-npm run dev        # razvojni strežnik (http://localhost:3000)
-npm run typecheck  # TypeScript (strict)
-npm test           # vitest
-npm run build      # produkcijski build
+npm run dev            # razvojni strežnik (http://localhost:3000)
+npm run typecheck      # TypeScript (strict)
+npm run lint           # ESLint (napake = 0, opozorila pri `any`)
+npm test               # vitest
+npm run test:geometry  # dodatni geometrijski testi (node)
+npm run build          # produkcijski build
 ```
 
-CI (`.github/workflows/test.yml`) preverja typecheck, vitest, `node test-runner.mjs`,
-`npm audit` in build.
+CI (`.github/workflows/test.yml`) preverja typecheck, ESLint, vitest, `test-runner.mjs`,
+`test-homography.js`, `npm audit` in build.
 
 ## Delovni tok
 
@@ -34,19 +36,38 @@ Količine → Predračun → Izvoz`
   količin in statistike predračuna.
 - **Varnostna kopija** (korak Izvoz → 🧰) izvozi JSON s projektom, stanjem in
   **fotografijami**; uvoz (korak Nov projekt → ⬆) obnovi projekt kot nov (izvirnik ostane).
+- Pri polni shrambi (kvota) uporabnik dobi opozorilo, ne praznega zaslona.
+
+## Geometrija in matematika (FAZA 8 / P1)
+
+- **Segmenti ograje** (korak Materiali): vsaka dolžinska meritev dobi **azimut** in
+  **dvig**, zato so mogoči koti (L-oblike) in terenski dvigi — prej je bila mogoča samo
+  ravna ograja.
+- **Cene materialov** so del nastavitev projekta (prej trdo zapisane v kodi).
+- **Homografija** sprejme realen šum značilnic (~0,5 px) in model preveri s reprojekcijo;
+  **RANSAC** je determinističen (seed), zato so rezultati ponovljivi in testabilni.
+- **Delovanje brez povezave**: service worker (`public/sw.js`) + manifest, namečen ob
+  glavi »Offline ✓«.
 
 ## Struktura
 
 ```
 src/App.tsx            # delovni tok in UI
-src/components/        # komponente (kamera, merjenje, vizualizacije)
+src/components/        # komponente (kamera, merjenje, vizualizacije, urejevalnik segmentov)
 src/utils/geometry.ts  # izračuni (ograja, stopnice, predračun)
+src/utils/fenceGeometry.ts # segmenti ograje (azimut, dvig, koti)
 src/utils/cv.ts        # računalniška vizija (Harris, deskriptorji, homografija, RANSAC)
 src/utils/projectState.ts # shranjevanje/nalaganje stanja projekta
 src/utils/backup.ts    # varnostna kopija in obnova
 src/utils/storage.ts   # IndexedDB (projekti, fotografije)
 src/data/              # katalog Roksal, galerija
 src/tests/             # vitest testi
+public/sw.js           # service worker (offline)
 ```
 
-Poročila o fazah dela so v korenu (`*-POROCILO.md`) in v `docs/`.
+Poročila o fazah dela so v `docs/porocila/`, dodatna dokumentacija v `docs/`.
+
+### Opomba o AI detekciji
+AI detekcija objektov (RF-DETR Nano, Apache 2.0) je **izbirna** — model se prenese šele,
+ko uporabnik vklopi preklop v kameri, in se izvaja lokalno v brskalniku. Brez tega
+aplikacija ne potrebuje omrežja.

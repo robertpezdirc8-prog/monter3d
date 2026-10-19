@@ -41,6 +41,31 @@ export interface StairsConfig {
   handrailHeight: number;
 }
 
+/**
+ * FAZA 8 (P1): segment ograje — dolžina + smer (azimut) + morebitni dvig.
+ * Azimut je v stopinjah: 0° = +X, 90° = +Y. Več segmentov omogoča kote
+ * (L-oblike) in terenske dvige, kar prej ni bilo mogoče modelirati.
+ */
+export interface FenceSegmentInput {
+  /** ID meritve, iz katere je segment nastal. */
+  id: string;
+  /** Dolžina segmenta v metrih. */
+  length: number;
+  /** Azimut segmenta v stopinjah (0° = +X, 90° = +Y). */
+  bearingDeg?: number;
+  /** Višinska razlika na začetku segmenta (m). */
+  heightChange?: number;
+}
+
+/** Cene materialov za predračun (EUR). */
+export interface MaterialPrices {
+  panelPricePerM2: number;
+  postPriceEach: number;
+  railPricePerM: number;
+  fastenerPriceEach: number;
+  endCapPriceEach: number;
+}
+
 /** Nastavitve projekta, ki preživijo osvežitev strani. */
 export interface ProjectSettings {
   pixelToMeter: number | null;
@@ -50,6 +75,10 @@ export interface ProjectSettings {
   laborHours: number;
   taxRate: number;
   capturedSteps: string[];
+  /** FAZA 8 (P1): segmenti ograje (koti in dvigi) po meritvah. */
+  fenceSegments: FenceSegmentInput[];
+  /** FAZA 8 (P1): cene materialov (neposredno uporabljene v predračunu). */
+  materialPrices: MaterialPrices;
 }
 
 export type ObjectType = 'fence' | 'stairs' | 'facade' | 'terrain' | 'combined';
