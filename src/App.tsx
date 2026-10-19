@@ -2,10 +2,11 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import type {
   Project, Photo, Measurement, WorkflowStep, ObjectType,
   MeasurementStatus, ScaleSource, FencePlan, StairsPlan,
-  CostEstimate, MaterialItem, ImageQuality, FeaturePoint
+  CostEstimate, MaterialItem, ImageQuality, FeaturePoint,
+  FenceConfig, StairsConfig, ProjectSettings
 } from './types';
 import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetection } from './utils/cv';
-import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, formatMeasurement, exportMeasurementsCSV } from './utils/geometry';
+import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, formatMeasurement, exportMeasurementsCSV, selectFenceLengthMeasurements } from './utils/geometry';
 import { generatePDFReport } from './utils/pdfExport';
 import { v4 as uuidv4 } from 'uuid';
 import { FenceVisualization } from './components/FenceVisualization';
@@ -24,7 +25,27 @@ import { FenceConfigurator } from './components/FenceConfigurator';
 import TradeMenu from './components/TradeMenu';
 import TradeCapture from './components/TradeCapture';
 import type { TradeId } from './utils/cameraSDK';
-import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId } from './utils/storage';
+import { saveProject, getProject, getAllProjects, savePhoto, setCurrentProjectId, getCurrentProjectId, deleteProject, deletePhotosByProject, loadProjectWithPhotos } from './utils/storage';
+import {
+  DEFAULT_FENCE_CONFIG,
+  DEFAULT_STAIRS_CONFIG,
+  DEFAULT_SETTINGS,
+  normalizeSettings,
+  snapshotProjectState,
+  applySnapshotToProject,
+  stateSignature,
+  emptySnapshot,
+  type ProjectStateSnapshot,
+} from './utils/projectState';
+import { createBackup, restoreBackup } from './utils/backup';
+
+const STATUS_TO_STEP: Record<string, WorkflowStep> = {
+  capture: 'capture',
+  processing: 'quality_check',
+  measuring: 'scale_verification',
+  planning: 'material_selection',
+  complete: 'export',
+};
 
 // Icons as simple SVG components
 const IconCamera = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
@@ -77,23 +98,11 @@ function App() {
   const [referenceLength, setReferenceLength] = useState<string>('');
   const [pixelToMeter, setPixelToMeter] = useState<number | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
-  const [fenceConfig, setFenceConfig] = useState({
-    panelWidth: 1.8,
-    panelHeight: 1.5,
-    postWidth: 0.06,
-    maxGap: 0.12,
-    mountingStyle: 'stepped' as 'level' | 'stepped' | 'mixed',
-    slopeThreshold: 5
-  });
-  const [stairsConfig, setStairsConfig] = useState({
-    numSteps: 5,
-    totalRise: 1.2,
-    totalRun: 2.5,
-    handrailHeight: 0.9
-  });
-  const [laborRate, setLaborRate] = useState(35);
-  const [laborHours, setLaborHours] = useState(8);
-  const [taxRate, setTaxRate] = useState(22);
+  const [fenceConfig, setFenceConfig] = useState<FenceConfig>(DEFAULT_FENCE_CONFIG);
+  const [stairsConfig, setStairsConfig] = useState<StairsConfig>(DEFAULT_STAIRS_CONFIG);
+  const [laborRate, setLaborRate] = useState(DEFAULT_SETTINGS.laborRate);
+  const [laborHours, setLaborHours] = useState(DEFAULT_SETTINGS.laborHours);
+  const [taxRate, setTaxRate] = useState(DEFAULT_SETTINGS.taxRate);
   const [vizStartPoint, setVizStartPoint] = useState<{x: number; y: number} | null>(null);
   const [vizEndPoint, setVizEndPoint] = useState<{x: number; y: number} | null>(null);
   const [vizFenceHeight, setVizFenceHeight] = useState(1.5);
@@ -114,6 +123,52 @@ function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // FAZA 7 (P0): zadnje shranjeno stanje prepreči neskončno pisanje v IndexedDB.
+  const currentProjectRef = useRef<Project | null>(null);
+  const lastSavedSignature = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentProjectRef.current = currentProject;
+  }, [currentProject]);
+
+  /**
+   * FAZA 7 (P0): naloži projekt skupaj s CELOTNIM stanjem (meritve, načrti,
+   * predračun, merilo, konfiguracije) — uporabljeno ob zagonu in ob izbiri projekta.
+   */
+  const openProject = useCallback(async (project: Project) => {
+    // FAZA 7 (P0): fotografije se naložijo iz ločene shrambe, stari podvojeni
+    // zapisi se ob tem enkrat preselijo in počistijo.
+    const { project: projectToUse, photos: photosToUse } = await loadProjectWithPhotos(project);
+
+    const snapshot = snapshotProjectState(projectToUse);
+    currentProjectRef.current = projectToUse;
+    lastSavedSignature.current = stateSignature(snapshot);
+
+    setCurrentProject(projectToUse);
+    setPhotos(photosToUse);
+    setSelectedPhoto(photosToUse[0] ?? null);
+    setMeasurements(snapshot.measurements);
+    setFencePlan(snapshot.fencePlan);
+    setStairsPlan(snapshot.stairsPlan);
+    setEstimate(snapshot.estimate);
+    setPixelToMeter(snapshot.settings.pixelToMeter);
+    setFenceConfig(snapshot.settings.fenceConfig);
+    setStairsConfig(snapshot.settings.stairsConfig);
+    setLaborRate(snapshot.settings.laborRate);
+    setLaborHours(snapshot.settings.laborHours);
+    setTaxRate(snapshot.settings.taxRate);
+    setCapturedSteps(snapshot.settings.capturedSteps);
+    setMeasurePoints([]);
+    setMeasuringMode(false);
+    setComparePhoto(null);
+    setPhotoMatchings([]);
+    setReferenceLength('');
+    setVizStartPoint(null);
+    setVizEndPoint(null);
+    setCurrentStep(STATUS_TO_STEP[projectToUse.status] ?? 'capture');
+    setCurrentProjectId(projectToUse.id);
+  }, []);
+
   // Create new project
   const createProject = useCallback((name: string, type: ObjectType) => {
     const project: Project = {
@@ -132,56 +187,137 @@ function App() {
         postMaterial: 'Aluminij',
         fastenerType: 'A2 inox'
       },
+      settings: normalizeSettings(DEFAULT_SETTINGS),
       status: 'capture'
     };
+
+    // Nov projekt se začne s praznim stanjem — privzete nastavitve veljajo tudi v UI.
+    setMeasurements([]);
+    setFencePlan(null);
+    setStairsPlan(null);
+    setEstimate(null);
+    setPixelToMeter(null);
+    setFenceConfig(DEFAULT_FENCE_CONFIG);
+    setStairsConfig(DEFAULT_STAIRS_CONFIG);
+    setLaborRate(DEFAULT_SETTINGS.laborRate);
+    setLaborHours(DEFAULT_SETTINGS.laborHours);
+    setTaxRate(DEFAULT_SETTINGS.taxRate);
+    setCapturedSteps([]);
+    setPhotos([]);
+    setSelectedPhoto(null);
+    setMeasurePoints([]);
+    setMeasuringMode(false);
+    setComparePhoto(null);
+    setPhotoMatchings([]);
+    setReferenceLength('');
+    setVizStartPoint(null);
+    setVizEndPoint(null);
+
+    currentProjectRef.current = project;
+    lastSavedSignature.current = stateSignature(emptySnapshot());
     setCurrentProject(project);
     setProjects(prev => [...prev, project]);
     setCurrentStep('capture');
-    
+
     // Save to IndexedDB
     saveProject(project).catch(err => console.error('Failed to save project:', err));
     setCurrentProjectId(project.id);
   }, []);
+
+  // Odpri obstoječi projekt s klikom na seznam
+  const handleOpenProject = useCallback(async (id: string) => {
+    try {
+      const project = await getProject(id);
+      if (project) await openProject(project);
+    } catch (err) {
+      console.error('Failed to open project:', err);
+      alert('Projekta ni bilo mogoče odpreti.');
+    }
+  }, [openProject]);
+
+  // Izbriši projekt skupaj z njegovimi fotografijami (brez sirot v IndexedDB)
+  const handleDeleteProject = useCallback(async (id: string) => {
+    try {
+      await deletePhotosByProject(id);
+      await deleteProject(id);
+      setProjects(prev => prev.filter(p => p.id !== id));
+
+      if (currentProjectRef.current?.id === id) {
+        currentProjectRef.current = null;
+        lastSavedSignature.current = null;
+        setCurrentProject(null);
+        setPhotos([]);
+        setSelectedPhoto(null);
+        setMeasurements([]);
+        setFencePlan(null);
+        setStairsPlan(null);
+        setEstimate(null);
+        setPixelToMeter(null);
+        setCapturedSteps([]);
+        setCurrentStep('new_project');
+        setCurrentProjectId(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+      alert('Projekta ni bilo mogoče izbrisati.');
+    }
+  }, []);
+
+  /**
+   * FAZA 7 (P0): samodejno shrani celotno stanje projekta. Prej so se meritve,
+   * načrti in predračun ob osvežitvi strani izgubili.
+   */
+  useEffect(() => {
+    const project = currentProjectRef.current;
+    if (!project) return;
+
+    const settings: ProjectSettings = {
+      pixelToMeter,
+      fenceConfig,
+      stairsConfig,
+      laborRate,
+      laborHours,
+      taxRate,
+      capturedSteps,
+    };
+    const snapshot: ProjectStateSnapshot = {
+      measurements,
+      fencePlan,
+      stairsPlan,
+      estimate,
+      settings,
+    };
+
+    const signature = stateSignature(snapshot);
+    if (signature === lastSavedSignature.current) return;
+    lastSavedSignature.current = signature;
+
+    const updated = applySnapshotToProject(project, snapshot);
+    currentProjectRef.current = updated;
+    setCurrentProject(updated);
+    saveProject(updated).catch(err => console.error('Failed to save project state:', err));
+  }, [measurements, fencePlan, stairsPlan, estimate, pixelToMeter, fenceConfig, stairsConfig, laborRate, laborHours, taxRate, capturedSteps]);
 
   // Load projects from IndexedDB on mount
   useEffect(() => {
     const loadProjects = async () => {
       try {
         const savedProjects = await getAllProjects();
-        if (savedProjects.length > 0) {
-          setProjects(savedProjects);
-          
-          // Restore last active project
-          const lastProjectId = getCurrentProjectId();
-          if (lastProjectId) {
-            const lastProject = await getProject(lastProjectId);
-            if (lastProject) {
-              setCurrentProject(lastProject);
-              // Map project status to workflow step
-              const statusToStep: Record<string, WorkflowStep> = {
-                'capture': 'capture',
-                'processing': 'quality_check',
-                'measuring': 'scale_verification',
-                'planning': 'material_selection',
-                'complete': 'export'
-              };
-              setCurrentStep(statusToStep[lastProject.status] || 'capture');
-              
-              // Load photos for this project
-              const savedPhotos = await getPhotosByProject(lastProjectId);
-              if (savedPhotos.length > 0) {
-                setPhotos(savedPhotos);
-              }
-            }
-          }
-        }
+        if (savedProjects.length === 0) return;
+        setProjects(savedProjects);
+
+        // Restore last active project
+        const lastProjectId = getCurrentProjectId();
+        if (!lastProjectId) return;
+        const lastProject = await getProject(lastProjectId);
+        if (lastProject) await openProject(lastProject);
       } catch (err) {
         console.error('Failed to load projects:', err);
       }
     };
-    
+
     loadProjects();
-  }, []);
+  }, [openProject]);
 
   // Handle photo capture/upload
   const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -224,22 +360,13 @@ function App() {
 
           setPhotos(prev => [...prev, photo]);
           if (!selectedPhoto) setSelectedPhoto(photo);
-          
-          // Save to IndexedDB if project exists
-          if (currentProject) {
-            savePhoto({ ...photo, projectId: currentProject.id }).catch(err => 
+
+          // FAZA 7 (P0): fotografija se shrani SAMO v shrambo fotografij.
+          // Prej se je ista slika (z dataUrl) zapisala še v projekt — dvojna poraba kvote.
+          const projectId = currentProjectRef.current?.id;
+          if (projectId) {
+            savePhoto({ ...photo, projectId }).catch(err =>
               console.error('Failed to save photo:', err)
-            );
-            
-            // Update project with new photo
-            const updatedProject = {
-              ...currentProject,
-              photos: [...currentProject.photos, photo],
-              updatedAt: new Date()
-            };
-            setCurrentProject(updatedProject);
-            saveProject(updatedProject).catch(err => 
-              console.error('Failed to update project:', err)
             );
           }
         };
@@ -247,7 +374,7 @@ function App() {
       };
       reader.readAsDataURL(file);
     });
-  }, [selectedPhoto, currentProject]);
+  }, [selectedPhoto]);
 
   // Handle camera capture
   const handleCameraCapture = useCallback((dataUrl: string, quality: ImageQuality, stepId?: string) => {
@@ -274,26 +401,16 @@ function App() {
         setCapturedSteps(prev => [...prev, stepId]);
       }
 
-      // Save to IndexedDB if project exists
-      if (currentProject) {
-        savePhoto({ ...photo, projectId: currentProject.id }).catch(err => 
+      // FAZA 7 (P0): fotografija samo v shrambo fotografij (brez podvajanja v projektu).
+      const projectId = currentProjectRef.current?.id;
+      if (projectId) {
+        savePhoto({ ...photo, projectId }).catch(err =>
           console.error('Failed to save photo:', err)
-        );
-        
-        // Update project with new photo
-        const updatedProject = {
-          ...currentProject,
-          photos: [...currentProject.photos, photo],
-          updatedAt: new Date()
-        };
-        setCurrentProject(updatedProject);
-        saveProject(updatedProject).catch(err => 
-          console.error('Failed to update project:', err)
         );
       }
     };
     img.src = dataUrl;
-  }, [selectedPhoto, currentProject]);
+  }, [selectedPhoto]);
 
   // Compute photo matchings
   const computePhotoMatchings = useCallback(async () => {
@@ -485,8 +602,10 @@ function App() {
         type: 'length',
         value: meters,
         unit: 'm',
-        source: 'manual',
+        // FAZA 7 (P0): referenca je merilo fotografije, NE del objekta.
+        source: 'reference_scale',
         scaleSource: 'manual_reference',
+        isScaleReference: true,
         status: 'verified',
         uncertainty: 2,
         confidence: 0.9,
@@ -506,14 +625,9 @@ function App() {
 
   // Calculate fence plan
   const calculateFence = useCallback(() => {
-    // Only use verified measurements with metric units
-    const validMeasurements = measurements.filter(m => 
-      m.status === 'verified' && 
-      m.unit === 'm' && 
-      m.scaleSource !== 'unknown' && 
-      m.scaleSource !== 'demo' &&
-      m.scaleSource !== 'normalized'
-    );
+    // FAZA 7 (P0): izloči referenčno (kalibracijsko) meritev — sicer merilni trak
+    // postane dodaten segment ograje in napihne količine/predračun.
+    const validMeasurements = selectFenceLengthMeasurements(measurements);
     
     if (validMeasurements.length < 1) {
       // No valid measurements - cannot calculate fence
@@ -565,7 +679,11 @@ function App() {
       materialItems,
       { hours: laborHours, rate: laborRate },
       taxRate / 100,
-      measurements.map(m => ({ status: m.status, scaleSource: m.scaleSource }))
+      // FAZA 7 (P0): referenčna kalibracija ni meritev objekta in ne sodi v statistiko
+      // predračuna; neveljavne/opozorilne meritve pa morajo ostati vidne.
+      measurements
+        .filter(m => m.isScaleReference !== true && m.source !== 'reference_scale' && m.algorithm !== 'reference_calibration')
+        .map(m => ({ status: m.status, scaleSource: m.scaleSource }))
     );
     setEstimate(costEstimate);
   }, [measurements, fenceConfig, laborHours, laborRate, taxRate]);
@@ -619,7 +737,9 @@ function App() {
       };
       downloadFile(JSON.stringify(exportObj, null, 2), 'mera3d_project.json', 'application/json');
     } else if (format === 'pdf') {
-      generatePDFReport(currentProject, measurements, fencePlan, stairsPlan, estimate);
+      // FAZA 7 (P0): fotografije niso več del zapisa projekta, zato jih za poročilo
+      // (število fotografij) podamo iz stanja.
+      generatePDFReport({ ...currentProject, photos }, measurements, fencePlan, stairsPlan, estimate);
     }
   }, [measurements, currentProject, photos, fencePlan, stairsPlan, estimate]);
 
@@ -632,6 +752,40 @@ function App() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  /**
+   * FAZA 7 (P0): varnostna kopija — JSON s projektom, stanjem IN fotografijami.
+   * Običajni izvoz JSON ne vsebuje slik, zato projekta ni bilo mogoče obnoviti.
+   */
+  const handleExportBackup = useCallback(() => {
+    if (!currentProject) {
+      alert('Ni izbranega projekta za varnostno kopijo.');
+      return;
+    }
+    try {
+      const json = createBackup(currentProject, photos);
+      const safeName = currentProject.name.replace(/[^\w\-]+/g, '_').slice(0, 40) || 'projekt';
+      downloadFile(json, `mera3d_kopija_${safeName}.json`, 'application/json');
+    } catch (err) {
+      console.error('Failed to create backup:', err);
+      alert('Varnostne kopije ni bilo mogoče ustvariti.');
+    }
+  }, [currentProject, photos]);
+
+  // Uvoz/obnova varnostne kopije -> nov projekt, ki ga takoj odpremo
+  const handleImportBackup = useCallback(async (file: File) => {
+    try {
+      const text = await file.text();
+      const result = await restoreBackup(text);
+      const refreshed = await getAllProjects();
+      setProjects(refreshed);
+      const restored = await getProject(result.projectId);
+      if (restored) await openProject(restored);
+    } catch (err) {
+      console.error('Failed to restore backup:', err);
+      alert(err instanceof Error ? err.message : 'Varnostne kopije ni bilo mogoče obnoviti.');
+    }
+  }, [openProject]);
 
   // Workflow steps config
   const steps: { key: WorkflowStep; label: string; icon: string }[] = [
@@ -755,6 +909,21 @@ function App() {
         {currentProject && (
           <aside className="lg:w-64 bg-slate-800/30 border-b lg:border-b-0 lg:border-r border-slate-700 p-4 overflow-y-auto">
             <h3 className="text-sm font-semibold text-slate-300 mb-3">Projekt</h3>
+            {projects.length > 0 && (
+              <label className="block mb-3">
+                <span className="sr-only">Aktiven projekt</span>
+                <select
+                  value={currentProject.id}
+                  onChange={e => handleOpenProject(e.target.value)}
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                  title="Preklopi projekt"
+                >
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-400">Tip:</span>
@@ -818,7 +987,14 @@ function App() {
         <div className="flex-1 overflow-y-auto p-4">
           {/* New Project Step */}
           {currentStep === 'new_project' && (
-            <NewProjectView onCreateProject={createProject} projects={projects} />
+            <NewProjectView
+              onCreateProject={createProject}
+              projects={projects}
+              currentProjectId={currentProject?.id ?? null}
+              onOpenProject={handleOpenProject}
+              onDeleteProject={handleDeleteProject}
+              onImportBackup={handleImportBackup}
+            />
           )}
 
           {/* Capture Step */}
@@ -1022,6 +1198,7 @@ function App() {
           {currentStep === 'export' && (
             <ExportView
               onExport={exportData}
+              onExportBackup={handleExportBackup}
               measurements={measurements}
               currentProject={currentProject}
               fencePlan={fencePlan}
@@ -1059,16 +1236,53 @@ function App() {
 
 // ==================== SUB-COMPONENTS ====================
 
-function NewProjectView({ onCreateProject, projects }: {
+function NewProjectView({ onCreateProject, projects, currentProjectId, onOpenProject, onDeleteProject, onImportBackup }: {
   onCreateProject: (name: string, type: ObjectType) => void;
   projects: Project[];
+  currentProjectId: string | null;
+  onOpenProject: (id: string) => void;
+  onDeleteProject: (id: string) => void;
+  onImportBackup: (file: File) => void;
 }) {
   const [name, setName] = useState('');
   const [type, setType] = useState<ObjectType>('fence');
+  const backupInputRef = useRef<HTMLInputElement>(null);
+
+  const formatDate = (value: Date | string) => {
+    const d = value instanceof Date ? value : new Date(value);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('sl-SI');
+  };
 
   return (
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-bold mb-6 text-emerald-400">Nov projekt</h2>
+
+      {/* FAZA 7 (P0): uvoz varnostne kopije — obnova projekta s fotografijami */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 bg-slate-800/60 rounded-lg px-4 py-3">
+        <p className="text-xs text-slate-400">
+          Imaš varnostno kopijo (.json)? Obnovi projekt skupaj s fotografijami, meritvami in predračunom.
+        </p>
+        <div>
+          <input
+            ref={backupInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) void onImportBackup(file);
+              e.target.value = ''; // omogoči ponoven izbiro iste datoteke
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => backupInputRef.current?.click()}
+            className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded"
+          >
+            ⬆ Uvozi varnostno kopijo
+          </button>
+        </div>
+      </div>
       
       <div className="bg-slate-800 rounded-lg p-6 mb-6">
         <label className="block text-sm font-medium text-slate-300 mb-2">Ime projekta</label>
@@ -1117,15 +1331,45 @@ function NewProjectView({ onCreateProject, projects }: {
         <div className="bg-slate-800 rounded-lg p-6">
           <h3 className="text-sm font-semibold text-slate-300 mb-3">Obstoječi projekti</h3>
           <div className="space-y-2">
-            {projects.map(p => (
-              <div key={p.id} className="flex items-center justify-between bg-slate-700/50 rounded p-3">
-                <div>
-                  <p className="text-sm font-medium">{p.name}</p>
-                  <p className="text-xs text-slate-400">{getObjectTypeLabel(p.objectType)} • {p.createdAt.toLocaleDateString('sl-SI')}</p>
+            {projects.map(p => {
+              const isActive = p.id === currentProjectId;
+              return (
+                <div
+                  key={p.id}
+                  className={`flex items-center justify-between gap-3 rounded p-3 ${
+                    isActive ? 'bg-emerald-900/30 border border-emerald-700' : 'bg-slate-700/50'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onOpenProject(p.id)}
+                    className="flex-1 text-left"
+                    title="Odpri projekt"
+                  >
+                    <p className="text-sm font-medium">
+                      {p.name} {isActive && <span className="text-emerald-400">(aktiven)</span>}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {getObjectTypeLabel(p.objectType)} • {formatDate(p.createdAt)}
+                    </p>
+                  </button>
+                  <span className="text-xs bg-slate-600 px-2 py-1 rounded">{p.status}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Izbrišem projekt "${p.name}" in vse njegove fotografije?`)) {
+                        onDeleteProject(p.id);
+                      }
+                    }}
+                    className="text-xs bg-red-900/60 hover:bg-red-800 text-red-200 px-2 py-1 rounded"
+                    title="Izbriši projekt"
+                    aria-label={`Izbriši projekt ${p.name}`}
+                  >
+                    🗑
+                  </button>
                 </div>
-                <span className="text-xs bg-slate-600 px-2 py-1 rounded">{p.status}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -2047,8 +2291,9 @@ function EstimateView({ estimate, measurements, laborRate, laborHours, taxRate, 
   );
 }
 
-function ExportView({ onExport, measurements, currentProject, fencePlan, stairsPlan, estimate, pixelToMeter }: {
+function ExportView({ onExport, onExportBackup, measurements, currentProject, fencePlan, stairsPlan, estimate, pixelToMeter }: {
   onExport: (format: 'csv' | 'json' | 'pdf') => void;
+  onExportBackup: () => void;
   measurements: Measurement[];
   currentProject: Project | null;
   fencePlan: FencePlan | null;
@@ -2072,7 +2317,7 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
 
       <div className="mt-4">
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <button
           onClick={() => onExport('csv')}
           className="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg p-6 text-center transition-colors"
@@ -2096,6 +2341,15 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
           <span className="text-3xl">📄</span>
           <p className="text-sm font-medium text-slate-200 mt-2">PDF</p>
           <p className="text-xs text-slate-400 mt-1">Predračun za stranko</p>
+        </button>
+        <button
+          onClick={onExportBackup}
+          className="bg-emerald-900/40 hover:bg-emerald-900/70 border border-emerald-800 rounded-lg p-6 text-center transition-colors"
+          title="Varnostna kopija vsebuje tudi fotografije in omogoča obnovo projekta"
+        >
+          <span className="text-3xl">🧰</span>
+          <p className="text-sm font-medium text-slate-200 mt-2">Varnostna kopija</p>
+          <p className="text-xs text-slate-400 mt-1">Projekt + fotografije (obnovljivo)</p>
         </button>
       </div>
 

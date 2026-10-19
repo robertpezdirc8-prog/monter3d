@@ -164,6 +164,64 @@ export async function deletePhoto(id: string): Promise<void> {
   });
 }
 
+/**
+ * FAZA 7 (P0): ob brisanju projekta je treba pobrisati tudi njegove fotografije,
+ * sicer v IndexedDB ostanejo "sirote" in trajno zapolnijo kvoto.
+ * Vrne število izbrisanih fotografij.
+ */
+export async function deletePhotosByProject(projectId: string): Promise<number> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([PHOTOS_STORE], 'readwrite');
+    const store = transaction.objectStore(PHOTOS_STORE);
+    const index = store.index('projectId');
+    const request = index.openKeyCursor(IDBKeyRange.only(projectId));
+    let deleted = 0;
+
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor) {
+        store.delete(cursor.primaryKey);
+        deleted++;
+        cursor.continue();
+      }
+    };
+    transaction.oncomplete = () => resolve(deleted);
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
+
+/**
+ * FAZA 7 (P0): naloži projekt in njegove fotografije.
+ *
+ * Starejši zapisi so imeli fotografije (z dataUrl) tudi v samem projektu. Tu jih
+ * enkrat preselimo v ločeno shrambo in projekt očistimo, da se podatki ne podvajajo
+ * in da kasnejše shranjevanje stanja ne zapisuje slik dvakrat.
+ */
+export async function loadProjectWithPhotos(
+  project: Project
+): Promise<{ project: Project; photos: Photo[] }> {
+  const storedPhotos = await getPhotosByProject(project.id);
+  const legacyPhotos = Array.isArray(project.photos) ? project.photos : [];
+
+  if (legacyPhotos.length === 0) {
+    return { project, photos: storedPhotos };
+  }
+
+  if (storedPhotos.length === 0) {
+    await Promise.all(legacyPhotos.map(p => savePhoto({ ...p, projectId: project.id })));
+  }
+
+  const cleanedProject: Project = { ...project, photos: [] };
+  await saveProject(cleanedProject);
+
+  return {
+    project: cleanedProject,
+    photos: storedPhotos.length > 0 ? storedPhotos : legacyPhotos,
+  };
+}
+
 // Save current project ID to localStorage for quick access
 export function setCurrentProjectId(id: string | null): void {
   if (id) {
