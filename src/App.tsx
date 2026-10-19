@@ -3,7 +3,7 @@ import type {
   Project, Photo, Measurement, WorkflowStep, ObjectType,
   MeasurementStatus, ScaleSource, FencePlan, StairsPlan,
   CostEstimate, MaterialItem, ImageQuality, FeaturePoint,
-  Customer, RoksalQuote, UserRole
+  Customer, RoksalQuote, UserRole, ProjectMontageInput
 } from './types';
 import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetection } from './utils/cv';
 import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, formatMeasurement, exportMeasurementsCSV } from './utils/geometry';
@@ -30,6 +30,8 @@ import { PriceListEditor } from './components/PriceListEditor';
 import { WarehouseView } from './components/WarehouseView';
 import { DirectorView } from './components/DirectorView';
 import { getStoredRole, setStoredRole } from './utils/roles';
+import { addProjectMontage, removeProjectMontage } from './utils/montages';
+import { applyProjectWorkState, projectWorkStateChanged } from './utils/projectState';
 import type { TradeId } from './utils/cameraSDK';
 import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId } from './utils/storage';
 
@@ -141,6 +143,7 @@ function App() {
       updatedAt: new Date(),
       photos: [],
       measurements: [],
+      montages: [],
       materials: {
         productLine: 'Roksal Standard',
         color: 'Antracit RAL 7016',
@@ -194,6 +197,10 @@ function App() {
               setCurrentProject(lastProject);
               setCustomer(lastProject.customer ?? { name: '' });
               setRoksalQuote(lastProject.roksalQuote ?? null);
+              setMeasurements(lastProject.measurements ?? []);
+              setFencePlan(lastProject.fencePlan ?? null);
+              setStairsPlan(lastProject.stairsPlan ?? null);
+              setEstimate(lastProject.estimate ?? null);
               // Map project status to workflow step
               const statusToStep: Record<string, WorkflowStep> = {
                 'capture': 'capture',
@@ -208,6 +215,9 @@ function App() {
               const savedPhotos = await getPhotosByProject(lastProjectId);
               if (savedPhotos.length > 0) {
                 setPhotos(savedPhotos);
+                setSelectedPhoto(savedPhotos[0]);
+              } else {
+                setSelectedPhoto(null);
               }
             }
           }
@@ -231,6 +241,24 @@ function App() {
     return () => clearTimeout(timeout);
   }, [currentProject]);
 
+  // Meritve, načrti in predračun so delovno stanje; ob spremembi jih prenesemo
+  // v projekt, da se po ponovnem odprtju ne izgubijo.
+  useEffect(() => {
+    if (!currentProject) return;
+
+    const workState = { measurements, fencePlan, stairsPlan, estimate };
+    if (!projectWorkStateChanged(currentProject, workState)) return;
+
+    const timeout = setTimeout(() => {
+      setCurrentProject(prev => {
+        if (!prev || !projectWorkStateChanged(prev, workState)) return prev;
+        return applyProjectWorkState(prev, workState);
+      });
+    }, 600);
+
+    return () => clearTimeout(timeout);
+  }, [measurements, fencePlan, stairsPlan, estimate, currentProject]);
+
   // Uporaba Roksal konfiguracije v projektu
   const handleApplyRoksalConfig = useCallback((payload: FenceConfiguratorApplyPayload) => {
     setRoksalQuote(payload.quote);
@@ -247,6 +275,29 @@ function App() {
       setProjects(prev => prev.map(p => (p.id === updated.id ? updated : p)));
       saveProject(updated).catch(err => console.error('Failed to save Roksal quote:', err));
     }
+  }, [currentProject]);
+
+  // Shranjevanje fotomontaže v projekt (trajno, vključi se tudi v PDF)
+  const handleSaveMontage = useCallback((input: ProjectMontageInput) => {
+    if (!currentProject) {
+      alert('Montažo lahko shranite le v projekt. Najprej ustvarite ali odprite projekt.');
+      return;
+    }
+
+    const updated = addProjectMontage(currentProject, input);
+    setCurrentProject(updated);
+    setProjects(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+    saveProject(updated).catch(err => console.error('Failed to save montage:', err));
+  }, [currentProject]);
+
+  const handleDeleteMontage = useCallback((montageId: string) => {
+    if (!currentProject) return;
+    if (!window.confirm('Odstranim to fotomontažo iz projekta?')) return;
+
+    const updated = removeProjectMontage(currentProject, montageId);
+    setCurrentProject(updated);
+    setProjects(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+    saveProject(updated).catch(err => console.error('Failed to delete montage:', err));
   }, [currentProject]);
 
   // Handle photo capture/upload
@@ -784,6 +835,7 @@ function App() {
         <FenceVisualizer
           photo={selectedPhoto}
           onClose={() => setShowFenceVisualizer(false)}
+          onSaveMontage={currentProject ? handleSaveMontage : undefined}
         />
       )}
 
@@ -1145,6 +1197,7 @@ function App() {
               estimate={estimate}
               pixelToMeter={pixelToMeter}
               roksalQuote={roksalQuote}
+              onDeleteMontage={handleDeleteMontage}
             />
           )}
 
@@ -2260,7 +2313,7 @@ function EstimateView({ estimate, measurements, laborRate, laborHours, taxRate, 
   );
 }
 
-function ExportView({ onExport, measurements, currentProject, fencePlan, stairsPlan, estimate, pixelToMeter, roksalQuote }: {
+function ExportView({ onExport, measurements, currentProject, fencePlan, stairsPlan, estimate, pixelToMeter, roksalQuote, onDeleteMontage }: {
   onExport: (format: 'csv' | 'json' | 'pdf') => void;
   measurements: Measurement[];
   currentProject: Project | null;
@@ -2269,6 +2322,7 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
   estimate: CostEstimate | null;
   pixelToMeter: number | null;
   roksalQuote: RoksalQuote | null;
+  onDeleteMontage: (montageId: string) => void;
 }) {
   return (
     <div>
@@ -2302,6 +2356,65 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
               ⚠️ Uporabljene so privzete DEMO cene — nastavite svoj cenik v »💶 Cene«; PDF bo to označil.
             </p>
           )}
+        </div>
+      )}
+
+      {currentProject && (currentProject.montages?.length ?? 0) > 0 && (
+        <div className="bg-slate-800 rounded-lg p-4 mt-4">
+          <h3 className="text-sm font-semibold text-slate-300 mb-3">📸 Shranjene fotomontaže</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {currentProject.montages!.map(montage => {
+              const created = new Date(montage.createdAt);
+              const dateLabel = Number.isNaN(created.getTime())
+                ? ''
+                : created.toLocaleDateString('sl-SI');
+              const fileDate = Number.isNaN(created.getTime())
+                ? 'montaza'
+                : created.toISOString().slice(0, 10);
+
+              return (
+                <figure
+                  key={montage.id}
+                  className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700"
+                >
+                  <img
+                    src={montage.dataUrl}
+                    alt={`Fotomontaža ${montage.profileName}`}
+                    className="w-full h-auto"
+                    loading="lazy"
+                  />
+                  <figcaption className="p-3 text-xs text-slate-400 space-y-2">
+                    <div>
+                      <p className="text-sm font-medium text-slate-200">
+                        {montage.profileName} · {montage.colorName}
+                      </p>
+                      <p>
+                        {montage.orientation === 'vertical' ? 'Pokončno' : 'Prečno'} · višina{' '}
+                        {(montage.fenceHeightMm / 1000).toFixed(2)} m · razmik{' '}
+                        {montage.boardSpacingMm} mm
+                      </p>
+                      {dateLabel && <p>Shranjeno {dateLabel}</p>}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <a
+                        href={montage.dataUrl}
+                        download={`roksal-montaza-${fileDate}.png`}
+                        className="rounded bg-blue-600 px-3 py-1.5 font-medium text-white hover:bg-blue-700"
+                      >
+                        💾 Prenesi
+                      </a>
+                      <button
+                        onClick={() => onDeleteMontage(montage.id)}
+                        className="rounded bg-slate-700 px-3 py-1.5 font-medium text-slate-200 hover:bg-red-700 hover:text-white"
+                      >
+                        🗑️ Odstrani
+                      </button>
+                    </div>
+                  </figcaption>
+                </figure>
+              );
+            })}
+          </div>
         </div>
       )}
 

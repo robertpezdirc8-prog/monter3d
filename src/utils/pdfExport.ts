@@ -1,4 +1,4 @@
-import type { Project, Measurement, FencePlan, StairsPlan, CostEstimate, RoksalQuote } from '../types';
+import type { Project, Measurement, FencePlan, StairsPlan, CostEstimate, RoksalQuote, ProjectMontage } from '../types';
 import { ROKSAL_COMPANY, companyFooterLine } from '../data/company';
 
 function escapeHtml(value: unknown): string {
@@ -8,6 +8,26 @@ function escapeHtml(value: unknown): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/**
+ * Izgradi razdelek s fotomontažo za PDF. Izvoženo zaradi testov.
+ * Dovoljene so samo PNG/JPEG data URL slike, da se v HTML ne vstavi
+ * poljubna vsebina iz shrambe projekta.
+ */
+export function buildMontageSection(montage?: ProjectMontage | null): string {
+  if (!montage) return '';
+  if (!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(montage.dataUrl)) return '';
+
+  const orientation = montage.orientation === 'vertical' ? 'pokončno' : 'prečno';
+  return `
+  <div class="section montage-section">
+    <h2>Fotomontaža</h2>
+    <img class="montage-image" src="${montage.dataUrl}" alt="Fotomontaža ograje" />
+    <div class="montage-caption">
+      ${escapeHtml(montage.profileName)} · ${escapeHtml(montage.colorName)} · ${orientation} · višina ${(montage.fenceHeightMm / 1000).toFixed(2)} m · razmik desk ${montage.boardSpacingMm} mm
+    </div>
+  </div>`;
 }
 
 export function generatePDFReport(
@@ -38,6 +58,9 @@ export function generatePDFReport(
   const validMeasurements = measurements.filter(m => m.status === 'verified');
   const warningMeasurements = measurements.filter(m => m.status === 'warning');
   const invalidMeasurements = measurements.filter(m => m.status === 'invalid');
+  const latestMontage = project.montages && project.montages.length > 0
+    ? project.montages[project.montages.length - 1]
+    : null;
 
   const html = `
 <!DOCTYPE html>
@@ -107,6 +130,22 @@ export function generatePDFReport(
       font-size: 12pt;
       color: #111827;
       margin-top: 4px;
+    }
+    .montage-section {
+      page-break-inside: avoid;
+    }
+    .montage-image {
+      width: 100%;
+      max-height: 11cm;
+      object-fit: contain;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: #f9fafb;
+    }
+    .montage-caption {
+      margin-top: 8px;
+      color: #4b5563;
+      font-size: 9pt;
     }
     table {
       width: 100%;
@@ -291,6 +330,8 @@ export function generatePDFReport(
       </div>
     </div>
   </div>
+
+  ${buildMontageSection(latestMontage)}
 
   ${fencePlan ? `
   <div class="section">

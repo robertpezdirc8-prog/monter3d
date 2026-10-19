@@ -11,7 +11,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { Photo } from '../types';
+import type { Photo, ProjectMontageInput } from '../types';
 import { getVerticalProfiles, getHorizontalProfiles } from '../data/roksalCatalog';
 import type { RoksalProfile, RoksalColor } from '../data/roksalCatalog';
 import { buildFenceQuads, type Point, type Quad } from '../utils/fenceVisualization';
@@ -19,6 +19,7 @@ import { buildFenceQuads, type Point, type Quad } from '../utils/fenceVisualizat
 interface FenceVisualizerProps {
   photo: Photo;
   onClose: () => void;
+  onSaveMontage?: (montage: ProjectMontageInput) => void;
 }
 
 interface FenceConfig {
@@ -138,7 +139,7 @@ function drawGuides(
   }
 }
 
-export function FenceVisualizer({ photo, onClose }: FenceVisualizerProps) {
+export function FenceVisualizer({ photo, onClose, onSaveMontage }: FenceVisualizerProps) {
   const baseCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const guideCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -374,8 +375,8 @@ export function FenceVisualizer({ photo, onClose }: FenceVisualizerProps) {
     setNotice(null);
   };
 
-  const downloadMontage = useCallback(() => {
-    if (!image || corners.length !== 4 || canvasSize.width <= 0) return;
+  const renderMontageDataUrl = useCallback((): string | null => {
+    if (!image || corners.length !== 4 || canvasSize.width <= 0) return null;
 
     const width = image.naturalWidth;
     const height = image.naturalHeight;
@@ -384,7 +385,7 @@ export function FenceVisualizer({ photo, onClose }: FenceVisualizerProps) {
     canvas.height = height;
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) return null;
 
     ctx.drawImage(image, 0, 0, width, height);
 
@@ -418,11 +419,38 @@ export function FenceVisualizer({ photo, onClose }: FenceVisualizerProps) {
     ctx.stroke();
     ctx.restore();
 
+    return canvas.toDataURL('image/png');
+  }, [image, canvasSize, corners, config, pxPerMeter]);
+
+  const downloadMontage = useCallback(() => {
+    const dataUrl = renderMontageDataUrl();
+    if (!dataUrl) return;
+
     const link = document.createElement('a');
     link.download = `roksal-vizualizacija-${new Date().toISOString().slice(0, 10)}.png`;
-    link.href = canvas.toDataURL('image/png');
+    link.href = dataUrl;
     link.click();
-  }, [image, canvasSize, corners, config, pxPerMeter]);
+  }, [renderMontageDataUrl]);
+
+  const saveMontageToProject = () => {
+    if (!onSaveMontage) return;
+
+    const dataUrl = renderMontageDataUrl();
+    if (!dataUrl) return;
+
+    onSaveMontage({
+      dataUrl,
+      sourcePhotoId: photo.id,
+      profileName: config.profile.name,
+      colorName: config.color.name,
+      orientation: config.orientation,
+      fenceHeightMm: config.fenceHeight,
+      boardSpacingMm: config.boardSpacing,
+      pxPerMeter
+    });
+
+    setNotice('✓ Montaža je shranjena v projekt. Vidna bo tudi v izvozu in PDF.');
+  };
 
   const availableProfiles = fenceProfiles(config.orientation);
 
@@ -575,6 +603,19 @@ export function FenceVisualizer({ photo, onClose }: FenceVisualizerProps) {
               >
                 💾 Prenesi montažo
               </button>
+              {onSaveMontage && (
+                <button
+                  onClick={saveMontageToProject}
+                  disabled={!cornersDone}
+                  className={`px-4 py-2 rounded font-medium ${
+                    cornersDone
+                      ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                      : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  📎 Shrani v projekt
+                </button>
+              )}
             </div>
 
             {mode === 'corners' && (

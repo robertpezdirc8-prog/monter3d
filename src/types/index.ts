@@ -89,8 +89,28 @@ export interface Project {
   customer?: Customer;
   roksalConfig?: RoksalConfiguration;
   roksalQuote?: RoksalQuote;
+  montages?: ProjectMontage[];
   status: ProjectStatus;
 }
+
+/**
+ * Shranjena fotomontaža je del projekta in se lahko doda v PDF/ponudbo.
+ * Slika je PNG data URL, ustvarjena v vizualizatorju.
+ */
+export interface ProjectMontage {
+  id: string;
+  dataUrl: string;
+  createdAt: Date;
+  sourcePhotoId?: string;
+  profileName: string;
+  colorName: string;
+  orientation: 'vertical' | 'horizontal';
+  fenceHeightMm: number;
+  boardSpacingMm: number;
+  pxPerMeter: number | null;
+}
+
+export type ProjectMontageInput = Omit<ProjectMontage, 'id' | 'createdAt'>;
 
 export type ObjectType = 'fence' | 'stairs' | 'facade' | 'terrain' | 'combined';
 export type ProjectStatus = 'capture' | 'processing' | 'measuring' | 'planning' | 'complete';
