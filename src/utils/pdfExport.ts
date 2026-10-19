@@ -487,8 +487,8 @@ export function generatePDFReport(
 
     ${roksalQuote.isDemoPrices ? `
     <div class="warning-box">
-      <strong>⚠ DEMO CENE:</strong> Ponudba uporablja demo cenik in ni uradni Roksal cenik.
-      Pred uporabo pri stranki ga zamenjajte z veljavnim cenikom.
+      <strong>⚠ DEMO CENE:</strong> Ponudba uporablja privzete demo cene.
+      V aplikaciji odprite »💶 Cene« in vnesite svoj cenik; nove ponudbe bodo uporabile nove cene.
     </div>
     ` : ''}
 

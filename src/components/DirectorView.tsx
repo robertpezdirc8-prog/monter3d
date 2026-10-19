@@ -9,6 +9,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Project, RoksalQuote } from '../types';
 import { getAllProjects } from '../utils/storage';
+import { loadRoksalPriceList, type RoksalPriceList } from '../data/roksalPrices';
+import { PriceListEditor } from './PriceListEditor';
 
 interface QuoteRow {
   projectId: string;
@@ -32,6 +34,8 @@ export function DirectorView() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showPrices, setShowPrices] = useState(false);
+  const [priceList, setPriceList] = useState<RoksalPriceList>(() => loadRoksalPriceList());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,14 +113,29 @@ export function DirectorView() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
+      {showPrices && (
+        <PriceListEditor
+          onClose={() => setShowPrices(false)}
+          onSaved={setPriceList}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-white">Pregled ponudb</h2>
           <p className="text-xs text-slate-400">
-            Vrednosti so informativne in se berejo iz lokalne shrambe te naprave.
+            Vrednosti so informativne in se berejo iz lokalne shrambe te naprave. Cenik:{' '}
+            <span className={priceList.isDemo ? 'text-amber-300' : 'text-emerald-300'}>
+              {priceList.isDemo ? 'privzeti DEMO' : (priceList.label || priceList.version)}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPrices(true)}
+            className="px-3 py-2 bg-amber-800/60 hover:bg-amber-700/60 text-amber-100 rounded text-xs font-medium"
+          >
+            💶 Cene
+          </button>
           <button
             onClick={() => void load()}
             className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded text-xs font-medium"
@@ -155,8 +174,9 @@ export function DirectorView() {
             <div className="bg-amber-900/20 border border-amber-700 rounded-lg p-3 text-xs text-amber-200">
               {stats.demoCount > 0 && (
                 <p>
-                  ⚠️ {stats.demoCount} od {stats.total} ponudb uporablja DEMO cene — niso primerne za pošiljanje strankam,
-                  dokler cenik ni zamenjan z uradnim.
+                  ⚠️ {stats.demoCount} od {stats.total} ponudb uporablja DEMO cene in niso primerne
+                  za pošiljanje strankam. V urejevalniku (💶 Cene) vnesite svoj cenik — nove
+                  ponudbe bodo uporabile nove cene.
                 </p>
               )}
               {stats.invalidCount > 0 && (

@@ -26,6 +26,7 @@ import type { FenceConfiguratorApplyPayload } from './components/FenceConfigurat
 import TradeMenu from './components/TradeMenu';
 import TradeCapture from './components/TradeCapture';
 import { RoleSwitcher } from './components/RoleSwitcher';
+import { PriceListEditor } from './components/PriceListEditor';
 import { WarehouseView } from './components/WarehouseView';
 import { DirectorView } from './components/DirectorView';
 import { getStoredRole, setStoredRole } from './utils/roles';
@@ -114,6 +115,7 @@ function App() {
   const [photoMatchings, setPhotoMatchings] = useState<any[]>([]);
   const [showFenceVisualizer, setShowFenceVisualizer] = useState(false);
   const [showRoksalGallery, setShowRoksalGallery] = useState(false);
+  const [showPriceEditor, setShowPriceEditor] = useState(false);
   const [showFenceConfigurator, setShowFenceConfigurator] = useState(false);
   const [roksalQuote, setRoksalQuote] = useState<RoksalQuote | null>(null);
   const [customer, setCustomer] = useState<Customer>({ name: '' });
@@ -791,6 +793,12 @@ function App() {
         />
       )}
 
+      {showPriceEditor && (
+        <PriceListEditor
+          onClose={() => setShowPriceEditor(false)}
+        />
+      )}
+
       {showFenceConfigurator && (
         <FenceConfigurator
           onClose={() => setShowFenceConfigurator(false)}
@@ -819,6 +827,12 @@ function App() {
             className="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded hover:bg-blue-800/50"
           >
             🧪 Testi
+          </button>
+          <button
+            onClick={() => setShowPriceEditor(true)}
+            className="text-xs bg-amber-900/50 text-amber-300 px-2 py-1 rounded hover:bg-amber-800/50"
+          >
+            💶 Cene
           </button>
           {currentProject && (
             <span className="text-sm text-slate-300">
@@ -2284,7 +2298,9 @@ function ExportView({ onExport, measurements, currentProject, fencePlan, stairsP
             </span>
           </div>
           {roksalQuote.isDemoPrices && (
-            <p className="text-xs text-amber-400 mt-1">⚠️ Uporabljene so DEMO cene - PDF bo to označil.</p>
+            <p className="text-xs text-amber-400 mt-1">
+              ⚠️ Uporabljene so privzete DEMO cene — nastavite svoj cenik v »💶 Cene«; PDF bo to označil.
+            </p>
           )}
         </div>
       )}

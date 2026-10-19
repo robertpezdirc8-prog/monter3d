@@ -12,7 +12,8 @@ import { parseFenceConfiguration, validateConfiguration, getExamplePrompts } fro
 import { calculateFenceConstruction, validateFenceConfiguration } from '../utils/fenceConstruction';
 import type { ConstructionResult, FenceConfiguration } from '../utils/fenceConstruction';
 import { createRoksalQuote, nextQuoteNumber } from '../utils/roksalQuote';
-import { DEFAULT_ROKSAL_PRICE_LIST } from '../data/roksalPrices';
+import { loadRoksalPriceList, type RoksalPriceList } from '../data/roksalPrices';
+import { PriceListEditor } from './PriceListEditor';
 import type { Customer, RoksalQuote } from '../types';
 
 export interface FenceConfiguratorApplyPayload {
@@ -43,6 +44,9 @@ export function FenceConfigurator({ onClose, onApply, customer, projectName }: F
   const [applyNotice, setApplyNotice] = useState<string | null>(null);
   const [parseResult, setParseResult] = useState<any>(null);
   const [validationResult, setValidationResult] = useState<any>(null);
+  // Cenik, ki ga določita monter/vodstvo (💶 Cene) — naložen ob odprtju
+  const [priceList, setPriceList] = useState<RoksalPriceList>(() => loadRoksalPriceList());
+  const [showPriceEditor, setShowPriceEditor] = useState(false);
 
   // Handle natural language input
   const handleParseInput = useCallback(() => {
@@ -136,12 +140,12 @@ export function FenceConfigurator({ onClose, onApply, customer, projectName }: F
       configuration: config,
       construction,
       color: selectedColor,
-      priceList: DEFAULT_ROKSAL_PRICE_LIST,
+      priceList,
       quoteNumber: 'OSNUTEK',
       laborHours,
       discountPercent
     });
-  }, [config, selectedColor, construction, customer, projectName, laborHours, discountPercent]);
+  }, [config, selectedColor, construction, customer, projectName, laborHours, discountPercent, priceList]);
 
   const handleApply = useCallback(() => {
     if (!onApply || !config || !selectedColor || !construction) return;
@@ -158,19 +162,25 @@ export function FenceConfigurator({ onClose, onApply, customer, projectName }: F
       configuration: config,
       construction,
       color: selectedColor,
-      priceList: DEFAULT_ROKSAL_PRICE_LIST,
+      priceList,
       quoteNumber: nextQuoteNumber(),
       laborHours,
       discountPercent
     });
     onApply({ config, construction, color: selectedColor, quote });
     setApplyNotice(`Ponudba ${quote.number} je pripravljena in shranjena v projekt (korak Predračun/Izvoz).`);
-  }, [onApply, config, selectedColor, construction, customer, projectName, laborHours, discountPercent]);
+  }, [onApply, config, selectedColor, construction, customer, projectName, laborHours, discountPercent, priceList]);
 
   const examplePrompts = getExamplePrompts();
 
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+      {showPriceEditor && (
+        <PriceListEditor
+          onClose={() => setShowPriceEditor(false)}
+          onSaved={setPriceList}
+        />
+      )}
       <div className="bg-slate-800 rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
@@ -738,9 +748,18 @@ export function FenceConfigurator({ onClose, onApply, customer, projectName }: F
             {/* Kosovnica in ponudba */}
             {draftQuote && construction && selectedProfile && selectedColor && (
               <div className="bg-slate-900 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-slate-300 mb-3">
-                  🧾 Kosovnica in ponudba
-                </h3>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <h3 className="text-sm font-semibold text-slate-300">
+                    🧾 Kosovnica in ponudba
+                  </h3>
+                  <button
+                    onClick={() => setShowPriceEditor(true)}
+                    className="text-xs text-amber-300 hover:text-amber-200 shrink-0"
+                    title="Vnesite svoje cene (veljajo za nove ponudbe)"
+                  >
+                    💶 Uredi cene
+                  </button>
+                </div>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -826,9 +845,13 @@ export function FenceConfigurator({ onClose, onApply, customer, projectName }: F
                   </div>
                 </div>
 
-                {draftQuote.isDemoPrices && (
+                {draftQuote.isDemoPrices ? (
                   <p className="text-xs text-amber-400 mt-2">
-                    ⚠️ Uporabljene so DEMO cene - zamenjajte jih z uradnim Roksal cenikom.
+                    ⚠️ Uporabljene so privzete DEMO cene — kliknite »💶 Uredi cene« in vnesite svoje cene.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500 mt-2">
+                    Cenik: {priceList.label || priceList.version} (velja od {priceList.validFrom}).
                   </p>
                 )}
                 {(!construction.valid || selectedProfile.kind === 'partition') && (

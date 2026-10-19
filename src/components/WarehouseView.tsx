@@ -202,7 +202,7 @@ export function WarehouseView() {
 
                 {selected.roksalQuote.isDemoPrices && (
                   <p className="text-xs text-amber-400 mb-3">
-                    ⚠️ Ponudba vsebuje DEMO cene — količine v kosovnici so pravilne, cene pa niso uradne.
+                    ⚠️ Ponudba vsebuje DEMO cene — količine v kosovnici so pravilne, cene pa so privzete (nastavite svoj cenik v 💶 Cene).
                   </p>
                 )}
 

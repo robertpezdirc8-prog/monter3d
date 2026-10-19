@@ -18,7 +18,7 @@ import type {
   RoksalQuote
 } from '../types';
 import type { RoksalColor } from '../data/roksalCatalog';
-import { DEFAULT_ROKSAL_PRICE_LIST, type RoksalPriceList } from '../data/roksalPrices';
+import { loadRoksalPriceList, type RoksalPriceList } from '../data/roksalPrices';
 import type { ConstructionResult, FenceConfiguration } from './fenceConstruction';
 
 export interface BuildRoksalBomInput {
@@ -203,7 +203,7 @@ export const DEFAULT_QUOTE_TERMS = [
 ].join('\n');
 
 export function createRoksalQuote(input: CreateRoksalQuoteInput): RoksalQuote {
-  const priceList = input.priceList ?? DEFAULT_ROKSAL_PRICE_LIST;
+  const priceList = input.priceList ?? loadRoksalPriceList();
   const { configuration, construction, color } = input;
   const now = input.now ?? new Date();
   const validUntil = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
@@ -249,7 +249,7 @@ export function createRoksalQuote(input: CreateRoksalQuoteInput): RoksalQuote {
 
   const warnings = [...construction.warnings];
   if (priceList.isDemo) {
-    warnings.push('Ponudba uporablja DEMO cene - niso uradni Roksal cenik.');
+    warnings.push('Ponudba uporablja privzete DEMO cene - nastavite svoj cenik (💶 Cene).');
   }
   if (!input.customer?.name?.trim()) {
     warnings.push('Stranka ni vnesena - ponudba je brez podatkov o naročniku.');
