@@ -15,6 +15,7 @@ import { ProjectSummary } from './components/ProjectSummary';
 import { MathTestRunner } from './components/MathTestRunner';
 import { CameraCapture } from './components/CameraCapture';
 import { MeasurementOverlay } from './components/MeasurementOverlay';
+import type { MeasurementSegment } from './components/MeasurementOverlay';
 import { MeasurementAccuracyTests } from './components/MeasurementAccuracyTests';
 import { GuidedCapture } from './components/GuidedCapture';
 import { PhotoMatchingView } from './components/PhotoMatchingView';
@@ -33,6 +34,7 @@ import { DirectorView } from './components/DirectorView';
 import { getStoredRole, setStoredRole } from './utils/roles';
 import { addProjectMontage, removeProjectMontage } from './utils/montages';
 import { applyProjectWorkState, projectWorkStateChanged } from './utils/projectState';
+import { mergeOverlayMeasurements } from './utils/overlayMeasurements';
 import type { TradeId } from './utils/cameraSDK';
 import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId } from './utils/storage';
 
@@ -126,6 +128,7 @@ function App() {
   }, []);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const displayedCanvasRef = useRef<{ photoId: string; element: HTMLCanvasElement } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -167,6 +170,7 @@ function App() {
     setPhotoMatchings([]);
     setRoksalQuote(null);
     setCustomer(customerData ?? { name: '' });
+    displayedCanvasRef.current = null;
 
     setCurrentProject(project);
     setProjects(prev => [...prev, project]);
@@ -255,6 +259,42 @@ function App() {
     return () => clearTimeout(timeout);
   }, [measurements, fencePlan, stairsPlan, estimate, currentProject]);
 
+  // Prikaži izbrano fotografijo na skupnem platnu, ko vstopimo v korak,
+  // kjer se platno uporablja. Brez tega je bilo platno ob prvem obisku prazno.
+  useEffect(() => {
+    if (!selectedPhoto || !canvasRef.current) return;
+    if (!['capture', 'scale_verification', 'measurements'].includes(currentStep)) return;
+
+    const canvas = canvasRef.current;
+    if (
+      displayedCanvasRef.current?.photoId === selectedPhoto.id &&
+      displayedCanvasRef.current.element === canvas
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (cancelled || canvasRef.current !== canvas) return;
+
+      const scale = Math.min(1, 1000 / img.width, 700 / img.height);
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      displayedCanvasRef.current = { photoId: selectedPhoto.id, element: canvas };
+    };
+    img.src = selectedPhoto.dataUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPhoto, currentStep]);
+
   // Uporaba Roksal konfiguracije v projektu
   const handleApplyRoksalConfig = useCallback((payload: FenceConfiguratorApplyPayload) => {
     setRoksalQuote(payload.quote);
@@ -311,6 +351,10 @@ function App() {
     }
     return undefined;
   }, [roksalQuote, fencePlan]);
+
+  const handleOverlayMeasurementsChange = useCallback((segments: MeasurementSegment[]) => {
+    setMeasurements(prev => mergeOverlayMeasurements(prev, segments, selectedPhoto?.id));
+  }, [selectedPhoto?.id]);
 
   // Handle photo capture/upload
   const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -527,6 +571,8 @@ function App() {
         displayCtx.fillText(`Linije: ${lines.length}`, 10, 38);
         displayCtx.fillText(`Kakovost: ${(photo.quality.overallScore * 100).toFixed(0)}%`, 10, 54);
         displayCtx.fillText(`Ostrina: ${(photo.quality.sharpness * 100).toFixed(0)}%`, 10, 70);
+
+        displayedCanvasRef.current = { photoId: photo.id, element: canvasRef.current };
       }
     };
     img.src = photo.dataUrl;
@@ -1102,6 +1148,7 @@ function App() {
                     imageUrl={selectedPhoto.dataUrl}
                     imageWidth={selectedPhoto.width || 800}
                     imageHeight={selectedPhoto.height || 600}
+                    onMeasurementsChange={handleOverlayMeasurementsChange}
                   />
                 </div>
               )}

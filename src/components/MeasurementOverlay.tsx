@@ -15,7 +15,7 @@ interface MeasurementPoint {
   label?: string;
 }
 
-interface MeasurementSegment {
+export interface MeasurementSegment {
   id: string;
   from: MeasurementPoint;
   to: MeasurementPoint;
@@ -269,7 +269,6 @@ export function MeasurementOverlay({
     setReferencePoints([]);
     setReferenceDistance('');
     setPixelToMeter(null);
-    setMode('idle');
   }, []);
 
   // Clear measurements
@@ -307,6 +306,12 @@ export function MeasurementOverlay({
           🗑 Počisti mere
         </button>
       </div>
+
+      {onMeasurementsChange && (
+        <p className="text-xs text-emerald-400">
+          ✓ Vsaka nova meritev se samodejno shrani v projekt.
+        </p>
+      )}
 
       {/* Reference input */}
       {mode === 'reference' && (
