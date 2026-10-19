@@ -32,15 +32,16 @@ const PROFILE_KEYWORDS: Record<string, string[]> = {
   'deska-150': ['150', 'deska 150', 'terasna', 'terasa']
 };
 
-// Keywords for color recognition
+// Keywords for color recognition (uradna lestvica 2024)
+// Rustic Walnut mora biti pred Rustic Oak, da "rustic walnut" ne pade na "rustic".
 const COLOR_KEYWORDS: Record<string, string[]> = {
+  'rustic-walnut': ['rustic walnut', 'rustik walnut', 'walnut', 'oreh'],
+  'rustic-oak': ['rustic oak', 'rustik oak', 'rustic', 'rustikal', 'staran'],
   'amazon-wood': ['amazon', 'amazon wood'],
-  'ash-wood': ['ash', 'ash wood', 'jesen'],
+  'ash-wood': ['ash', 'ash wood', 'jesen', 'siva', 'siv'],
   'burma-teak': ['burma', 'burma teak'],
   'golden-teak': ['golden', 'golden teak', 'zlata', 'zlato'],
   'oak-wood': ['oak', 'oak wood', 'hrast'],
-  'rustic': ['rustic', 'staran', 'rustikal'],
-  'anthracite': ['anthracite', 'antracit', 'siva', 'temno siva'],
   'white': ['white', 'bela', 'bel']
 };
 
@@ -76,10 +77,10 @@ export function parseFenceConfiguration(input: string): ParsedConfiguration {
     }
   }
 
-  // Parse color
+  // Parse color (prva najdena barva zmaga - vrstni red v COLOR_KEYWORDS je pomemben)
   for (const [colorId, keywords] of Object.entries(COLOR_KEYWORDS)) {
     for (const keyword of keywords) {
-      if (normalizedInput.includes(keyword)) {
+      if (!result.colorId && normalizedInput.includes(keyword)) {
         result.colorId = colorId;
         result.recognized.push(`Barva: ${ROKSAL_COLORS[colorId]?.name || colorId}`);
         result.confidence += 0.2;

@@ -1,4 +1,5 @@
 import type { Project, Measurement, FencePlan, StairsPlan, CostEstimate, RoksalQuote } from '../types';
+import { ROKSAL_COMPANY, companyFooterLine } from '../data/company';
 
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -182,7 +183,7 @@ export function generatePDFReport(
   <div class="header">
     <h1>${roksalQuote ? 'PONUDBA' : 'PREDRAČUN'}</h1>
     ${roksalQuote ? `<div style="font-size: 13pt; font-weight: 600; margin-bottom: 6px;">${escapeHtml(roksalQuote.number)}</div>` : ''}
-    <div class="subtitle">${roksalQuote ? 'Roksal Kranj — WoodCore WPC sistemi' : 'Mera3D Pro — Profesionalne meritve in montaža'}</div>
+    <div class="subtitle">${roksalQuote ? `${escapeHtml(ROKSAL_COMPANY.legalName)} — WoodCore WPC sistemi` : 'Mera3D Pro — Profesionalne meritve in montaža'}</div>
   </div>
 
   ${roksalQuote ? `
@@ -212,6 +213,28 @@ export function generatePDFReport(
       <div class="info-item">
         <div class="info-label">Velja do</div>
         <div class="info-value">${new Date(roksalQuote.validUntil).toLocaleDateString('sl-SI')}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Ponudnik</h2>
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">Podjetje</div>
+        <div class="info-value">${escapeHtml(ROKSAL_COMPANY.legalName)}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Salon in skladišče</div>
+        <div class="info-value">${escapeHtml(ROKSAL_COMPANY.showroomAddress)}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Kontakt</div>
+        <div class="info-value">${escapeHtml(ROKSAL_COMPANY.phones[1]?.number ?? ROKSAL_COMPANY.phones[0].number)} · ${escapeHtml(ROKSAL_COMPANY.email)}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Davčna številka in TRR</div>
+        <div class="info-value">${escapeHtml(ROKSAL_COMPANY.taxNumber)} · ${escapeHtml(ROKSAL_COMPANY.iban)}</div>
       </div>
     </div>
   </div>
@@ -494,7 +517,7 @@ export function generatePDFReport(
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 50px;">
       <div style="border-top: 1px solid #9ca3af; padding-top: 6px; font-size: 9pt; color: #6b7280;">Naročnik</div>
-      <div style="border-top: 1px solid #9ca3af; padding-top: 6px; font-size: 9pt; color: #6b7280;">Roksal Kranj</div>
+      <div style="border-top: 1px solid #9ca3af; padding-top: 6px; font-size: 9pt; color: #6b7280;">${escapeHtml(ROKSAL_COMPANY.legalName)} — žig in podpis</div>
     </div>
   </div>
   ` : ''}
@@ -562,13 +585,123 @@ export function generatePDFReport(
   ` : ''}
 
   <div class="footer">
-    <p><strong>${roksalQuote ? 'Roksal Kranj' : 'Mera3D Pro'}</strong> — ${roksalQuote ? 'WoodCore WPC sistemi' : 'Profesionalne meritve in montaža'}</p>
+    <p><strong>${roksalQuote ? escapeHtml(ROKSAL_COMPANY.legalName) : 'Mera3D Pro'}</strong> — ${roksalQuote ? 'WoodCore WPC sistemi' : 'Profesionalne meritve in montaža'}</p>
+    ${roksalQuote ? `<p style="margin-top: 6px;">${escapeHtml(companyFooterLine())}</p>` : ''}
     <p>Dokument izdelan: ${new Date().toLocaleString('sl-SI')}</p>
     <p style="margin-top: 10px; font-size: 8pt;">
       ${roksalQuote
         ? 'Ponudba je informativne narave. Končni obračun se izvede po dejansko opravljenih delih in vgrajenem materialu.'
         : 'Ta dokument je bil samodejno generiran. Meritve so bile izvedene z uporabo klasične računalniške vizije. Priporočamo preverjanje ključnih meritev z referenčnimi merili pred začetkom montaže.'}
     </p>
+  </div>
+</body>
+</html>
+  `;
+
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+/**
+ * Pobirnica materiala za skladišče — natisne seznam postavk iz kosovnice
+ * projekta, s polji za odkljukavanje pri prevzemu materiala.
+ */
+export function printPickList(project: Project, quote: RoksalQuote): void {
+  if (!quote || quote.items.length === 0) {
+    alert('Pobirnice ni mogoče natisniti: kosovnica je prazna.');
+    return;
+  }
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Prosimo, dovolite popup okna za tiskanje.');
+    return;
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+  <meta charset="UTF-8">
+  <title>Pobirnica ${escapeHtml(quote.number)} — ${escapeHtml(project.name)}</title>
+  <style>
+    @page { size: A4; margin: 1.6cm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 11pt; line-height: 1.45; color: #1a1a1a; margin: 0;
+    }
+    .header { border-bottom: 3px solid #10b981; padding-bottom: 12px; margin-bottom: 18px; }
+    .header h1 { margin: 0 0 4px 0; font-size: 20pt; color: #10b981; }
+    .header .sub { color: #4b5563; font-size: 10pt; }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+    .meta .item { background: #f9fafb; padding: 8px 10px; border-radius: 4px; font-size: 10pt; }
+    .meta .label { font-weight: 600; color: #6b7280; font-size: 8.5pt; text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f3f4f6; text-align: left; padding: 8px; font-size: 10pt; border-bottom: 2px solid #d1d5db; }
+    td { padding: 8px; border-bottom: 1px solid #e5e7eb; font-size: 10pt; vertical-align: top; }
+    td.check { width: 30px; text-align: center; font-size: 15pt; color: #374151; }
+    td.qty { text-align: right; white-space: nowrap; }
+    .small { color: #6b7280; font-size: 8.5pt; }
+    .footer { margin-top: 26px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 8.5pt; color: #6b7280; }
+    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 36px; }
+    .signatures div { border-top: 1px solid #9ca3af; padding-top: 6px; font-size: 9pt; color: #6b7280; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="text-align: center; margin-bottom: 16px;">
+    <button onclick="window.print()" style="padding: 10px 30px; font-size: 12pt; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer;">
+      🖨️ Natisni / Shrani kot PDF
+    </button>
+  </div>
+
+  <div class="header">
+    <h1>POBIRNICA MATERIALA</h1>
+    <div class="sub">${escapeHtml(ROKSAL_COMPANY.legalName)} — ${escapeHtml(ROKSAL_COMPANY.showroomAddress)} · ${escapeHtml(ROKSAL_COMPANY.phones[1]?.number ?? ROKSAL_COMPANY.phones[0].number)}</div>
+  </div>
+
+  <div class="meta">
+    <div class="item"><div class="label">Projekt</div>${escapeHtml(project.name)}</div>
+    <div class="item"><div class="label">Ponudba</div>${escapeHtml(quote.number)}</div>
+    <div class="item"><div class="label">Stranka</div>${escapeHtml(quote.customer?.name || '—')}</div>
+    <div class="item"><div class="label">Datum</div>${new Date().toLocaleDateString('sl-SI')}</div>
+    <div class="item"><div class="label">Profil</div>${escapeHtml(quote.configuration.profileName)} · ${escapeHtml(quote.configuration.colorName)}</div>
+    <div class="item"><div class="label">Mere</div>${(quote.configuration.fenceLengthMm / 1000).toFixed(2)} m × ${(quote.configuration.fenceHeightMm / 1000).toFixed(2)} m (${quote.configuration.orientation === 'vertical' ? 'pokončno' : 'prečno'})</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th></th>
+        <th>Postavka</th>
+        <th style="text-align: right;">Količina</th>
+        <th style="text-align: right;">Enota</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${quote.items.map(item => `
+      <tr>
+        <td class="check">☐</td>
+        <td>
+          ${escapeHtml(item.name)}
+          ${item.notes ? `<div class="small">${escapeHtml(item.notes)}</div>` : ''}
+        </td>
+        <td class="qty">${item.quantity}</td>
+        <td class="qty">${escapeHtml(item.unit)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>
+
+  ${quote.isDemoPrices ? `<p class="small" style="margin-top: 10px;">⚠️ Ponudba uporablja demo cene — količine so izračunane po konfiguraciji.</p>` : ''}
+
+  <div class="signatures">
+    <div>Pripravil (skladišče)</div>
+    <div>Prevzel (monter)</div>
+  </div>
+
+  <div class="footer">
+    <p>${escapeHtml(companyFooterLine())}</p>
   </div>
 </body>
 </html>

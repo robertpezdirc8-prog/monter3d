@@ -162,11 +162,15 @@ export function calculateFenceConstruction(config: FenceConfiguration): Construc
   // Determine effective board width
   const effectiveWidth = visibleWidth || profile.width;
   
-  // Determine maximum post spacing based on fence height
+  // Determine maximum post spacing based on fence height.
+  // Pravilo po višini (do 150 cm / nad 150 cm) velja za POKONČNE ograje;
+  // pri prečnih ograjah je meja vedno profile.maxPostSpacing (Roksal).
   let maxPostSpacing = profile.maxPostSpacing;
-  if (fenceHeight > 1500 && profile.maxPostSpacingHigh) {
-    maxPostSpacing = profile.maxPostSpacingHigh;
-    if (profile.maxPostSpacingLow !== profile.maxPostSpacingHigh) {
+  if (orientation === 'vertical' && profile.maxPostSpacingLow) {
+    maxPostSpacing = fenceHeight > 1500 && profile.maxPostSpacingHigh
+      ? profile.maxPostSpacingHigh
+      : profile.maxPostSpacingLow;
+    if (fenceHeight > 1500 && profile.maxPostSpacingLow !== profile.maxPostSpacingHigh) {
       warnings.push(`Za ograje nad 150cm je maksimalni razmak stebričkov ${profile.maxPostSpacingHigh}mm (namesto ${profile.maxPostSpacingLow}mm)`);
     }
   }

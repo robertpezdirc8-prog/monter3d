@@ -3,7 +3,7 @@ import type {
   Project, Photo, Measurement, WorkflowStep, ObjectType,
   MeasurementStatus, ScaleSource, FencePlan, StairsPlan,
   CostEstimate, MaterialItem, ImageQuality, FeaturePoint,
-  Customer, RoksalQuote
+  Customer, RoksalQuote, UserRole
 } from './types';
 import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetection } from './utils/cv';
 import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, formatMeasurement, exportMeasurementsCSV } from './utils/geometry';
@@ -25,6 +25,10 @@ import { FenceConfigurator } from './components/FenceConfigurator';
 import type { FenceConfiguratorApplyPayload } from './components/FenceConfigurator';
 import TradeMenu from './components/TradeMenu';
 import TradeCapture from './components/TradeCapture';
+import { RoleSwitcher } from './components/RoleSwitcher';
+import { WarehouseView } from './components/WarehouseView';
+import { DirectorView } from './components/DirectorView';
+import { getStoredRole, setStoredRole } from './utils/roles';
 import type { TradeId } from './utils/cameraSDK';
 import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId } from './utils/storage';
 
@@ -113,6 +117,13 @@ function App() {
   const [showFenceConfigurator, setShowFenceConfigurator] = useState(false);
   const [roksalQuote, setRoksalQuote] = useState<RoksalQuote | null>(null);
   const [customer, setCustomer] = useState<Customer>({ name: '' });
+  // Vloga uporabnika (monter / skladišče / direktor) - izbira se hrani lokalno
+  const [role, setRole] = useState<UserRole>(() => getStoredRole());
+
+  const handleRoleChange = useCallback((nextRole: UserRole) => {
+    setRole(nextRole);
+    setStoredRole(nextRole);
+  }, []);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -721,6 +732,38 @@ function App() {
     return <TradeMenu />;
   }
 
+  // Vlogi »skladišče« in »direktor« imata svoj pogled; monter uporablja celoten tok.
+  if (role === 'skladisce' || role === 'direktor') {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
+        <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{role === 'skladisce' ? '📦' : '📊'}</span>
+            <div>
+              <h1 className="text-lg font-bold text-emerald-400">
+                {role === 'skladisce' ? 'Skladišče' : 'Vodstvo'}
+              </h1>
+              <p className="text-xs text-slate-400">
+                {role === 'skladisce'
+                  ? 'Kosovnice in pobirnice materiala'
+                  : 'Pregled projektov in ponudb'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <RoleSwitcher role={role} onChange={handleRoleChange} />
+            <span className="hidden sm:inline text-xs bg-emerald-900/50 text-emerald-300 px-2 py-1 rounded">
+              Offline ✓
+            </span>
+          </div>
+        </header>
+        <main className="flex-1 overflow-y-auto p-4">
+          {role === 'skladisce' ? <WarehouseView /> : <DirectorView />}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
       {/* Camera Capture Modal */}
@@ -767,6 +810,7 @@ function App() {
           </div>
         </div>
         <div className="flex items-center gap-4">
+          <RoleSwitcher role={role} onChange={handleRoleChange} />
           <span className="text-xs bg-emerald-900/50 text-emerald-300 px-2 py-1 rounded">
             Offline ✓
           </span>

@@ -514,4 +514,44 @@ describe('Fence Construction Calculator', () => {
       expect(result.warnings.some(w => w.includes('pregradne'))).toBe(true);
     });
   });
+
+  describe('Pravilo razmaka stebričkov po višini (pokončno, Roksal)', () => {
+    it('POLNA 128 pokončno: do 150cm višine je dovoljen razmak 180cm', () => {
+      const result = calculateFenceConstruction({
+        profile: polna128,
+        orientation: 'vertical',
+        fenceHeight: 1200,
+        fenceLength: 3600,
+        boardSpacing: 20
+      });
+
+      expect(result.numberOfPosts).toBe(3);
+      expect(result.actualPostSpacing).toBe(1800);
+    });
+
+    it('POLNA 128 pokončno: nad 150cm višine velja omejitev 150cm', () => {
+      const result = calculateFenceConstruction({
+        profile: polna128,
+        orientation: 'vertical',
+        fenceHeight: 1800,
+        fenceLength: 3000,
+        boardSpacing: 20
+      });
+
+      expect(result.actualPostSpacing).toBeLessThanOrEqual(1500);
+      expect(result.warnings.some(w => w.includes('nad 150cm'))).toBe(true);
+    });
+
+    it('POLNA 128 prečno: pravilo po višini ne velja - meja ostane 110cm', () => {
+      const result = calculateFenceConstruction({
+        profile: polna128,
+        orientation: 'horizontal',
+        fenceHeight: 1200,
+        fenceLength: 1100,
+        boardSpacing: 20
+      });
+
+      expect(result.actualPostSpacing).toBeLessThanOrEqual(1100);
+    });
+  });
 });

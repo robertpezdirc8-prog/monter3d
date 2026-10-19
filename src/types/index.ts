@@ -95,6 +95,12 @@ export interface Project {
 export type ObjectType = 'fence' | 'stairs' | 'facade' | 'terrain' | 'combined';
 export type ProjectStatus = 'capture' | 'processing' | 'measuring' | 'planning' | 'complete';
 
+/**
+ * Vloge uporabnikov: monter (teren), skladiščnik (kosovnice in pobirnice)
+ * in direktor (pregled projektov in ponudb). Izbira je shranjena lokalno.
+ */
+export type UserRole = 'monter' | 'skladisce' | 'direktor';
+
 export interface Photo {
   id: string;
   dataUrl: string;

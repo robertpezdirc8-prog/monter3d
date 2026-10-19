@@ -1,17 +1,22 @@
 /**
- * Mera3D Pro - Roksal Product Catalog
- * 
- * Official Roksal WPC fence products data sourced from:
- * - PDF Catalog: https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf
- * - https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/
- * - https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-ograja-pokoncna/
- * - https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-precna-ograja/
- * - https://roksal.com/woodcore-wpc-deske/barvni-odtenki/
- * 
- * Last verified: 2026
- * 
- * IMPORTANT: All data is sourced from official Roksal catalogs and websites.
- * HEX colors are approximations - actual colors may vary. Always verify with physical samples.
+ * Roksal Product Catalog — WoodCore WPC
+ *
+ * Uradni podatki, povzeti z Roksalovih strani (preverjeno 19. 10. 2026):
+ * - Barvni odtenki:        https://roksal.com/woodcore-wpc-deske/barvni-odtenki/
+ * - Prečne ograje:         https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-precna-ograja/
+ * - Pokončne ograje:       https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-ograja-pokoncna/
+ * - Preglednica ograj:     https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/
+ * - PDF katalog (2020):    https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf
+ *
+ * Barvne lestvice (slike, iz katerih so povzeta imena odtenkov):
+ * - TERASA 150 / ROMB: 2024/09/BARVNA_LESTVICA_1-terasa4.png, BARVNA_LESTVICA_3-rombi4.png
+ * - POLNA 100:         2024/10/BARVNA_LESTVICA_2_polna.png
+ * - POLNA 128:         2024/09/BARVNA_LESTVICA_4-polna-128-4.png
+ * - KUBO:              2024/09/BARVNA_LESTVICA_5-kubo4.png
+ *
+ * POMEMBNO: HEX vrednosti so približki za zaslonski prikaz, niso laboratorijsko
+ * potrjene. Za natančno ujemanje uporabite fizične vzorce (Roksal pošilja
+ * brezplačne vzorce po pošti).
  */
 
 export interface RoksalColor {
@@ -41,8 +46,10 @@ export interface RoksalProfile {
   screwSide: 'front' | 'back' | 'both'; // stran vijačenja
   hasAluminumTube: boolean;
   requiresAluminumTube: boolean; // ali profil zahteva ALU cev
-  maxPostSpacingLow: number; // mm - max razmak stebričkov za ograje do 150cm
-  maxPostSpacingHigh: number; // mm - max razmak stebričkov za ograje nad 150cm
+  maxPostSpacingLow: number; // mm - max razmak stebričkov za ograje do 150cm (pokončno)
+  maxPostSpacingHigh: number; // mm - max razmak stebričkov za ograje nad 150cm (pokončno)
+  /** Razpoložljive površine (npr. KLASIK / RUSTIK). */
+  surfaces?: string[];
   colors: RoksalColor[];
   verified: boolean;
   source: string;
@@ -50,85 +57,96 @@ export interface RoksalProfile {
   technicalNotes?: string[]; // dodatne tehnične opombe
 }
 
-// Color definitions based on official Roksal color palettes
-// IMPORTANT: HEX values are approximations for screen display only.
-// Actual colors may vary between batches and should be verified with physical samples.
-// Original names from PDF catalog: Amazon Wood, Ash Wood, Burma Teak, Golden Teak, Oak Wood, Rustic
+// ---------------------------------------------------------------------------
+// Barvni odtenki — uradna lestvica 2024 (8 odtenkov, White samo za POLNA 100)
+// ---------------------------------------------------------------------------
+
+const PALETTE_SOURCE = 'https://roksal.com/woodcore-wpc-deske/barvni-odtenki/';
 
 export const ROKSAL_COLORS: Record<string, RoksalColor> = {
   'amazon-wood': {
     id: 'amazon-wood',
     name: 'Amazon Wood',
-    hex: '#5d4037',
+    hex: '#6e6763',
     verified: true,
-    source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'Temno rjava barva z naravnim videzom lesa'
+    source: PALETTE_SOURCE,
+    notes: 'Sivo-rjav odtenek z naravnim videzom lesa'
   },
   'ash-wood': {
     id: 'ash-wood',
     name: 'Ash Wood',
-    hex: '#b8a89a',
+    hex: '#c2bfba',
     verified: true,
-    source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'Svetlo sivo-rjava barva, videz jesena'
-  },
-  'burma-teak': {
-    id: 'burma-teak',
-    name: 'Burma Teak',
-    hex: '#6d4c41',
-    verified: true,
-    source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'Srednje rjava barva z videzom tika'
+    source: PALETTE_SOURCE,
+    notes: 'Svetel sivo-srebrn odtenek, videz jesena'
   },
   'golden-teak': {
     id: 'golden-teak',
     name: 'Golden Teak',
-    hex: '#c9a961',
+    hex: '#d6a191',
     verified: true,
-    source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'Zlato-rjava barva z videzom tika'
+    source: PALETTE_SOURCE,
+    notes: 'Topel rožnato-rjav odtenek z videzom tika'
+  },
+  'burma-teak': {
+    id: 'burma-teak',
+    name: 'Burma Teak',
+    hex: '#ac8f88',
+    verified: true,
+    source: PALETTE_SOURCE,
+    notes: 'Sivkasto-rjav odtenek z videzom tika'
   },
   'oak-wood': {
     id: 'oak-wood',
     name: 'Oak Wood',
-    hex: '#8b6f47',
+    hex: '#d9ba95',
     verified: true,
-    source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'Srednje rjava barva z videzom hrasta'
-  },
-  'rustic': {
-    id: 'rustic',
-    name: 'Rustic (Staran les)',
-    hex: '#6b5b4f',
-    verified: true,
-    source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'Staran videz lesa z naravnimi variacijami. Na eni strani gladka, na drugi rebrasta površina.'
-  },
-  // Additional colors from website (not in PDF catalog)
-  'anthracite': {
-    id: 'anthracite',
-    name: 'Anthracite',
-    hex: '#383838',
-    verified: true,
-    source: 'https://roksal.com/woodcore-wpc-deske/barvni-odtenki/',
-    notes: 'Temno siva barva (samo spletna stran, ni v PDF katalogu)'
+    source: PALETTE_SOURCE,
+    notes: 'Svetel peščen odtenek z videzom hrasta'
   },
   'white': {
     id: 'white',
     name: 'White',
-    hex: '#f5f5f5',
+    hex: '#efece7',
     verified: true,
-    source: 'https://roksal.com/woodcore-wpc-deske/barvni-odtenki/',
-    notes: 'Bela barva (samo spletna stran, ni v PDF katalogu)'
+    source: PALETTE_SOURCE,
+    notes: 'Bela barva — na voljo samo za profil POLNA DESKA 100'
+  },
+  'rustic-oak': {
+    id: 'rustic-oak',
+    name: 'Rustic Oak',
+    hex: '#bf9d6f',
+    verified: true,
+    source: PALETTE_SOURCE,
+    notes: 'Večbarvni videz starega hrasta - odtenek in razpored lis lahko variirata med deskami in serijami'
+  },
+  'rustic-walnut': {
+    id: 'rustic-walnut',
+    name: 'Rustic Walnut',
+    hex: '#8e8074',
+    verified: true,
+    source: PALETTE_SOURCE,
+    notes: 'Večbarvni videz starega oreha - odtenek in razpored lis lahko variirata med deskami in serijami'
   }
 };
 
-// Profile definitions based on official Roksal specifications from PDF catalog and website
-// IMPORTANT: Colors listed are based on available sources. PDF catalog shows 5-6 colors,
-// website shows more. Always verify availability with Roksal for specific projects.
+// Vsi klasični odtenki (brez bele, ki je samo za POLNA 100)
+const CLASSIC_7 = [
+  ROKSAL_COLORS['amazon-wood'],
+  ROKSAL_COLORS['ash-wood'],
+  ROKSAL_COLORS['golden-teak'],
+  ROKSAL_COLORS['burma-teak'],
+  ROKSAL_COLORS['oak-wood'],
+  ROKSAL_COLORS['rustic-oak'],
+  ROKSAL_COLORS['rustic-walnut']
+];
+
+// ---------------------------------------------------------------------------
+// Profili — uradne mere in pravila montaže
+// ---------------------------------------------------------------------------
 
 export const ROKSAL_PROFILES: RoksalProfile[] = [
-  // POLNA DESKA 57/32 - Vertical only, hidden screwing
+  // POLNA DESKA 57/32 — pokončna ograja, skrito vijačenje
   {
     id: 'polna-deska-57-32',
     name: 'POLNA DESKA 57/32',
@@ -136,8 +154,8 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     thickness: 32,
     length: 5800,
     orientation: 'vertical',
-    maxPostSpacing: 1500, // max razmak stebričkov ne glede na višino
-    maxBeamSpacing: 1000, // max razmak vodoravnih nosilcev
+    maxPostSpacing: 1500,
+    maxBeamSpacing: 1000,
     minBoardSpacing: 5,
     maxBoardSpacing: 30,
     recommendedBoardSpacing: 20,
@@ -145,26 +163,28 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     screwSide: 'back',
     hasAluminumTube: false,
     requiresAluminumTube: false,
-    maxPostSpacingLow: 1500, // do 150cm višine
-    maxPostSpacingHigh: 1500, // nad 150cm višine
+    maxPostSpacingLow: 1500,
+    maxPostSpacingHigh: 1500,
     colors: [
       ROKSAL_COLORS['amazon-wood'],
-      ROKSAL_COLORS['ash-wood'],
-      ROKSAL_COLORS['burma-teak'],
-      ROKSAL_COLORS['golden-teak']
+      ROKSAL_COLORS['oak-wood'],
+      ROKSAL_COLORS['rustic-oak'],
+      ROKSAL_COLORS['rustic-walnut']
     ],
     verified: true,
     source: 'https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-ograja-pokoncna/',
-    notes: 'Skrito vijačenje skozi cev iz zadnje strani. Montaža na širino 57mm ali 32mm. Samo za pokončno ograjo.',
+    notes: 'Skrito vijačenje. Montaža na širino 57 mm ali 32 mm. Samo za pokončno ograjo. Dolžina profila 5,8 m, reže se na poljubne dolžine.',
     technicalNotes: [
-      'Vijak naj bo približno 2/3 globine profila',
-      'Predvrtanje obvezno - luknja 1mm večja od vijaka',
-      'Maksimalni razmak med stebrički: 150cm ne glede na višino ograje',
-      'Maksimalni razmak med vodoravnimi nosilci: 100cm'
+      'Maksimalni razmak med stebrički: 150 cm ne glede na višino ograje',
+      'Maksimalna razdalja med vodoravnima nosilcema: 100 cm',
+      'Vijak naj bo dolg približno 2/3 globine profila',
+      'V kompozit se vrta luknja, manjša od vijaka; v konstrukcijo večja (dilatacija)',
+      'Priporočen razmik med deskami 0,5–3 cm (večji razmik je estetsko lepši)',
+      'Opomba: na strani so navedene 3–4 trenutno razpoložljive barve - preverite pri Roksalu'
     ]
   },
-  
-  // POLNA DESKA 100 - Vertical only, visible screwing
+
+  // POLNA DESKA 100 — pokončna ograja, vidno vijačenje
   {
     id: 'polna-deska-100',
     name: 'POLNA DESKA 100',
@@ -172,8 +192,8 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     thickness: 12,
     length: 5800,
     orientation: 'vertical',
-    maxPostSpacing: 1800, // max razmak stebričkov (do 150cm višine)
-    maxBeamSpacing: 800, // max razmak vodoravnih nosilcev
+    maxPostSpacing: 1800,
+    maxBeamSpacing: 800,
     minBoardSpacing: 5,
     maxBoardSpacing: 30,
     recommendedBoardSpacing: 20,
@@ -181,30 +201,31 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     screwSide: 'front',
     hasAluminumTube: false,
     requiresAluminumTube: false,
-    maxPostSpacingLow: 1800, // do 150cm višine
-    maxPostSpacingHigh: 1500, // nad 150cm višine
+    maxPostSpacingLow: 1800,
+    maxPostSpacingHigh: 1500,
     colors: [
       ROKSAL_COLORS['amazon-wood'],
       ROKSAL_COLORS['ash-wood'],
-      ROKSAL_COLORS['burma-teak'],
       ROKSAL_COLORS['golden-teak'],
+      ROKSAL_COLORS['burma-teak'],
       ROKSAL_COLORS['oak-wood'],
-      ROKSAL_COLORS['rustic']
+      ROKSAL_COLORS['white'],
+      ROKSAL_COLORS['rustic-oak'],
+      ROKSAL_COLORS['rustic-walnut']
     ],
     verified: true,
-    source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'Vijačenje vidno iz lica - OBVEZNO vijačenje iz lica. Samo za pokončno ograjo. Dolžina 5.8m, reže se na poljubne dolžine.',
+    source: 'https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-ograja-pokoncna/',
+    notes: 'Vijačenje vidno z lica. Samo za pokončno ograjo. Dolžina 5,8 m. Edini profil, ki je na voljo v beli barvi.',
     technicalNotes: [
-      'OBVEZNO vijačenje iz lica (vidno)',
-      'Predvrtanje obvezno - luknja 1mm večja od vijaka',
-      'Maksimalni razmak med stebrički: 180cm za ograje do 150cm višine',
-      'Maksimalni razmak med stebrički: 150cm za ograje nad 150cm višine',
-      'Maksimalni razmak med vodoravnimi nosilci: 80cm',
-      'Priporočen razmik med deskami: 0.5-3cm'
+      'Maksimalni razmak med stebrički: 180 cm (ograje do 150 cm višine) oz. 150 cm (nad 150 cm)',
+      'Maksimalna razdalja med vodoravnima nosilcema: 80 cm',
+      'Predvrtanje obvezno - luknja 1 mm večja od vijaka',
+      'Vijaki so vidni z lica',
+      'Priporočen razmik med deskami 0,5–3 cm'
     ]
   },
-  
-  // ROMB DESKA 67 - Both orientations, hidden screwing with aluminum tube
+
+  // ROMB DESKA 67 — pokončno in prečno, skrito vijačenje skozi ALU cev
   {
     id: 'romb-deska-67',
     name: 'ROMB DESKA 67',
@@ -212,42 +233,42 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     thickness: 26,
     length: 5800,
     orientation: 'both',
-    maxPostSpacing: 1450, // max razmak stebričkov (prečna postavitev)
-    maxBeamSpacing: 1100, // max razmak vodoravnih nosilcev (pokončna postavitev)
+    maxPostSpacing: 1450,
+    maxBeamSpacing: 1100,
     minBoardSpacing: 5,
     maxBoardSpacing: 30,
     recommendedBoardSpacing: 20,
     screwVisible: false,
     screwSide: 'back',
     hasAluminumTube: true,
-    requiresAluminumTube: true, // OBVEZNA aluminijasta cev!
-    maxPostSpacingLow: 1450, // do 150cm višine
-    maxPostSpacingHigh: 1450, // nad 150cm višine
+    requiresAluminumTube: true,
+    maxPostSpacingLow: 1450,
+    maxPostSpacingHigh: 1450,
     colors: [
       ROKSAL_COLORS['amazon-wood'],
       ROKSAL_COLORS['ash-wood'],
-      ROKSAL_COLORS['burma-teak'],
       ROKSAL_COLORS['golden-teak'],
+      ROKSAL_COLORS['burma-teak'],
       ROKSAL_COLORS['oak-wood'],
-      ROKSAL_COLORS['rustic']
+      ROKSAL_COLORS['rustic-oak'],
+      ROKSAL_COLORS['rustic-walnut']
     ],
     verified: true,
-    source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'OPOZORILO: MONTAŽA BREZ ALU CEVI NI MOŽNA! Skrito vijačenje skozi aluminijasto cev. Primerna za pokončno in prečno ograjo. Dolžina 5.8m.',
+    source: 'https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-precna-ograja/',
+    notes: 'OPOZORILO: MONTAŽA BREZ ALU CEVI NI MOŽNA! Alu cev je v sredini profila in je vključena v ceno. Skrito vijačenje z zadnje strani. Dolžina 5,8 m.',
     technicalNotes: [
-      '⚠️ OPOZORILO: MONTAŽA BREZ ALUMINIJASTE CEVI NI MOŽNA!',
-      'Aluminijasta cev je obvezna in že vključena v ceno',
-      'Skrito vijačenje z zadnje strani skozi aluminijasto cev',
-      'Potrebni so ustrezni kotniki levo in desno na stebričkih',
-      'Maksimalni razmak med stebrički (prečna): 145cm',
-      'Maksimalni razmak med vodoravnimi nosilci (pokončna): 110cm',
-      'Pri razmaku nad 145cm (prečna) potrebna dodatna povezava do 180cm',
-      'Pri razmaku 180cm ali več (prečna) potreben dodatni stebriček',
-      'Priporočen razmik med deskami: 0.5-3cm'
+      '⚠️ Aluminijasta cev v sredini romba je obvezna in že vključena v ceno',
+      'Prečno: maksimalni razmak stebričkov 145 cm (možno samo s kotnikom levo in desno)',
+      'Prečno: pri razmaku 145–180 cm je potrebna dodatna vmesna povezava',
+      'Prečno: pri razmaku 180 cm ali več je potreben dodatni stebriček',
+      'Pokončno: maksimalna razdalja med vodoravnima nosilcema 110 cm',
+      'Pokončno: pri razmikih med deskami je vidna aluminijasta cev v sredini profila',
+      'Vijaki: predvrtanje v romb in alu 3,2 mm, nato v romb 4,2–4,5 mm (za kniping vijak 3,9)',
+      'Priporočen razmik med deskami 0,5–3 cm'
     ]
   },
-  
-  // DESKA 150 - Horizontal only (terrace board), visible screwing
+
+  // DESKA 150 — terasna deska, prečna ograja
   {
     id: 'deska-150',
     name: 'DESKA 150 (Terasna)',
@@ -255,8 +276,8 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     thickness: 25,
     length: 4000,
     orientation: 'horizontal',
-    maxPostSpacing: 1300, // max razmak stebričkov (varnejši podatek)
-    maxBeamSpacing: 1300, // max razmak vodoravnih nosilcev
+    maxPostSpacing: 1300,
+    maxBeamSpacing: 1300,
     minBoardSpacing: 5,
     maxBoardSpacing: 30,
     recommendedBoardSpacing: 20,
@@ -264,39 +285,37 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     screwSide: 'front',
     hasAluminumTube: false,
     requiresAluminumTube: false,
-    maxPostSpacingLow: 1300, // do 150cm višine
-    maxPostSpacingHigh: 1300, // nad 150cm višine
-    colors: [
-      ROKSAL_COLORS['amazon-wood'],
-      ROKSAL_COLORS['ash-wood'],
-      ROKSAL_COLORS['burma-teak'],
-      ROKSAL_COLORS['golden-teak'],
-      ROKSAL_COLORS['oak-wood'],
-      ROKSAL_COLORS['rustic']
+    maxPostSpacingLow: 1300,
+    maxPostSpacingHigh: 1300,
+    surfaces: [
+      'KLASIK - gosto rebrasta stran',
+      'KLASIK - široko rebrasta stran',
+      'RUSTIK - ena stran gladka, druga gosto rebrasta'
     ],
+    colors: CLASSIC_7,
     verified: true,
-    source: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
-    notes: 'Terasna deska za prečno ograjo. Vijačenje vidno iz lica. Na voljo v dolžinah 4m in 2.2m.',
+    source: 'https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-precna-ograja/',
+    notes: 'Terasna deska za prečno ograjo. Vidno vijačenje. Dolžina 4 m (na voljo tudi 2,2 m). KLASIK: 5 odtenkov, RUSTIK: 2 odtenka (Rustic Oak, Rustic Walnut).',
     technicalNotes: [
-      'Vijačenje vidno iz lica - skozi desko v konstrukcijo',
-      'Predvrtanje obvezno - luknja 1mm večja od vijaka',
-      'Maksimalni razmak med stebrički: 130cm (varnejši podatek)',
-      'Opomba: Spletna stran navaja 133-140cm, uporabljamo 130cm za varnost',
-      'Na voljo v dolžinah 4000mm in 2200mm',
-      'Priporočen razmik med deskami: 0.5-3cm'
+      'Stebrički za vodoravno postavitev na maksimalni razdalji 130 cm',
+      'Opomba: stran navaja tudi 133–140 cm; aplikacija uporablja varnejših 130 cm',
+      'Vijači se na sredini deske, kjer je rebro v profilu',
+      'Predvrtanje obvezno - luknja 1 mm večja od vijaka',
+      'Vmesna povezava brez pritrditve v tla je možna do razmaka 180 cm',
+      'Priporočen razmik med deskami 0,5–3 cm'
     ]
   },
-  
-  // POLNA DESKA 128 - Both orientations (from website, not in PDF)
+
+  // POLNA DESKA 128 — pokončno in prečno
   {
     id: 'polna-deska-128',
     name: 'POLNA DESKA 128',
     width: 128,
-    thickness: 16.5,
+    thickness: 16,
     length: 2200,
     orientation: 'both',
-    maxPostSpacing: 1100, // max razmak stebričkov (prečna postavitev)
-    maxBeamSpacing: 1000, // max razmak vodoravnih nosilcev (pokončna postavitev)
+    maxPostSpacing: 1100, // prečno
+    maxBeamSpacing: 1000, // pokončno - vodoravni nosilci
     minBoardSpacing: 5,
     maxBoardSpacing: 30,
     recommendedBoardSpacing: 20,
@@ -304,31 +323,31 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     screwSide: 'front',
     hasAluminumTube: false,
     requiresAluminumTube: false,
-    maxPostSpacingLow: 1100, // do 150cm višine
-    maxPostSpacingHigh: 1100, // nad 150cm višine
+    maxPostSpacingLow: 1800, // pokončno do 150 cm višine
+    maxPostSpacingHigh: 1500, // pokončno nad 150 cm višine
     colors: [
-      ROKSAL_COLORS['anthracite'],
-      ROKSAL_COLORS['white'],
+      ROKSAL_COLORS['amazon-wood'],
       ROKSAL_COLORS['ash-wood'],
-      ROKSAL_COLORS['golden-teak'],
+      ROKSAL_COLORS['burma-teak'],
       ROKSAL_COLORS['oak-wood'],
-      ROKSAL_COLORS['rustic']
+      ROKSAL_COLORS['rustic-oak'],
+      ROKSAL_COLORS['rustic-walnut']
     ],
     verified: true,
-    source: 'https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/',
-    notes: 'Vijačenje vidno iz lica. Primerna za pokončno in prečno ograjo. Samo spletna stran - ni v PDF katalogu.',
+    source: 'https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-ograja-pokoncna/',
+    notes: 'Vijačenje vidno z lica. Primerna za pokončno in prečno ograjo. Dolžina 2,2 m.',
     technicalNotes: [
-      'Vijačenje vidno iz lica - skozi desko v konstrukcijo',
-      'Predvrtanje obvezno - luknja 1mm večja od vijaka',
-      'Maksimalni razmak med stebrički (prečna): 110cm',
-      'Maksimalni razmak med vodoravnimi nosilci (pokončna): 100cm',
-      'Standardna dolžina: 2200mm',
-      'Priporočen razmik med deskami: 0.5-3cm',
-      'Opomba: Podatki samo iz spletne strani, niso v PDF katalogu'
+      'Prečno: maksimalni razmak stebričkov 110 cm',
+      'Pokončno: maksimalna razdalja med vodoravnima nosilcema 100 cm',
+      'Pokončno: razmak stebričkov 180 cm (do 150 cm višine) oz. 150 cm (nad 150 cm)',
+      'Vijaki so vidni z lica',
+      'Predvrtanje obvezno - luknja 1 mm večja od vijaka',
+      'Opomba: stran navaja debelino 16 mm in 16,5 mm - preverite pri Roksalu',
+      'Priporočen razmik med deskami 0,5–3 cm'
     ]
   },
-  
-  // KUBO 80/42 - Pregradne stene (partition walls)
+
+  // KUBO 80/42 — pregradne stene (partition)
   {
     id: 'kubo-80-42',
     name: 'KUBO 80/42 (Pregradna stena)',
@@ -337,36 +356,33 @@ export const ROKSAL_PROFILES: RoksalProfile[] = [
     length: 2900,
     orientation: 'both',
     kind: 'partition',
-    maxPostSpacing: 1200, // max razmak brez ojačitve
-    maxBeamSpacing: 1200, // max razmak brez ojačitve
+    maxPostSpacing: 1200,
+    maxBeamSpacing: 1200,
     minBoardSpacing: 20,
     maxBoardSpacing: 100,
     recommendedBoardSpacing: 40,
     screwVisible: false,
     screwSide: 'back',
-    hasAluminumTube: true, // notranja aluminijasta cev 20x60x2mm
-    requiresAluminumTube: true, // OBVEZNA za razpone nad 120cm
-    maxPostSpacingLow: 1200, // do 150cm višine
-    maxPostSpacingHigh: 1200, // nad 150cm višine
+    hasAluminumTube: true,
+    requiresAluminumTube: true,
+    maxPostSpacingLow: 1200,
+    maxPostSpacingHigh: 1200,
     colors: [
       ROKSAL_COLORS['amazon-wood'],
-      ROKSAL_COLORS['ash-wood'],
-      ROKSAL_COLORS['burma-teak'],
-      ROKSAL_COLORS['golden-teak']
+      ROKSAL_COLORS['oak-wood'],
+      ROKSAL_COLORS['rustic-oak'],
+      ROKSAL_COLORS['rustic-walnut']
     ],
     verified: true,
-    source: 'https://roksal.com/woodcore-wpc-deske/pregradne-stene/pokoncne-deske/',
-    notes: 'Profil za pregradne stene. Vidna širina 42mm ali 80mm. Z aluminijasto cevjo 20x60x2mm možen razpon do 260cm.',
+    source: 'https://roksal.com/woodcore-wpc-deske/barvni-odtenki/',
+    notes: 'Profil za pregradne stene. Vidna širina 42 mm ali 80 mm. Z aluminijasto cevjo 20x60x2 mm možen razpon do 260 cm. Na voljo 4 barve.',
     technicalNotes: [
-      'Profil 80 × 42 mm, standardna dolžina 2900mm',
-      'Vidna širina: 42mm ali 80mm (glede na orientacijo)',
+      'Profil 80 × 42 mm, standardna dolžina 2900 mm',
       'Notranja aluminijasta cev 20 × 60 × 2 mm',
-      'Brez dodatne ojačitve: max razpon 120cm',
-      'Z aluminijasto cevjo: max razpon do 260cm',
+      'Brez dodatne ojačitve: max razpon 120 cm; z ALU cevjo do 260 cm',
       'Skrito vijačenje z zadnje strani',
       'Primerno za notranje in zunanje pregradne stene',
-      'Razmik med letvicami se izbere glede na želeni videz',
-      'Opomba: KUBO je ločen sistem za pregrade, ni avtomatično združljiv z ograjami'
+      'KUBO je ločen sistem za pregrade, ni del ograjnega konfiguratorja'
     ]
   }
 ];
@@ -377,19 +393,19 @@ export function getProfileById(id: string): RoksalProfile | undefined {
 }
 
 export function getProfilesForOrientation(orientation: 'vertical' | 'horizontal' | 'both'): RoksalProfile[] {
-  return ROKSAL_PROFILES.filter(p => 
+  return ROKSAL_PROFILES.filter(p =>
     p.orientation === orientation || p.orientation === 'both'
   );
 }
 
 export function getVerticalProfiles(): RoksalProfile[] {
-  return ROKSAL_PROFILES.filter(p => 
+  return ROKSAL_PROFILES.filter(p =>
     p.orientation === 'vertical' || p.orientation === 'both'
   );
 }
 
 export function getHorizontalProfiles(): RoksalProfile[] {
-  return ROKSAL_PROFILES.filter(p => 
+  return ROKSAL_PROFILES.filter(p =>
     p.orientation === 'horizontal' || p.orientation === 'both'
   );
 }
@@ -400,28 +416,31 @@ export function getColorById(id: string): RoksalColor | undefined {
 
 // Catalog metadata
 export const CATALOG_METADATA = {
-  version: '2.0.0',
-  lastUpdated: '2026-01-XX',
-  primarySource: 'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf',
+  version: '3.0.0',
+  lastUpdated: '2026-10-19',
+  primarySource: 'https://roksal.com/woodcore-wpc-deske/barvni-odtenki/',
   secondarySources: [
     'https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/',
     'https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-ograja-pokoncna/',
     'https://roksal.com/woodcore-wpc-deske/balkonske-ograje-in-dvoriscne-ograje/wpc-precna-ograja/',
-    'https://roksal.com/woodcore-wpc-deske/barvni-odtenki/'
+    'https://roksal.com/woodcore-wpc-deske/barvni-odtenki/',
+    'https://www.montaze-mlakar.si/wp-content/uploads/2020/03/WPSOgrajeTerase.pdf'
   ],
   verified: true,
   totalProfiles: ROKSAL_PROFILES.length,
   totalColors: Object.keys(ROKSAL_COLORS).length,
   notes: [
-    'Primarni vir: PDF katalog WPS Ograje in Terase (2020)',
-    'Sekundarni viri: uradne Roksal spletne strani',
-    'HEX barve so PRIBLIŽKI za zaslonski prikaz - NISO laboratorijsko potrjene',
-    'Za natančno ujemanje barv uporabite FIZIČNE VZORCE',
-    'Barvni odtenki se lahko razlikujejo med serijami (5-10% posvetlitev skozi čas)',
-    'ROMB DESKA zahteva aluminijasto cev - montaža brez nje NI mogoča',
-    'POLNA DESKA 100 je samo za pokončno ograjo',
-    'DESKA 150 je primarna za terase, lahko se uporabi tudi za ograje',
-    'Priporočen razmik med deskami: 0.5cm do 3cm',
-    'Montaža ni primerna pri temperaturi pod 5°C'
+    'Podatki povzeti z uradnih Roksal strani (preverjeno 19. 10. 2026)',
+    'Barvna lestvica 2024: 8 odtenkov; White je na voljo samo za POLNA DESKA 100',
+    'Rustic Oak in Rustic Walnut sta večbarvna - odtenek variira med serijami',
+    'HEX barve so PRIBLIŽKI za zaslonski prikaz - za natančno ujemanje uporabite fizične vzorce',
+    'Roksal pošilja brezplačne vzorce po pošti',
+    'ROMB DESKA zahteva aluminijasto cev - montaža brez nje NI mogoča (vključena v ceno)',
+    'POLNA DESKA 100 je samo za pokončno ograjo in edina na voljo v beli barvi',
+    'DESKA 150 je primarna za terase, uporablja se tudi za prečne ograje',
+    'Minimalen odmik vijaka od roba reza je 3 cm',
+    'Priporočen razmik med deskami: 0,5 cm do 3 cm',
+    'Vijaki so vidni pri profilih DESKA 150, POLNA 100 in POLNA 128; skriti pri 57/32 in ROMB',
+    'Montaža ni primerna pri temperaturi pod 5 °C'
   ]
 };

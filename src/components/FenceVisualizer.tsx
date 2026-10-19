@@ -40,7 +40,7 @@ export function FenceVisualizer({ photo, onClose }: FenceVisualizerProps) {
   const [isDrawing, setIsDrawing] = useState(false);
   const [config, setConfig] = useState<FenceConfig>({
     profile: ROKSAL_PROFILES[0],
-    color: ROKSAL_COLORS['anthracite'],
+    color: ROKSAL_COLORS['oak-wood'],
     orientation: 'vertical',
     boardSpacing: 20,
     fenceHeight: 1000
