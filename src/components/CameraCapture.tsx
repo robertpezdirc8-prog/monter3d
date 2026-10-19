@@ -4,11 +4,15 @@
  * Real camera access using MediaDevices API (getUserMedia).
  * Supports rear camera on mobile devices.
  * Provides live preview, capture, retake, and quality assessment.
+ * 
+ * AI detection: RF-DETR Nano (brezplačen, Apache 2.0) prek Transformers.js.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { assessImageQuality } from '../utils/cv';
 import type { ImageQuality } from '../types';
+import { useAiDetection } from '../hooks/useAiDetection';
+import { AiOverlay } from './AiOverlay';
 
 interface CameraCaptureProps {
   onCapture: (dataUrl: string, quality: ImageQuality, stepId?: string) => void;
@@ -20,6 +24,7 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const aiTimerRef = useRef<number | null>(null);
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +33,10 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
   const [capturedQuality, setCapturedQuality] = useState<ImageQuality | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraSupported, setCameraSupported] = useState(true);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [videoDimensions, setVideoDimensions] = useState({ w: 0, h: 0 });
+
+  const { status: aiStatus, detections, statusText: aiText, loadModel, detect, clearDetections } = useAiDetection();
 
   // Check if camera API is available
   useEffect(() => {
@@ -42,6 +51,7 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
     setError(null);
     setCapturedImage(null);
     setCapturedQuality(null);
+    clearDetections();
 
     try {
       // Stop existing stream
@@ -65,6 +75,10 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         setIsStreaming(true);
+        // Track video dimensions once available
+        const track = stream.getVideoTracks()[0];
+        const settings = track.getSettings();
+        setVideoDimensions({ w: settings.width ?? 640, h: settings.height ?? 480 });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Neznana napaka';
@@ -79,7 +93,7 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
       }
       setIsStreaming(false);
     }
-  }, [facingMode]);
+  }, [facingMode, clearDetections]);
 
   // Start camera on mount
   useEffect(() => {
@@ -94,6 +108,45 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
       }
     };
   }, [cameraSupported, startCamera]);
+
+  // Periodična AI detekcija na živem videu (vsako sekundo)
+  useEffect(() => {
+    if (!aiEnabled || !isStreaming || aiStatus !== 'ready') return;
+
+    const runAi = async () => {
+      if (videoRef.current && videoRef.current.videoWidth > 0) {
+        await detect(videoRef.current);
+      }
+    };
+
+    // Prvi klic takoj, potem vsako sekundo
+    runAi();
+    aiTimerRef.current = window.setInterval(runAi, 1000);
+
+    return () => {
+      if (aiTimerRef.current !== null) {
+        clearInterval(aiTimerRef.current);
+        aiTimerRef.current = null;
+      }
+    };
+  }, [aiEnabled, isStreaming, aiStatus, detect]);
+
+  // Vklop/izklop AI
+  const toggleAi = useCallback(async () => {
+    if (!aiEnabled) {
+      // Vklop — najprej naložimo model
+      await loadModel();
+      setAiEnabled(true);
+    } else {
+      // Izklop
+      setAiEnabled(false);
+      clearDetections();
+      if (aiTimerRef.current !== null) {
+        clearInterval(aiTimerRef.current);
+        aiTimerRef.current = null;
+      }
+    }
+  }, [aiEnabled, loadModel, clearDetections]);
 
   // Capture photo from video
   const capturePhoto = useCallback(() => {
@@ -129,7 +182,13 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
       streamRef.current = null;
     }
     setIsStreaming(false);
-  }, []);
+
+    // Ustavimo AI timer
+    if (aiTimerRef.current !== null) {
+      clearInterval(aiTimerRef.current);
+      aiTimerRef.current = null;
+    }
+  }, [assessImageQuality]);
 
   // Confirm captured photo
   const confirmCapture = useCallback(() => {
@@ -156,8 +215,13 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    if (aiTimerRef.current !== null) {
+      clearInterval(aiTimerRef.current);
+      aiTimerRef.current = null;
+    }
+    clearDetections();
     if (onClose) onClose();
-  }, [onClose]);
+  }, [onClose, clearDetections]);
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
@@ -172,15 +236,27 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
         <span className="text-white text-sm font-medium">
           {capturedImage ? 'Predogled' : 'Zajem fotografije'}
         </span>
-        {isStreaming && (
-          <button
-            onClick={switchCamera}
-            className="text-white px-3 py-1 text-sm bg-slate-700 rounded"
-          >
-            🔄 Obrni
-          </button>
-        )}
-        {!isStreaming && <div className="w-16" />}
+        <div className="flex gap-2">
+          {isStreaming && (
+            <button
+              onClick={toggleAi}
+              className={`text-white px-3 py-1 text-sm rounded ${
+                aiEnabled ? 'bg-emerald-600' : 'bg-slate-700'
+              }`}
+            >
+              {aiEnabled ? '🧠 AI vklopljen' : '🧠 AI'}
+            </button>
+          )}
+          {isStreaming && (
+            <button
+              onClick={switchCamera}
+              className="text-white px-3 py-1 text-sm bg-slate-700 rounded"
+            >
+              🔄 Obrni
+            </button>
+          )}
+          {!isStreaming && <div className="w-16" />}
+        </div>
       </div>
 
       {/* Video / Image area */}
@@ -195,6 +271,18 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
           </div>
         )}
 
+        {/* AI status text */}
+        {aiStatus === 'loading' && (
+          <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 bg-blue-800/80 text-white px-3 py-1 rounded-full text-xs">
+            {aiText}
+          </div>
+        )}
+        {aiStatus === 'error' && (
+          <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 bg-red-800/80 text-white px-3 py-1 rounded-full text-xs">
+            {aiText}
+          </div>
+        )}
+
         {/* Live video */}
         {isStreaming && !capturedImage && (
           <>
@@ -206,6 +294,15 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
               className="max-w-full max-h-full object-contain"
               style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
             />
+            {/* AI overlay — samo če je vklopljen in pripravljen */}
+            {aiEnabled && aiStatus === 'ready' && videoDimensions.w > 0 && (
+              <AiOverlay
+                detections={detections}
+                width={videoDimensions.w}
+                height={videoDimensions.h}
+                useVideoDimensions
+              />
+            )}
             {/* Capture guide overlay */}
             <div className="absolute inset-0 pointer-events-none">
               {/* Corner markers */}
@@ -224,6 +321,12 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
                   Poravnajte objekt znotraj okvirja • Vključite referenčno mero
                 </p>
               </div>
+              {/* AI detection count */}
+              {aiEnabled && aiStatus === 'ready' && detections.length > 0 && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1 rounded-full">
+                  🧠 {detections.length} objektov zaznanih
+                </div>
+              )}
             </div>
           </>
         )}
