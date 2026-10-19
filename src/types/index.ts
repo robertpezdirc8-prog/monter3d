@@ -6,6 +6,11 @@ export interface Project {
   objectType: ObjectType;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * FAZA 7 (P0): fotografije se hranijo izključno v samostojnem IndexedDB shrambi
+   * (`photos`), da se podatki ne podvajajo. Polje ostaja zaradi združljivosti s
+   * starimi zapisi; ob nalaganju se vsebina preseli in počisti.
+   */
   photos: Photo[];
   measurements: Measurement[];
   fencePlan?: FencePlan;
@@ -13,7 +18,69 @@ export interface Project {
   terrainPlan?: TerrainPlan;
   materials: MaterialSelection;
   estimate?: CostEstimate;
+  /** FAZA 7 (P0): vse nastavitve delovnega toka, da se ob nalaganju obnovijo. */
+  settings?: ProjectSettings;
   status: ProjectStatus;
+}
+
+/** Konfiguracija izračuna ograje (mere v metrih). */
+export interface FenceConfig {
+  panelWidth: number;
+  panelHeight: number;
+  postWidth: number;
+  maxGap: number;
+  mountingStyle: 'level' | 'stepped' | 'mixed';
+  slopeThreshold: number;
+  /** FAZA 8 (P2): ID Roksal profila — omogoča preverjanje tehničnih pravil. */
+  profileId?: string;
+}
+
+/** Konfiguracija izračuna stopnic (mere v metrih). */
+export interface StairsConfig {
+  numSteps: number;
+  totalRise: number;
+  totalRun: number;
+  handrailHeight: number;
+}
+
+/**
+ * FAZA 8 (P1): segment ograje — dolžina + smer (azimut) + morebitni dvig.
+ * Azimut je v stopinjah: 0° = +X, 90° = +Y. Več segmentov omogoča kote
+ * (L-oblike) in terenske dvige, kar prej ni bilo mogoče modelirati.
+ */
+export interface FenceSegmentInput {
+  /** ID meritve, iz katere je segment nastal. */
+  id: string;
+  /** Dolžina segmenta v metrih. */
+  length: number;
+  /** Azimut segmenta v stopinjah (0° = +X, 90° = +Y). */
+  bearingDeg?: number;
+  /** Višinska razlika na začetku segmenta (m). */
+  heightChange?: number;
+}
+
+/** Cene materialov za predračun (EUR). */
+export interface MaterialPrices {
+  panelPricePerM2: number;
+  postPriceEach: number;
+  railPricePerM: number;
+  fastenerPriceEach: number;
+  endCapPriceEach: number;
+}
+
+/** Nastavitve projekta, ki preživijo osvežitev strani. */
+export interface ProjectSettings {
+  pixelToMeter: number | null;
+  fenceConfig: FenceConfig;
+  stairsConfig: StairsConfig;
+  laborRate: number;
+  laborHours: number;
+  taxRate: number;
+  capturedSteps: string[];
+  /** FAZA 8 (P1): segmenti ograje (koti in dvigi) po meritvah. */
+  fenceSegments: FenceSegmentInput[];
+  /** FAZA 8 (P1): cene materialov (neposredno uporabljene v predračunu). */
+  materialPrices: MaterialPrices;
 }
 
 export type ObjectType = 'fence' | 'stairs' | 'facade' | 'terrain' | 'combined';
@@ -93,6 +160,11 @@ export interface Measurement {
   source: MeasurementSource;
   scaleSource: ScaleSource;
   status: MeasurementStatus;
+  /**
+   * FAZA 7 (P0): referenčna meritev (kalibracija merila) ni del objekta in se
+   * NE sme šteti v dolžino ograje / količine / predračun.
+   */
+  isScaleReference?: boolean;
   uncertainty: number; // percentage
   confidence: number;
   photoIds: string[];

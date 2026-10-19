@@ -1,8 +1,34 @@
 // Mera3D Pro - Geometry & Calculation Utilities
 
-import type { FenceSegment, FencePlan, StairsPlan, StairStep, TerrainPlan, TerrainSegment, CostEstimate, MaterialItem } from '../types';
+import type { Measurement, FenceSegment, FencePlan, StairsPlan, StairStep, TerrainPlan, TerrainSegment, CostEstimate, MaterialItem } from '../types';
 
 const EPS = 1e-9;
+
+/**
+ * FAZA 7 (P0): ali je meritev sploh lahko del dolžine ograje?
+ *
+ * Referenčna (kalibracijska) meritev opisuje merilo fotografije, ne objekta.
+ * Prej se je zgodilo, da je 2 m merilni trak postal dodatni segment ograje in
+ * napihnil količine ter predračun. Zato so take meritve tu izrecno izločene.
+ */
+export function isFenceLengthMeasurement(
+  m: Pick<Measurement, 'status' | 'unit' | 'scaleSource' | 'algorithm' | 'value'> &
+    Partial<Pick<Measurement, 'source' | 'isScaleReference'>>
+): boolean {
+  if (m.isScaleReference === true) return false;
+  if (m.source === 'reference_scale' || m.source === 'calibration_marker') return false;
+  if (m.algorithm === 'reference_calibration') return false;
+  if (m.status !== 'verified') return false;
+  if (m.unit !== 'm') return false;
+  if (!isFinite(m.value) || m.value <= 0) return false;
+  if (m.scaleSource === 'unknown' || m.scaleSource === 'demo' || m.scaleSource === 'normalized') return false;
+  return true;
+}
+
+/** Vrne samo meritve, ki predstavljajo dejansko dolžino objekta. */
+export function selectFenceLengthMeasurements<T extends Measurement>(measurements: T[]): T[] {
+  return measurements.filter(isFenceLengthMeasurement);
+}
 
 // Calculate fence plan from segments
 // Model (FAZA 1, jasno dolocen): paneli se REZEJO NA MERO. N panelov + (N+1) stebrov

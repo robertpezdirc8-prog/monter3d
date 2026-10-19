@@ -1,0 +1,23 @@
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index cacfdcf..5992df7 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -28,12 +28,18 @@ jobs:
+     
+     - name: Run TypeScript type check
+       run: npm run typecheck
++
++    - name: Run ESLint
++      run: npm run lint
+     
+     - name: Run unit tests (vitest)
+       run: npx vitest run --reporter=verbose
+     
+     - name: Run geometry/estimate tests (node)
+       run: node test-runner.mjs
++
++    - name: Run homography/RANSAC tests (node)
++      run: node test-homography.js
+     
+     - name: Security audit (production deps)
+       run: npm audit --omit=dev

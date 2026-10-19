@@ -25,9 +25,9 @@ export function ProjectSummary({ project, measurements, fencePlan, stairsPlan, e
       detail: 'Brez oblačnih storitev'
     },
     {
-      label: 'Brez AI-modelov',
+      label: 'Meritve brez oblaka',
       passed: true,
-      detail: 'Klasična računalniška vizija'
+      detail: 'Vse računanje je lokalno; AI detekcija je izbirna'
     },
     {
       label: 'Sledljivost meritev',
