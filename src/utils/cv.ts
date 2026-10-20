@@ -1097,7 +1097,7 @@ export function measureDistance(
   const metricDist = pixelToMeter ? pixelDist * pixelToMeter : null;
   
   // Uncertainty based on source
-  let uncertainty = 0;
+  let uncertainty: number;
   if (source === 'calibration_marker') uncertainty = 1;
   else if (source === 'manual_reference') uncertainty = 2;
   else if (source === 'homography') uncertainty = 5;

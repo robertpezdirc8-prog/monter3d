@@ -32,19 +32,17 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [capturedQuality, setCapturedQuality] = useState<ImageQuality | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [cameraSupported, setCameraSupported] = useState(true);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ w: 0, h: 0 });
 
   const { status: aiStatus, detections, statusText: aiText, loadModel, detect, clearDetections } = useAiDetection();
 
-  // Check if camera API is available
-  useEffect(() => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setError('Kamera ni podprta v tem brskalniku. Uporabite Chrome, Firefox ali Safari na mobilni napravi.');
-      setCameraSupported(false);
-    }
-  }, []);
+  // FAZA 16: podporo kamere izračunamo med renderiranjem (prej je bil setState v
+  // efektu, kar je sprožalo kaskadno renderiranje in opozorilo ESLint pravila).
+  const cameraSupported = typeof navigator !== 'undefined'
+    && !!navigator.mediaDevices
+    && typeof navigator.mediaDevices.getUserMedia === 'function';
+  const cameraUnsupportedMessage = 'Kamera ni podprta v tem brskalniku. Uporabite Chrome, Firefox ali Safari na mobilni napravi.';
 
   // Start camera stream
   const startCamera = useCallback(async () => {
@@ -98,7 +96,10 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
   // Start camera on mount
   useEffect(() => {
     if (cameraSupported) {
-      startCamera();
+      /* eslint-disable-next-line react-hooks/set-state-in-effect --
+         startCamera je asinhrona: setState se izvede po `await`, zato klic ni
+         sinhron znotraj efekta (pravilo tega ne more zaznati). */
+      void startCamera();
     }
 
     return () => {
@@ -261,10 +262,10 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
 
       {/* Video / Image area */}
       <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-black">
-        {error && (
+        {(!cameraSupported || error) && (
           <div className="text-center p-6 max-w-md">
             <div className="text-4xl mb-4">📷</div>
-            <p className="text-white mb-4">{error}</p>
+            <p className="text-white mb-4">{error ?? cameraUnsupportedMessage}</p>
             <p className="text-gray-400 text-sm">
               Za zajem fotografij uporabite gumb "Naloži fotografijo" v glavnem vmesniku.
             </p>

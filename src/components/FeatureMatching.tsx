@@ -126,8 +126,10 @@ export function FeatureMatchingView({ photo1, photo2 }: FeatureMatchingProps) {
     // RANSAC homography estimation
     let inlierCount = 0;
     let rmse = 0;
-    let reliability: 'high' | 'medium' | 'low' | 'rejected' = 'low';
-    let reason = '';
+    // FAZA 16: vrednosti določimo v obeh vejah; začetni vrednosti ne smeta biti
+    // mrtve dodelitve (ESLint no-useless-assignment).
+    let reliability: 'high' | 'medium' | 'low' | 'rejected';
+    let reason: string;
     let concentrationIndex = 0;
 
     if (ccMatches.length >= 4) {

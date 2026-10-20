@@ -5,7 +5,7 @@
  * Shows match statistics and quality indicators.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Photo } from '../types';
 import type { MatchResult, Point2D } from '../utils/cv';
 
@@ -161,15 +161,13 @@ function MatchingVisualization({
   features2Points?: Point2D[];
   inlierMatches?: MatchResult[];
 }) {
-  const canvasRef = useMemo(() => {
-    return { current: null as HTMLCanvasElement | null };
-  }, []);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const displayWidth = 600;
   const displayHeight = 200;
 
-  // Draw visualization
-  useMemo(() => {
+  // Draw visualization (v učinku, ne med renderiranjem — sicer platna ni narisana)
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -257,7 +255,7 @@ function MatchingVisualization({
   return (
     <div className="bg-slate-900 rounded-lg p-2">
       <canvas
-        ref={(el) => { canvasRef.current = el; }}
+        ref={canvasRef}
         width={displayWidth}
         height={displayHeight}
         className="w-full h-auto"
