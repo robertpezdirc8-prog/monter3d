@@ -41,8 +41,20 @@ statistiko, a **ni dobil podatkov za risanje povezav** (`features1Points`,
 Podatki so zdaj posredovani, tip `PhotoPairMatching` je izvožen (prej je bil lokalen
 in je-tip `any[]` v `App.tsx` zakril neskladje).
 
+## 3. UI testi: izvoz in varnostna kopija
+
+Nov `src/tests/ui/exportBackup.test.tsx` (5 testov) preverja pot varnosti podatkov:
+- **CSV izvoz** ustvari datoteko z glavo in vrednostjo meritve;
+- **JSON izvoz** vsebuje projekt in meritve;
+- **PDF izvoz** brez dovoljenega popup okna prikaže razumljivo opozorilo (namesto
+  tihega ničesar);
+- **varnostna kopija** vsebuje fotografijo (`dataUrl`) in jo je mogoče **uvoziti nazaj**
+  kot nov projekt;
+- **neveljavna datoteka** pri uvozu ne uniči obstoječih projektov, temveč prikaže napako.
+
 ## Preverjanje
-`typecheck` ✅ · `eslint` ✅ **0 opozoril** · `vitest` ✅ 130/130 · `build` ✅
+`typecheck` ✅ · `eslint` ✅ **0 opozoril** · `vitest` ✅ **135/135** (3× zaporedoma in na
+Node 20) · `build` ✅
 
 ## Kaj ostane
 1. **UI testi** — PDF poročilo, uvoz varnostne kopije, korak »Kakovost«.
