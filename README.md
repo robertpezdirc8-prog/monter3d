@@ -37,6 +37,8 @@ Količine → Predračun → Izvoz`
 - **Varnostna kopija** (korak Izvoz → 🧰) izvozi JSON s projektom, stanjem in
   **fotografijami**; uvoz (korak Nov projekt → ⬆) obnovi projekt kot nov (izvirnik ostane).
 - Pri polni shrambi (kvota) uporabnik dobi opozorilo, ne praznega zaslona.
+- **Voden zajem po obrti** (`#trade`) shranjuje posnetke v izbrani projekt (zaščiteno
+  pred izgubo ob zaprtju zaslona); projekt je mogoče preklopiti med zajemom.
 
 ## Geometrija in matematika (FAZA 8 / P1)
 

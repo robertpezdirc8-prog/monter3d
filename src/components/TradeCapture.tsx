@@ -8,6 +8,9 @@ import {
   type TradeId, type FrameStats, type CaptureMeta,
   type CameraCapabilitiesInfo,
 } from '../utils/cameraSDK';
+import { getAllProjects, saveProject, savePhoto, setCurrentProjectId, getCurrentProjectId, deletePhoto } from '../utils/storage';
+import { frameStatsToImageQuality, photoStatusForQuality, resolveTradeProject } from '../utils/tradeCapture';
+import type { Project, Photo } from '../types';
 
 interface CapturedShot {
   id: string;
@@ -15,6 +18,8 @@ interface CapturedShot {
   dataUrl: string;
   stats: FrameStats;
   meta: CaptureMeta;
+  /** ID fotografije v shrambi (če je bila shranjena). */
+  photoId?: string;
 }
 
 export default function TradeCapture({ trade, onBack }: { trade: TradeId; onBack: () => void }) {
@@ -31,6 +36,10 @@ export default function TradeCapture({ trade, onBack }: { trade: TradeId; onBack
   const [activeReq, setActiveReq] = useState(profile.requirements[0].id);
   const [shots, setShots] = useState<CapturedShot[]>([]);
   const [busy, setBusy] = useState(false);
+  // FAZA 10 (P2): posnetki se shranjujejo v projekt, ne le v pomnilnik.
+  const [project, setProject] = useState<Project | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [savedCount, setSavedCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +62,43 @@ export default function TradeCapture({ trade, onBack }: { trade: TradeId; onBack
     };
   }, []);
 
+  // FAZA 10 (P2): določi projekt, v katerega se shranjujejo posnetki.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const existing = await getAllProjects();
+        if (cancelled) return;
+        setProjects(existing);
+
+        const { project: chosen, isNew } = resolveTradeProject(
+          existing,
+          getCurrentProjectId(),
+          trade,
+          profile.name
+        );
+        if (isNew) {
+          await saveProject(chosen);
+          setProjects(prev => [...prev, chosen]);
+        }
+        setCurrentProjectId(chosen.id);
+        setProject(chosen);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? 'Projekta ni bilo mogoče pripraviti.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [trade, profile.name]);
+
+  // Preklop med projekti (zajem se nadaljuje v izbranem projektu)
+  async function handleProjectChange(id: string) {
+    const chosen = projects.find(p => p.id === id);
+    if (!chosen) return;
+    setProject(chosen);
+    setCurrentProjectId(chosen.id);
+    setSavedCount(0);
+  }
+
   const reqShots = (id: string) => shots.filter(s => s.requirementId === id);
 
   async function handleCapture() {
@@ -61,10 +107,36 @@ export default function TradeCapture({ trade, onBack }: { trade: TradeId; onBack
     try {
       const { dataUrl, stats: st } = await cameraSDK.capturePhoto(2048);
       const meta = await collectCaptureMeta();
+      const shotId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       setShots(prev => [...prev, {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        id: shotId,
         requirementId: activeReq, dataUrl, stats: st, meta,
       }]);
+
+      // FAZA 10 (P2): shrani posnetek v shrambo fotografij izbranega projekta,
+      // da se ne izgubi ob zaprtju zaslona.
+      if (project) {
+        const quality = frameStatsToImageQuality(st);
+        const photo: Photo = {
+          id: shotId,
+          dataUrl,
+          timestamp: new Date(),
+          quality,
+          coverage: 0,
+          status: photoStatusForQuality(quality),
+          rejectionReason: quality.overallScore <= 0.4 ? 'Nizka kakovost posnetka' : undefined,
+          width: st.width,
+          height: st.height,
+        };
+        try {
+          await savePhoto({ ...photo, projectId: project.id });
+          setSavedCount(prev => prev + 1);
+        } catch (err: any) {
+          setError(err?.name === 'QuotaExceededError'
+            ? 'Shramba je polna — posnetek ni bil shranjen.'
+            : 'Posnetek ni bil shranjen.');
+        }
+      }
     } catch (e: any) {
       setError(e?.message ?? 'Zajem ni uspel.');
     } finally {
@@ -90,8 +162,15 @@ export default function TradeCapture({ trade, onBack }: { trade: TradeId; onBack
     setCaps(cameraSDK.getCapabilitiesInfo());
   }
 
-  function deleteShot(id: string) {
+  async function deleteShot(id: string) {
     setShots(prev => prev.filter(s => s.id !== id));
+    // FAZA 10 (P2): izbriši tudi shranjeno fotografijo v shrambi projekta.
+    try {
+      await deletePhoto(id);
+      setSavedCount(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error('Failed to delete photo:', err);
+    }
   }
 
   const activeRequirement = profile.requirements.find(r => r.id === activeReq)!;
@@ -120,6 +199,28 @@ export default function TradeCapture({ trade, onBack }: { trade: TradeId; onBack
       {error && (
         <div className="mb-3 p-3 rounded bg-red-800/80 text-sm">{error}</div>
       )}
+
+      {/* FAZA 10 (P2): v kateri projekt se shranjujejo posnetki */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+        <label htmlFor="trade-project" className="text-slate-400">Projekt:</label>
+        {projects.length > 0 ? (
+          <select
+            id="trade-project"
+            value={project?.id ?? ''}
+            onChange={e => void handleProjectChange(e.target.value)}
+            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+          >
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-slate-500">pripravljam…</span>
+        )}
+        <span className="text-emerald-400">
+          {savedCount > 0 ? `✓ ${savedCount} shranjenih v projektu` : 'posnetki se shranjujejo v projekt'}
+        </span>
+      </div>
 
       {/* Izbor koraka za zajem */}
       <div className="flex flex-wrap gap-2 mb-3">

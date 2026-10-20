@@ -76,6 +76,20 @@ describe('App — tok projekta (UI)', () => {
     });
   });
 
+  it('izvoz CSV pripravi datoteko (preverimo, da se izvoz sploh zažene)', async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+
+    render(<App />);
+    await ustvariProjekt('Izvozna ograda');
+
+    await user.click(screen.getByRole('button', { name: /izvoz/i }));
+    await user.click(await screen.findByRole('button', { name: /csv/i }));
+
+    expect(createObjectURL).toHaveBeenCalled();
+    createObjectURL.mockRestore();
+  });
+
   it('obvestilo o napaki pri brisanju ne izgubi projekta', async () => {
     const user = userEvent.setup();
     vi.spyOn(window, 'confirm').mockReturnValue(false);
