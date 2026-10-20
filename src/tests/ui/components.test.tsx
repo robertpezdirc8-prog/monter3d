@@ -181,7 +181,7 @@ describe('MaterialView (UI)', () => {
       />
     );
 
-    const izbirnik = screen.getByLabelText(/roksal profil/i) as HTMLSelectElement;
+    const izbirnik = screen.getByRole('combobox', { name: /roksal profil/i }) as HTMLSelectElement;
     fireEvent.change(izbirnik, { target: { value: 'polna-deska-57-32' } });
 
     expect(onFenceConfigChange).toHaveBeenCalled();

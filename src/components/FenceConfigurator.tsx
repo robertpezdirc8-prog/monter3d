@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { ROKSAL_PROFILES, ROKSAL_COLORS, getProfileById } from '../data/roksalCatalog';
+import { ROKSAL_PROFILES, ROKSAL_COLORS, getProfileById, searchProfiles } from '../data/roksalCatalog';
 import type { RoksalProfile, RoksalColor } from '../data/roksalCatalog';
 import { parseFenceConfiguration, validateConfiguration, getExamplePrompts } from '../utils/naturalLanguageParser';
 import type { ParsedConfiguration } from '../utils/naturalLanguageParser';
@@ -32,6 +32,9 @@ export function FenceConfigurator({ onClose, onApply }: FenceConfiguratorProps) 
   const [fenceLength, setFenceLength] = useState(3000); // mm
   const [boardSpacing, setBoardSpacing] = useState(20); // mm
   const [parseResult, setParseResult] = useState<ParsedConfiguration | null>(null);
+  // FAZA 21: iskanje profila v katalogu
+  const [profileQuery, setProfileQuery] = useState('');
+  const filteredProfiles = searchProfiles(profileQuery);
   const [, setValidationResult] = useState<ReturnType<typeof validateConfiguration> | null>(null);
 
   // Handle natural language input
@@ -204,19 +207,33 @@ export function FenceConfigurator({ onClose, onApply }: FenceConfiguratorProps) 
 
               {/* Profile Selection */}
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Profil</label>
+                <label htmlFor="config-profile-search" className="text-xs text-slate-400 mb-1 block">
+                  Profil (iskanje)
+                </label>
+                <input
+                  id="config-profile-search"
+                  type="search"
+                  value={profileQuery}
+                  onChange={e => setProfileQuery(e.target.value)}
+                  placeholder="npr. polna, 100, 1500"
+                  className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-1.5 text-white text-sm mb-2"
+                />
                 <select
                   value={selectedProfile?.id || ''}
                   onChange={(e) => handleProfileChange(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"
+                  aria-label="Izberite profil"
                 >
                   <option value="">Izberite profil</option>
-                  {ROKSAL_PROFILES.map(profile => (
+                  {filteredProfiles.map(profile => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name} ({profile.width}×{profile.thickness}×{profile.length}mm)
                     </option>
                   ))}
                 </select>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Prikazanih {filteredProfiles.length} od {ROKSAL_PROFILES.length} profilov
+                </p>
                 {selectedProfile && (
                   <p className="text-xs text-slate-400 mt-1">{selectedProfile.notes}</p>
                 )}

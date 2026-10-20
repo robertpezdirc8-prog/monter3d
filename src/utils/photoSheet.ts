@@ -157,6 +157,29 @@ export function buildPhotoSheetLayout(input: PhotoSheetInput): PhotoSheetLayout 
     }
   }
 
+  if (cells.length === 0 && layoutKind === 'strip') {
+    // Trak: fotografije v vrstici (kot filmski trak), po potrebi več vrstic.
+    const perRow = Math.max(1, Math.min(photos.length, Math.floor(contentWidth / 220)));
+    const rows = Math.max(1, Math.ceil(photos.length / perRow));
+    const cellWidth = Math.floor((contentWidth - gap * (perRow - 1)) / perRow);
+    const cellHeight = Math.floor((contentHeight - gap * (rows - 1)) / rows);
+    const photoHeight = Math.max(40, cellHeight - CAPTION_HEIGHT);
+
+    cells = photos.map((photo, i) => {
+      const col = i % perRow;
+      const row = Math.floor(i / perRow);
+      return {
+        photoId: photo.id,
+        x: padding + col * (cellWidth + gap),
+        y: padding + HEADER_HEIGHT + row * (cellHeight + gap),
+        width: cellWidth,
+        height: photoHeight,
+        caption: captionFor(photo),
+      };
+    });
+    columns = perRow;
+  }
+
   if (cells.length === 0 && layoutKind !== 'compare') {
     // Mreža
     columns = Math.max(1, Math.min(input.columns ?? DEFAULT_COLUMNS, photos.length || 1));

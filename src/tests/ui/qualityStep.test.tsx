@@ -244,6 +244,7 @@ describe('Označbe na fotografiji (UI)', () => {
   });
 });
 
+
 describe('Korak Kakovost (UI)', () => {
   beforeEach(beforeEachClean);
 

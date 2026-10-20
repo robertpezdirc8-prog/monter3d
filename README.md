@@ -99,6 +99,13 @@ v **PNG** — vse lokalno v brskalniku, brez nalaganja fotografij na internet (v
 spletnih orodij za fotomontažo, Abox Image Layout in PixGrid, ter dokumentacijski tok
 CompanyCam).
 
+### Dokumentacijska lista — izbira, postavitve, iskanje
+- **Izbira fotografij**: gumb »🖼 N/M fotografij« odpre miniaturne, s klikom dodaja/odstrani
+  fotografijo iz liste.
+- **Postavitve**: mreža, **trak (vrstica)** in **primerjava pred/po**.
+- **Iskanje v katalogu** (korak Materiali in konfigurator): iskalno polje najde profil po
+  imenu, ID-ju, dimenziji ali dovoljenem razmiku (npr. »1500«).
+
 ### Predračun s fotografijami in primerjava pred/po
 - **PDF predračun** (korak Izvoz → 📄 PDF) vsebuje tudi **galerijo fotografij z napisi**
   in narisane skice (SVG) — stranka vidi del, ne le številke.

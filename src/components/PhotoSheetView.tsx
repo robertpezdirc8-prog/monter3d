@@ -28,10 +28,15 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, pro
   const [presetId, setPresetId] = useState(PHOTO_SHEET_PRESETS[0].id);
   const [columns, setColumns] = useState(3);
   const [layoutKind, setLayoutKind] = useState<PhotoSheetLayoutKind>('grid');
+  // FAZA 21: uporabnik sam izbere fotografije, ki gredo v listo (PixGrid).
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => photos.map(p => p.id));
+  const [showPicker, setShowPicker] = useState(false);
+
+  const selectedPhotos = photos.filter(p => selectedIds.includes(p.id));
   const [status, setStatus] = useState<string | null>(null);
 
   const layout = buildPhotoSheetLayout({
-    photos,
+    photos: selectedPhotos,
     measurements,
     projectName,
     summary,
@@ -45,11 +50,11 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, pro
     const canvas = canvasRef.current;
     if (!canvas) return;
     let cancelled = false;
-    void renderPhotoSheet(canvas, layout, photos).catch(err => {
+    void renderPhotoSheet(canvas, layout, selectedPhotos).catch(err => {
       if (!cancelled) console.error('Failed to render photo sheet:', err);
     });
     return () => { cancelled = true; };
-  }, [layout, photos]);
+  }, [layout, selectedPhotos]);
 
   const handleExport = useCallback(async () => {
     const canvas = canvasRef.current;
@@ -57,7 +62,7 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, pro
     setStatus('Pripravljam PNG …');
     try {
       // Zagotovi, da je canvas narisan pred izvozom.
-      await renderPhotoSheet(canvas, layout, photos);
+      await renderPhotoSheet(canvas, layout, selectedPhotos);
       const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
       if (!blob) throw new Error('Brskalnik ni uspel ustvariti slike');
       const url = URL.createObjectURL(blob);
@@ -73,7 +78,7 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, pro
       console.error('Failed to export photo sheet:', err);
       setStatus('Izvoz ni uspel — poskusi z manjšo sliko.');
     }
-  }, [layout, photos, projectName]);
+  }, [layout, selectedPhotos, projectName, setStatus]);
 
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
@@ -118,6 +123,7 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, pro
                     className="bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white"
                   >
                     <option value="grid">Mreža</option>
+                    <option value="strip">Trak (vrstica)</option>
                     <option value="compare">Primerjava pred / po</option>
                   </select>
                 </div>
@@ -133,6 +139,13 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, pro
                     className="w-20 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white"
                   />
                 </div>
+                <button
+                  onClick={() => setShowPicker(v => !v)}
+                  className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded text-sm font-medium"
+                  title="Izberi fotografije, ki gredo v dokumentacijsko listo"
+                >
+                  🖼 {selectedPhotos.length}/{photos.length} fotografij
+                </button>
                 <button
                   onClick={handleExport}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-medium"
@@ -150,6 +163,38 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, pro
                 )}
                 {status && <span className="text-xs text-slate-300">{status}</span>}
               </div>
+
+              {showPicker && (
+                <div className="rounded border border-slate-700 bg-slate-900 p-3">
+                  <p className="text-xs text-slate-400 mb-2">
+                    Klikni fotografijo, da jo dodas ali odstranis iz liste.
+                  </p>
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                    {photos.map(photo => {
+                      const selected = selectedIds.includes(photo.id);
+                      return (
+                        <button
+                          key={photo.id}
+                          type="button"
+                          onClick={() => setSelectedIds(prev =>
+                            selected ? prev.filter(id => id !== photo.id) : [...prev, photo.id]
+                          )}
+                          className={`relative rounded overflow-hidden aspect-video border-2 ${
+                            selected ? 'border-emerald-400' : 'border-slate-700 opacity-50'
+                          }`}
+                          aria-pressed={selected}
+                          aria-label={`${selected ? 'Odstrani' : 'Dodaj'} fotografijo ${photo.id}`}
+                        >
+                          <img src={photo.dataUrl} alt="" className="w-full h-full object-cover" />
+                          {selected && (
+                            <span className="absolute top-1 right-1 text-[10px] bg-emerald-600 text-white rounded px-1">✓</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="overflow-auto rounded border border-slate-700 bg-slate-900 p-2">
                 <canvas ref={canvasRef} className="max-w-full h-auto" aria-label="Predogled dokumentacijske liste" />
