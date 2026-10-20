@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 import type { Photo } from '../types';
 import type { MatchResult, Point2D } from '../utils/cv';
 
-interface PhotoPairMatching {
+export interface PhotoPairMatching {
   photo1: Photo;
   photo2: Photo;
   features1: number;
@@ -27,10 +27,9 @@ interface PhotoPairMatching {
 
 interface PhotoMatchingViewProps {
   matchings: PhotoPairMatching[];
-  onSelectPhoto?: (photo: Photo) => void;
 }
 
-export function PhotoMatchingView({ matchings, onSelectPhoto }: PhotoMatchingViewProps) {
+export function PhotoMatchingView({ matchings }: PhotoMatchingViewProps) {
   if (matchings.length === 0) {
     return (
       <div className="bg-slate-800 rounded-lg p-6 text-center">
@@ -50,20 +49,13 @@ export function PhotoMatchingView({ matchings, onSelectPhoto }: PhotoMatchingVie
         <MatchingCard
           key={idx}
           matching={matching}
-          onSelectPhoto={onSelectPhoto}
         />
       ))}
     </div>
   );
 }
 
-function MatchingCard({ 
-  matching, 
-  onSelectPhoto 
-}: { 
-  matching: PhotoPairMatching;
-  onSelectPhoto?: (photo: Photo) => void;
-}) {
+function MatchingCard({ matching }: { matching: PhotoPairMatching }) {
   const { 
     photo1, photo2, features1, features2, matches, inliers, 
     reprojError, status, message,
@@ -95,7 +87,6 @@ function MatchingCard({
           features1Points={features1Points}
           features2Points={features2Points}
           inlierMatches={inlierMatches}
-          allMatches={matches}
         />
       </div>
 
@@ -162,15 +153,13 @@ function MatchingVisualization({
   photo2,
   features1Points,
   features2Points,
-  inlierMatches,
-  allMatches
+  inlierMatches
 }: {
   photo1: Photo;
   photo2: Photo;
   features1Points?: Point2D[];
   features2Points?: Point2D[];
   inlierMatches?: MatchResult[];
-  allMatches: MatchResult[];
 }) {
   const canvasRef = useMemo(() => {
     return { current: null as HTMLCanvasElement | null };

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import type { Photo } from '../types';
 import { toGrayscale, harrisCornerDetection, computeDescriptors, crossCheckMatch, ransacHomography } from '../utils/cv';
 
@@ -24,12 +24,7 @@ export function FeatureMatchingView({ photo1, photo2 }: FeatureMatchingProps) {
   const [processing, setProcessing] = useState(false);
   const [engineUsed, setEngineUsed] = useState<string>('');
 
-  useEffect(() => {
-    if (!photo1 || !photo2 || !canvasRef.current) return;
-    processMatching();
-  }, [photo1, photo2]);
-
-  const processMatching = async () => {
+  const processMatching = useCallback(async () => {
     setProcessing(true);
     setAnalysis(null);
 
@@ -108,8 +103,9 @@ export function FeatureMatchingView({ photo1, photo2 }: FeatureMatchingProps) {
 
     // Cross-check matching
     const ccMatches = crossCheckMatch(features1, features2, 0.8);
-    const rawMatches = features1.length * features2.length > 0 ? 
-      Math.round(ccMatches.length * 1.5) : 0;
+    const rawMatches = features1.length * features2.length > 0
+      ? Math.round(ccMatches.length * 1.5)
+      : 0;
 
     // Draw matches
     const maxDrawMatches = Math.min(ccMatches.length, 30);
@@ -175,10 +171,11 @@ export function FeatureMatchingView({ photo1, photo2 }: FeatureMatchingProps) {
 
         // Determine reliability
         const overlapRatio = inlierCount / Math.max(features1.length, features2.length);
-        
+
         if (inlierCount >= 8 && rmse < 3 && concentrationIndex > 0.3) {
           reliability = 'high';
-          reason = `Dovolj inlierjev (${inlierCount}), nizka RMSE (${rmse.toFixed(2)}), dobra razporeditev.`;
+          reason = `Dovolj inlierjev (${inlierCount}), nizka RMSE (${rmse.toFixed(2)}), ` +
+            `dobra razporeditev, prekrivanje ${(overlapRatio * 100).toFixed(0)} %`.trim() + '.';
         } else if (inlierCount >= 4 && rmse < 5) {
           reliability = 'medium';
           reason = `Zadostno ujemanje, vendar z višjo negotovostjo (RMSE: ${rmse.toFixed(2)}).`;
@@ -217,7 +214,13 @@ export function FeatureMatchingView({ photo1, photo2 }: FeatureMatchingProps) {
     });
 
     setProcessing(false);
-  };
+  }, [photo1, photo2]);
+
+  useEffect(() => {
+    if (!photo1 || !photo2 || !canvasRef.current) return;
+    void processMatching();
+  }, [photo1, photo2, processMatching]);
+
 
   return (
     <div className="bg-slate-800 rounded-lg p-4">

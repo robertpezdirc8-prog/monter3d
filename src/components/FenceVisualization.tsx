@@ -18,7 +18,6 @@ interface FenceVisualizationProps {
 
 export function FenceVisualization({
   photoUrl,
-  fencePlan,
   startPoint,
   endPoint,
   onStartPointChange,
@@ -33,7 +32,7 @@ export function FenceVisualization({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [placingPoint, setPlacingPoint] = useState<'start' | 'end' | null>(null);
-  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const [, setImageSize] = useState({ width: 0, height: 0 });
 
   // Draw fence visualization
   useEffect(() => {
@@ -219,7 +218,7 @@ function drawFence(
 ) {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
-  const length = Math.sqrt(dx * dx + dy * dy);
+  const _length = Math.sqrt(dx * dx + dy * dy);
   const angle = Math.atan2(dy, dx);
   
   // Fence height in pixels (approximate based on image)

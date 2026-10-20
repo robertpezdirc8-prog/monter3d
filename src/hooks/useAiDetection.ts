@@ -8,7 +8,7 @@
  * Prenese se enkrat v brskalnikov cache, potem deluje offline.
  */
 
-import { useRef, useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 export interface DetectedObject {
   label: string;
@@ -18,11 +18,22 @@ export interface DetectedObject {
 
 export type AiStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-// Globalni singleton pipeline — naloži se samo enkrat
-let gPipeline: any = null;
-let gLoadPromise: Promise<any> | null = null;
+/**
+ * Minimalen opis transformers.js cevovodnega objekta (knjižnica je tipizirana
+ * precej ohlapno, zato si tu določimo to, kar dejansko uporabljamo).
+ */
+interface DetectionPipeline {
+  (source: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement, options?: {
+    threshold?: number;
+    percentage?: boolean;
+  }): Promise<Array<{ label: string; score: number; box?: Record<string, number> }>>;
+}
 
-async function getPipeline(): Promise<any> {
+// Globalni singleton pipeline — naloži se samo enkrat
+let gPipeline: DetectionPipeline | null = null;
+let gLoadPromise: Promise<DetectionPipeline> | null = null;
+
+async function getPipeline(): Promise<DetectionPipeline> {
   if (gPipeline) return gPipeline;
   if (gLoadPromise) return gLoadPromise;
   gLoadPromise = (async () => {
@@ -30,10 +41,10 @@ async function getPipeline(): Promise<any> {
     const p = await transformers.pipeline(
       'object-detection',
       'onnx-community/rfdetr_nano-ONNX',
-      {  } as any // quantized: true — potihoma ignorirano za TS
+      {  } as never // quantized: true — potihoma ignorirano za TS
     );
-    gPipeline = p;
-    return p;
+    gPipeline = p as unknown as DetectionPipeline;
+    return gPipeline;
   })();
   return gLoadPromise;
 }
@@ -51,9 +62,9 @@ export function useAiDetection() {
       await getPipeline();
       setStatus('ready');
       setStatusText('✅ AI model pripravljen');
-    } catch (e: any) {
+    } catch (e: unknown) {
       setStatus('error');
-      setStatusText(`❌ Napaka: ${e?.message ?? 'neznana'}`);
+      setStatusText(`❌ Napaka: ${e instanceof Error ? e.message : 'neznana'}`);
       console.error('AI model load failed:', e);
     }
   }, [status]);
@@ -71,7 +82,7 @@ export function useAiDetection() {
     }
     try {
       // Transformers.js podpira direktno HTML elemente
-      const output: any[] = await gPipeline(source, {
+      const output = await gPipeline(source, {
         threshold: 0.5,
         percentage: true, // koordinate so 0..1
       });
@@ -85,7 +96,7 @@ export function useAiDetection() {
         ?? (source as HTMLImageElement).naturalHeight
         ?? 480;
 
-      const objs: DetectedObject[] = output.map((d: any) => {
+      const objs: DetectedObject[] = output.map(d => {
         const b = d.box ?? {};
         // percentage koordinate → pixel koordinate
         const xmin = (b.xmin ?? 0) * imgWidth;
@@ -97,7 +108,7 @@ export function useAiDetection() {
 
       setDetections(objs);
       return objs;
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('AI detection error:', e);
       setDetections([]);
       return [];

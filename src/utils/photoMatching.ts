@@ -10,7 +10,6 @@ import type { FeatureDescriptor, MatchResult } from './cv';
 import { 
   harrisCornerDetection, 
   computeDescriptors, 
-  bruteForceMatch, 
   crossCheckMatch,
   ransacHomography,
   toGrayscale
@@ -101,8 +100,6 @@ export async function matchPhotoPair(
   }
 
   // Find matches
-  const rawMatches = bruteForceMatch(features1, features2);
-  
   // Apply cross-check
   const crossChecked = crossCheckMatch(features1, features2);
   

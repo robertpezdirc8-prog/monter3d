@@ -2,7 +2,7 @@
  * ScaleView.tsx — korak »Merilo«: kalibracija fotografije z referenčno dolžino.
  */
 import type { Photo } from '../../types';
-export function ScaleView({ selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, measurePoints, referenceLength, onSetReferenceLength, onSetScale, pixelToMeter, onCanvasClick, onAnalyze }: {
+export function ScaleView({ selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, measurePoints, referenceLength, onSetReferenceLength, onSetScale, pixelToMeter, onCanvasClick }: {
   selectedPhoto: Photo | null;
   canvasRef: React.RefObject<HTMLCanvasElement>;
   measuringMode: boolean;

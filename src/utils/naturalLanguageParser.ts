@@ -7,8 +7,7 @@
  * No external AI models or paid services required.
  */
 
-import { ROKSAL_PROFILES, ROKSAL_COLORS, getProfileById } from '../data/roksalCatalog';
-import type { RoksalProfile, RoksalColor } from '../data/roksalCatalog';
+import { ROKSAL_COLORS, getProfileById } from '../data/roksalCatalog';
 
 export interface ParsedConfiguration {
   profileId?: string;
@@ -62,7 +61,6 @@ export function parseFenceConfiguration(input: string): ParsedConfiguration {
   };
 
   const normalizedInput = input.toLowerCase().trim();
-  const words = normalizedInput.split(/\s+/);
 
   // Parse profile
   for (const [profileId, keywords] of Object.entries(PROFILE_KEYWORDS)) {

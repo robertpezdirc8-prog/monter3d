@@ -188,7 +188,7 @@ export function CameraCapture({ onCapture, onClose, stepId }: CameraCaptureProps
       clearInterval(aiTimerRef.current);
       aiTimerRef.current = null;
     }
-  }, [assessImageQuality]);
+  }, []);
 
   // Confirm captured photo
   const confirmCapture = useCallback(() => {

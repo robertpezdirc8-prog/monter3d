@@ -51,8 +51,8 @@ export default function TradeCapture({ trade, onBack }: { trade: TradeId; onBack
         setLive(true);
         setCaps(cameraSDK.getCapabilitiesInfo());
         stopWatchRef.current = cameraSDK.startLiveQualityWatch(setStats, 300);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? 'Kamere ni bilo mogoče zagnati.');
+      } catch (e: unknown) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Kamere ni bilo mogoče zagnati.');
       }
     })();
     return () => {
@@ -83,8 +83,8 @@ export default function TradeCapture({ trade, onBack }: { trade: TradeId; onBack
         }
         setCurrentProjectId(chosen.id);
         setProject(chosen);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? 'Projekta ni bilo mogoče pripraviti.');
+      } catch (e: unknown) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Projekta ni bilo mogoče pripraviti.');
       }
     })();
     return () => { cancelled = true; };
@@ -131,14 +131,14 @@ export default function TradeCapture({ trade, onBack }: { trade: TradeId; onBack
         try {
           await savePhoto({ ...photo, projectId: project.id });
           setSavedCount(prev => prev + 1);
-        } catch (err: any) {
-          setError(err?.name === 'QuotaExceededError'
+        } catch (err: unknown) {
+          setError(err instanceof Error && err.name === 'QuotaExceededError'
             ? 'Shramba je polna — posnetek ni bil shranjen.'
             : 'Posnetek ni bil shranjen.');
         }
       }
-    } catch (e: any) {
-      setError(e?.message ?? 'Zajem ni uspel.');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Zajem ni uspel.');
     } finally {
       setBusy(false);
     }
@@ -158,7 +158,7 @@ export default function TradeCapture({ trade, onBack }: { trade: TradeId; onBack
   async function handleFlip() {
     const cur = cameraSDK.activeTrack?.getSettings().facingMode;
     const target = cur === 'user' ? 'environment' : 'user';
-    await cameraSDK.switchCamera(target as any);
+    await cameraSDK.switchCamera(target);
     setCaps(cameraSDK.getCapabilitiesInfo());
   }
 
