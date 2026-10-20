@@ -62,8 +62,9 @@ export function RoksalGalleryView({ onClose }: RoksalGalleryViewProps) {
         <div className="p-4 border-b border-slate-700 bg-slate-900/50">
           {/* FAZA 10 (P2): slike so zunanji vir — brez povezave se prikaže nadomestek. */}
           <p className="mb-3 rounded border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs text-slate-400">
-            Slike se nalagajo z roksal.com — brez povezave so prikazani nadomestki z barvnim
-            vzorcem. Barve in tehnične podatke preveri v <b>Katalogu</b> (deluje brez povezave).
+            Slike so shranjene <b>lokalno</b> (delujejo brez povezave). Če lokalna kopija ni
+            na voljo, se naloži izvirnik z roksal.com, sicer je prikazan nadomestek z barvnim
+            vzorcem. Vir slik: roksal.com.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>

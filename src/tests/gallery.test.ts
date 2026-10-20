@@ -2,8 +2,12 @@
  * FAZA 10 (P2) — galerija Roksal: povezava s katalogom in offline prikaz.
  */
 import { describe, it, expect } from 'vitest';
+import { existsSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { ROKSAL_GALLERY, getImagesByColor, getImagesByProfile } from '../data/roksalGallery';
 import { ROKSAL_COLORS, getColorById } from '../data/roksalCatalog';
+
+const PUBLIC_DIR = join(process.cwd(), 'public');
 
 describe('galerija ↔ katalog (barve in profili)', () => {
   it('vse barve v galeriji obstajajo v katalogu (filter po barvi deluje)', () => {
@@ -35,5 +39,32 @@ describe('galerija ↔ katalog (barve in profili)', () => {
     expect(getColorById('ash')?.id).toBe('ash-wood');
     expect(getColorById('amazon-wood')?.id).toBe('amazon-wood');
     expect(getColorById('neobstaja')).toBeUndefined();
+  });
+});
+
+describe('lokalne slike galerije (offline)', () => {
+  it('vsaka slika ima lokalno pot', () => {
+    const brez = ROKSAL_GALLERY.filter(img => !img.localPath).map(img => img.id);
+    expect(brez).toEqual([]);
+  });
+
+  it('lokalna datoteka res obstaja in je dovolj velika', () => {
+    const manjse = ROKSAL_GALLERY
+      .filter(img => img.localPath)
+      .filter(img => {
+        const path = join(PUBLIC_DIR, img.localPath!.replace(/^\//, ''));
+        if (!existsSync(path)) return true;
+        return statSync(path).size < 1024;
+      })
+      .map(img => img.id);
+
+    // Manjkajoče slike ne smejo tiho uničiti galerije — videti morajo v CI.
+    expect(manjse).toEqual([]);
+  });
+
+  it('lokalne poti so znotraj public/roksal/images', () => {
+    for (const img of ROKSAL_GALLERY) {
+      expect(img.localPath).toMatch(/^\/roksal\/images\/(vertical|horizontal|stairs|profiles|swatches)\//);
+    }
   });
 });
