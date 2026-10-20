@@ -62,6 +62,7 @@ import {
 } from './utils/projectState';
 import { calculateFenceCalculation } from './utils/fenceCalculation';
 import { normalizeUnit, fromUnit, type LengthUnit } from './utils/units';
+import { buildShareDocument, estimateShareSizeMB } from './utils/shareExport';
 import { getProfileById } from './data/roksalCatalog';
 import { createBackup, restoreBackup, createWorkspaceBackup, restoreWorkspaceBackup, parseBackup, parseWorkspaceBackup } from './utils/backup';
 import { downloadFile } from './utils/download';
@@ -1106,6 +1107,42 @@ function App() {
   }, [currentProject, photos, logActivity]);
 
   /**
+   * FAZA 32: deli dokumentacijo kot SAMOSTOJEN HTML dokument (brez strežnika) —
+   * pisarna ga odpre v kateremkoli brskalniku, ne potrebuje aplikacije.
+   */
+  const handleShareDocumentation = useCallback(() => {
+    if (!currentProject) {
+      alert('Ni izbranega projekta za deljenje.');
+      return;
+    }
+    try {
+      const velikost = estimateShareSizeMB(photos);
+      if (velikost > 25) {
+        const potrdi = window.confirm(
+          `Dokumentacija bo velika (~${velikost.toFixed(0)} MB zaradi fotografij). ` +
+          `Kljub, da jo želiš poslati tako?`
+        );
+        if (!potrdi) return;
+      }
+      const html = buildShareDocument({
+        project: currentProject,
+        photos,
+        measurements,
+        fencePlan,
+        boardPlan,
+        estimate,
+        lengthUnit,
+      });
+      const safeName = currentProject.name.replace(/[^\w-]+/g, '_').slice(0, 40) || 'projekt';
+      downloadFile(html, `dokumentacija_${safeName}.html`, 'text/html;charset=utf-8');
+      logActivity('export_created', 'Izdelana dokumentacija za deljenje (samostojen HTML)');
+    } catch (err) {
+      console.error('Failed to share documentation:', err);
+      alert('Dokumentacije ni bilo mogoče ustvariti.');
+    }
+  }, [currentProject, photos, measurements, fencePlan, boardPlan, estimate, lengthUnit, logActivity]);
+
+  /**
    * FAZA 13: varnostna kopija celotnega delovnega okolja (vsi projekti) —
    * za prenos na drugo napravo ali arhiviranje.
    */
@@ -1637,6 +1674,7 @@ function App() {
               onExport={exportData}
               onExportBackup={handleExportBackup}
               onOpenPhotoSheet={() => setShowPhotoSheet(true)}
+              onShareDocumentation={handleShareDocumentation}
               measurements={measurements}
               currentProject={currentProject}
               fencePlan={fencePlan}

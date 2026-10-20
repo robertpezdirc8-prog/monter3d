@@ -39,6 +39,9 @@ Količine → Predračun → Izvoz`
   **fotografijami**; uvoz (korak Nov projekt → ⬆) obnovi projekt kot nov (izvirnik ostane).
 - **Kopija celotnega delovnega okolja** (Nov projekt → 🗄️) zajame **vse** projekte in
   fotografije v eno datoteko; isti gumb uvozi obe obliki kopij (projekt ali okolje).
+- **Deljenje dokumentacije brez strežnika** (Izvoz → 📨): aplikacija izdela **samostojen
+  HTML dokument** (projekt, meritve, fotografije, predračun) — pisarna ga odpre v
+  kateremkoli brskalniku, brez aplikacije.
 - Pri polni shrambi (kvota) uporabnik dobi opozorilo, ne praznega zaslona.
 - **Voden zajem po obrti** (`#trade`) shranjuje posnetke v izbrani projekt (zaščiteno
   pred izgubo ob zaprtju zaslona); projekt je mogoče preklopiti med zajemom.
