@@ -84,6 +84,10 @@ public/sw.js           # service worker (offline)
 
 Poročila o fazah dela so v `docs/porocila/`, dodatna dokumentacija v `docs/`.
 
+### Namestitev in delovanje brez povezave
+Aplikacija je namestljiva (PWA): manifest + service worker omogočata delovanje brez
+omrežja, v glavi pa se pokaže gumb »⬇ Namesti« in opozorilo, ko naprava ni povezana.
+
 ### Galerija slik
 Slike so shranjene **lokalno** v `public/roksal/images/` (galerija deluje brez povezave),
 osveži pa jih z `npm run fetch:images`. Vir slik je roksal.com — pogoje uporabe preveri v

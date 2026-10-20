@@ -15,6 +15,7 @@ import { CameraCapture } from './components/CameraCapture';
 import { MeasurementOverlay } from './components/MeasurementOverlay';
 import { MeasurementAccuracyTests } from './components/MeasurementAccuracyTests';
 import { PhotoMatchingView, type PhotoPairMatching } from './components/PhotoMatchingView';
+import { InstallPrompt } from './components/InstallPrompt';
 import { FenceVisualizer } from './components/FenceVisualizer';
 import { RoksalGalleryView } from './components/RoksalGalleryView';
 import { FenceConfigurator } from './components/FenceConfigurator';
@@ -1081,10 +1082,12 @@ function App() {
             <p className="text-xs text-slate-400">Profesionalne 3D-meritve in montaža</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <span className="text-xs bg-emerald-900/50 text-emerald-300 px-2 py-1 rounded">
             Offline ✓
           </span>
+          {/* FAZA 14: ponudba namestitve (PWA) in indikator povezave */}
+          <InstallPrompt />
           <button
             onClick={() => setShowAccuracyTests(!showAccuracyTests)}
             className="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded hover:bg-blue-800/50"
