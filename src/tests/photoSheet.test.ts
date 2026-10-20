@@ -140,4 +140,22 @@ describe('buildPhotoSheetLayout', () => {
     expect(layout.cells.length).toBe(2);
     expect(layout.columns).toBe(2);
   });
+
+  it('trakasta postavitev razporedi fotografije v vrstice', () => {
+    const photos = Array.from({ length: 5 }, (_, i) => photo(`p${i}`));
+    const layout = buildPhotoSheetLayout({
+      photos,
+      measurements: [],
+      projectName: 'X',
+      layoutKind: 'strip',
+    });
+
+    expect(layout.cells.length).toBe(5);
+    // V isti vrstici so celice enako visoke in se ne prekrivajo.
+    const prva = layout.cells[0];
+    const druga = layout.cells[1];
+    expect(druga.y).toBe(prva.y);
+    expect(druga.x).toBeGreaterThan(prva.x);
+    expect(prva.x + prva.width).toBeLessThanOrEqual(druga.x);
+  });
 });

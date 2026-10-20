@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import type { Project, Measurement, FenceSegmentInput, MaterialPrices, FenceConfig, StairsConfig } from '../../types';
 import { selectFenceLengthMeasurements } from '../../utils/geometry';
-import { ROKSAL_PROFILES } from '../../data/roksalCatalog';
+import { searchProfiles } from '../../data/roksalCatalog';
 import { FenceSegmentEditor } from '../FenceSegmentEditor';
 export function MaterialView({ currentProject, fenceConfig, onFenceConfigChange, stairsConfig, onStairsConfigChange, onCalculateFence, onCalculateStairs, measurements, fenceSegments, onFenceSegmentsChange, materialPrices, onMaterialPricesChange }: {
   currentProject: Project | null;
@@ -22,6 +22,9 @@ export function MaterialView({ currentProject, fenceConfig, onFenceConfigChange,
   onMaterialPricesChange: (prices: MaterialPrices) => void;
 }) {
   const [activeSection, setActiveSection] = useState<'fence' | 'stairs'>('fence');
+  // FAZA 21: iskanje profila v katalogu
+  const [profileQuery, setProfileQuery] = useState('');
+  const filteredProfiles = searchProfiles(profileQuery);
 
   return (
     <div>
@@ -81,6 +84,14 @@ export function MaterialView({ currentProject, fenceConfig, onFenceConfigChange,
               <label htmlFor="fence-profile" className="text-xs text-slate-400">
                 Roksal profil (za preverjanje pravil)
               </label>
+              <input
+                type="search"
+                value={profileQuery}
+                onChange={e => setProfileQuery(e.target.value)}
+                placeholder="Iskanje profila (npr. polna, 100, romb)"
+                aria-label="Iskanje Roksal profila"
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white mb-2"
+              />
               <select
                 id="fence-profile"
                 value={fenceConfig.profileId ?? ''}
@@ -91,7 +102,7 @@ export function MaterialView({ currentProject, fenceConfig, onFenceConfigChange,
                 className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white mt-1"
               >
                 <option value="">Brez profila (pravila niso preverjena)</option>
-                {ROKSAL_PROFILES.map(p => (
+                {filteredProfiles.map(p => (
                   <option key={p.id} value={p.id}>
                     {p.name} — max razmak stebrov {p.maxPostSpacingLow} mm
                     {p.maxPostSpacingHigh !== p.maxPostSpacingLow ? ` / ${p.maxPostSpacingHigh} mm (>150 cm)` : ''}

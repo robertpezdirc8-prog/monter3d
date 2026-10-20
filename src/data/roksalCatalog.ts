@@ -428,3 +428,35 @@ export const CATALOG_METADATA = {
     'Montaža ni primerna pri temperaturi pod 5°C'
   ]
 };
+
+/**
+ * FAZA 21: iskanje v katalogu (izberi profil/barvo po imenu, ID ali dimenzijah).
+ * Katalog je pregleden, z brez iskanja je iskanje profila mučno.
+ */
+export function searchProfiles(query: string): RoksalProfile[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return ROKSAL_PROFILES;
+  return ROKSAL_PROFILES.filter(p =>
+    p.name.toLowerCase().includes(q)
+    || p.id.toLowerCase().includes(q)
+    || (p.notes ?? '').toLowerCase().includes(q)
+    || (p.technicalNotes ?? []).some(n => n.toLowerCase().includes(q))
+    || String(p.width).includes(q)
+    || String(p.length).includes(q)
+    // uporabnik pogosto vpiše dovoljeni razmak (npr. »1500«)
+    || String(p.maxPostSpacingLow).includes(q)
+    || String(p.maxPostSpacingHigh).includes(q)
+    || String(p.maxBeamSpacing).includes(q)
+  );
+}
+
+export function searchColors(query: string): RoksalColor[] {
+  const q = query.trim().toLowerCase();
+  const all = Object.values(ROKSAL_COLORS);
+  if (!q) return all;
+  return all.filter(c =>
+    c.name.toLowerCase().includes(q)
+    || c.id.toLowerCase().includes(q)
+    || c.hex.toLowerCase().includes(q)
+  );
+}
