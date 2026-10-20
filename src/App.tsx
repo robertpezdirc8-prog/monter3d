@@ -1065,9 +1065,9 @@ function App() {
     } else if (format === 'pdf') {
       // FAZA 7 (P0): fotografije niso več del zapisa projekta, zato jih za poročilo
       // (število fotografij) podamo iz stanja.
-      generatePDFReport({ ...currentProject, photos }, measurements, fencePlan, stairsPlan, estimate);
+      generatePDFReport({ ...currentProject, photos }, measurements, fencePlan, stairsPlan, estimate, activity);
     }
-  }, [measurements, currentProject, photos, fencePlan, stairsPlan, estimate, logActivity]);
+  }, [measurements, currentProject, photos, fencePlan, stairsPlan, estimate, activity, logActivity]);
 
   /**
    * FAZA 7 (P0): varnostna kopija — JSON s projektom, stanjem IN fotografijami.

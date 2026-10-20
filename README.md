@@ -54,7 +54,8 @@ Količine → Predračun → Izvoz`
   ponudba »↶ Razveljavi« (samodejno izgine po 10 s). Zaporedne napake se razveljavljajo
   ena za drugo (»+N še razveljivih«).
 - **Zgodovina projekta** (korak 🕘): dnevnik opravljenega dela — kaj je bilo izmerjeno,
-  dodano in izračunano (lokalno, brez strežnika).
+  dodano in izračunano (lokalno, brez strežnika). Dnevnik je tudi del **PDF poročila**
+  (»Potek dela«), ki gre stranki.
 
 ## Geometrija in matematika (FAZA 8 / P1)
 

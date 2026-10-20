@@ -93,4 +93,39 @@ describe('generatePDFReport', () => {
     generatePDFReport(mkProject([]), [], null, null, null);
     expect(html()).not.toContain('class="photo-grid"');
   });
+
+  it('FAZA 28: poročilo vsebuje potek dela (dnevnik)', () => {
+    const { html } = captureReportHtml();
+    const activity = [
+      {
+        id: 'a1',
+        projectId: 'p1',
+        type: 'measurement_added' as const,
+        message: 'Meritev 4.20 m',
+        timestamp: new Date('2026-01-02T09:15:00Z'),
+      },
+      {
+        id: 'a2',
+        projectId: 'p1',
+        type: 'plan_calculated' as const,
+        message: 'Izračunana ograja: 6.00 m',
+        timestamp: new Date('2026-01-02T10:00:00Z'),
+      },
+    ];
+
+    generatePDFReport(mkProject([]), [], null, null, null, activity);
+
+    const out = html();
+    expect(out).toContain('Potek dela');
+    expect(out).toContain('Meritev 4.20 m');
+    expect(out).toContain('Izračunana ograja: 6.00 m');
+    // Dogodki so urejeni po času (najprej najstarejši).
+    expect(out.indexOf('Meritev 4.20 m')).toBeLessThan(out.indexOf('Izračunana ograja: 6.00 m'));
+  });
+
+  it('brez dnevnika poročilo ne vsebuje poteka dela', () => {
+    const { html } = captureReportHtml();
+    generatePDFReport(mkProject([]), [], null, null, null, []);
+    expect(html()).not.toContain('Potek dela');
+  });
 });
