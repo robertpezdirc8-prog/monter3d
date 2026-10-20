@@ -25,8 +25,8 @@ izvede, opozorilo o izgubljeni povezavi se prikaže in izgine ob vračanju.
 `test-runner` 21/21 · `test-homography` 40/40 · `build` ✅
 
 ## Kaj ostane
-1. **CI koraki** (ESLint + `test-homography.js`) — zahtevajo ročno uporabo
-   `docs/porocila/CI-ENHANCEMENTS.patch` (GitHub App nima pravice `workflows`).
+1. **CI koraki** — ESLint se zdaj izvaja prek `npm run typecheck` (CI ga že kliče),
+   testi homografije pa so portani v vitest; patch je le neobvezna razlaga.
 2. **iOS/Android specifike**: `apple-touch-icon` in manifest sta dodana, a zaslon za
    »namestitev« (iOS nima `beforeinstallprompt`) še ni ločen.
 3. **Sinhronizacija med napravami** — namesto tega je varen prenos prek varnostne kopije.

@@ -1,3 +1,17 @@
+# OPTIONALNO — ni več potrebno za ESLint.
+#
+# Od FAZA 16 dalje `npm run typecheck` preveri TUDI ESLint (`tsc --noEmit && eslint .`),
+# CI pa že kliče `npm run typecheck` — zato je ESLint zdaj v CI brez spremembe
+# datoteke .github/workflows/test.yml.
+#
+# Ta patch je le seznam sprememb, če želiš CI korake prikazati ločeno:
+#   - ločen korak »Run ESLint«,
+#   - korak »node test-homography.js« (testi so sicer že portani v vitest:
+#     src/tests/homography.test.ts, ki jih CI kliče prek `npx vitest run`).
+#
+# Uporaba (zahteva dovoljenje »workflows«):
+#   git apply docs/porocila/CI-ENHANCEMENTS.patch
+#
 diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
 index cacfdcf..5992df7 100644
 --- a/.github/workflows/test.yml
