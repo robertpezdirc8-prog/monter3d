@@ -17,6 +17,7 @@
 
 import type { BoardFencePlan, CostEstimate, FencePlan, Measurement, Photo, Project } from '../types';
 import { formatLength, type LengthUnit } from './units';
+import { ACTIVITY_PRESENTATION, type ActivityEntry } from './activityLog';
 
 /** Varno vstavljanje besedila v HTML (imena projektov in opisi so uporabnikov vnos). */
 export function escapeHtml(value: unknown): string {
@@ -38,6 +39,8 @@ export interface ShareDocumentInput {
   lengthUnit?: LengthUnit;
   /** Opomba, ki se doda dokumentu (npr. »ponudba«). */
   note?: string;
+  /** Dnevnik opravljenih dejanj (potek dela) — prikazan pisarni. */
+  activity?: ActivityEntry[];
 }
 
 /** Ocena velikosti dokumenta v MB (za opozorilo pred deljenjem). */
@@ -77,6 +80,33 @@ function photoBlocks(photos: Photo[], measurements: Measurement[], unit: LengthU
       <figcaption>${escapeHtml(caption)}${annotationNote ? ` — ${escapeHtml(annotationNote)}` : ''}</figcaption>
     </figure>`;
   }).join('');
+}
+
+/**
+ * Tabela poteka dela (dnevnik opravljenih dejanj) — prikazana v deljenem dokumentu,
+ * da pisarna vidi tudi *kaj je bilo narejeno*, ne le številk.
+ */
+function activityRows(activity: ActivityEntry[] | undefined): string {
+  if (!activity || activity.length === 0) return '';
+
+  const vrstici = activity
+    .slice()
+    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+    .map(entry => {
+      const presentation = ACTIVITY_PRESENTATION[entry.type] ?? { icon: '•', label: 'Dogodek' };
+      return `<tr>
+        <td style="white-space:nowrap;color:#64748b;">${escapeHtml(entry.timestamp.toLocaleString('sl-SI'))}</td>
+        <td style="white-space:nowrap;">${escapeHtml(presentation.icon)} ${escapeHtml(presentation.label)}</td>
+        <td>${escapeHtml(entry.message)}</td>
+      </tr>`;
+    })
+    .join('');
+
+  return `<h2 style="font-size:16px;margin:24px 0 4px;">Potek dela</h2>
+  <table>
+    <thead><tr><th>Čas</th><th>Dejanje</th><th>Opis</th></tr></thead>
+    <tbody>${vrstici}</tbody>
+  </table>`;
 }
 
 /**
@@ -150,6 +180,8 @@ export function buildShareDocument(input: ShareDocumentInput): string {
     <thead><tr><th>Vrednost</th><th>Vir</th><th>Negotovost</th><th>Status</th></tr></thead>
     <tbody>${measurementRows(measurements, unit)}</tbody>
   </table>
+
+  ${activityRows(input.activity)}
 
   <h2 style="font-size:16px;margin:24px 0 8px;">Fotografije</h2>
   <div class="grid">${photoBlocks(photos, measurements, unit)}</div>
