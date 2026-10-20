@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Measurement, Photo, Project } from '../types';
-import { buildPhotoSheetLayout, renderPhotoSheet, PHOTO_SHEET_PRESETS } from '../utils/photoSheet';
+import { buildPhotoSheetLayout, renderPhotoSheet, PHOTO_SHEET_PRESETS, type PhotoSheetLayoutKind } from '../utils/photoSheet';
 import { generatePhotoSheetPDF } from '../utils/pdfExport';
 
 interface PhotoSheetViewProps {
@@ -27,6 +27,7 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, pro
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [presetId, setPresetId] = useState(PHOTO_SHEET_PRESETS[0].id);
   const [columns, setColumns] = useState(3);
+  const [layoutKind, setLayoutKind] = useState<PhotoSheetLayoutKind>('grid');
   const [status, setStatus] = useState<string | null>(null);
 
   const layout = buildPhotoSheetLayout({
@@ -36,6 +37,7 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, pro
     summary,
     presetId,
     columns,
+    layoutKind,
   });
 
   // Predogled se izriše ob vsaki spremembi.
@@ -105,6 +107,18 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, pro
                     {PHOTO_SHEET_PRESETS.map(p => (
                       <option key={p.id} value={p.id}>{p.label}</option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="sheet-layout" className="text-xs text-slate-400 block mb-1">Postavitev</label>
+                  <select
+                    id="sheet-layout"
+                    value={layoutKind}
+                    onChange={e => setLayoutKind(e.target.value as PhotoSheetLayoutKind)}
+                    className="bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white"
+                  >
+                    <option value="grid">Mreža</option>
+                    <option value="compare">Primerjava pred / po</option>
                   </select>
                 </div>
                 <div>

@@ -82,6 +82,12 @@ export function generatePDFReport(
       font-size: 9pt;
       text-transform: uppercase;
     }
+    .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6mm; }
+    .photo-cell { break-inside: avoid; margin: 0; }
+    .photo-frame { position: relative; width: 100%; height: 52mm; overflow: hidden; border: 0.3mm solid #d1d5db; }
+    .photo-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .photo-frame svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .photo-cell figcaption { font-size: 8pt; color: #4b5563; margin-top: 1.5mm; }
     .info-value {
       font-size: 12pt;
       color: #111827;
@@ -380,6 +386,8 @@ export function generatePDFReport(
   </div>
   ` : ''}
 
+  ${photoGalleryHtml(project.photos, measurements)}
+
   <div class="footer">
     <p><strong>Mera3D Pro</strong> — Profesionalne 3D-meritve in montaža</p>
     <p>Dokument izdelan: ${new Date().toLocaleString('sl-SI')}</p>
@@ -394,6 +402,53 @@ export function generatePDFReport(
 
   printWindow.document.write(html);
   printWindow.document.close();
+}
+
+/**
+ * FAZA 20: galerija fotografij v PDF poročilu — stranka vidi posnetke in
+ * narisane skice, ne le številke.
+ *
+ * Označbe so vektor (normalizirane koordinate), zato jih v HTML vgradimo kot
+ * SVG nad fotografijo — brez dodatnega zapisa v bazi in brez posiljanja.
+ */
+function photoGalleryHtml(photos: Photo[], measurements: Measurement[]): string {
+  if (!photos || photos.length === 0) return '';
+
+  const cells = photos.slice(0, 12).map(photo => {
+    const measurement = measurements.find(m => m.photoIds?.includes(photo.id) && m.status === 'verified');
+    const time = photo.timestamp instanceof Date
+      ? photo.timestamp.toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' })
+      : '';
+    const caption = [measurement ? `${measurement.value.toFixed(2)} ${measurement.unit}` : '', time]
+      .filter(Boolean)
+      .join(' · ');
+
+    const strokes = photo.annotation?.strokes ?? [];
+    const paths = strokes.map(stroke => {
+      const d = stroke.points
+        .map((p, i) => `${i === 0 ? 'M' : 'L'} ${(p.x * 100).toFixed(2)} ${(p.y * 100).toFixed(2)}`)
+        .join(' ');
+      const width = (stroke.width * 100).toFixed(2);
+      return `<path d="${d}" stroke="${stroke.color}" stroke-width="${width}" fill="none" stroke-linecap="round" stroke-linejoin="round" />`;
+    }).join('');
+
+    const overlay = paths
+      ? `<svg viewBox="0 0 100 100" preserveAspectRatio="none">${paths}</svg>`
+      : '';
+
+    return `<figure class="photo-cell">
+      <div class="photo-frame">
+        <img src="${photo.dataUrl}" alt="" />
+        ${overlay}
+      </div>
+      <figcaption>${caption || '—'}</figcaption>
+    </figure>`;
+  }).join('');
+
+  return `
+  <h3 style="margin: 24px 0 8px 0;">📷 Fotografije (${photos.length})</h3>
+  <div class="photo-grid">${cells}</div>
+  `;
 }
 
 function getObjectTypeLabel(type: string): string {

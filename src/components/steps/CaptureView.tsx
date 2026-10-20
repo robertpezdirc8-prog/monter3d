@@ -7,7 +7,7 @@ import { IconCamera } from '../icons';
 import { GuidedCapture } from '../GuidedCapture';
 import { CoverageMapView, CameraGuide } from '../CoverageMap';
 import { QualityBadge } from './QualityCheckView';
-export function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPhoto, onAnalyze, onDeletePhoto, onAnnotate, canvasRef, showInstructions, onToggleInstructions, onOpenCamera, objectType, capturedSteps, onCaptureStep }: {
+export function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPhoto, onAnalyze, onDeletePhoto, onAnnotate, onSetPhotoRole, canvasRef, showInstructions, onToggleInstructions, onOpenCamera, objectType, capturedSteps, onCaptureStep }: {
   photos: Photo[];
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   fileInputRef: React.RefObject<HTMLInputElement>;
@@ -17,6 +17,8 @@ export function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onS
   onDeletePhoto: (photoId: string) => void;
   /** FAZA 19: risanje označb (skic) čez fotografijo. */
   onAnnotate: (photoId: string) => void;
+  /** FAZA 20: označevanje vloge posnetka (pred / po / detajl). */
+  onSetPhotoRole: (photoId: string, role: 'before' | 'after' | 'detail' | 'other') => void;
   onAnalyze: (p: Photo) => void;
   canvasRef: React.RefObject<HTMLCanvasElement>;
   showInstructions: boolean;
@@ -178,6 +180,20 @@ export function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onS
                 <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 pointer-events-none">
                   <span className="text-[10px] text-white">{(photo.quality.overallScore * 100).toFixed(0)}%</span>
                 </div>
+                {/* FAZA 20: vloga posnetka (pred/po) */}
+                <select
+                  value={photo.role ?? 'other'}
+                  onChange={e => onSetPhotoRole(photo.id, e.target.value as 'before' | 'after' | 'detail' | 'other')}
+                  className="absolute bottom-0 right-0 text-[9px] bg-slate-900/85 text-white rounded-tl px-1 py-0.5"
+                  aria-label={`Vloga posnetka ${photo.id}`}
+                  title="Vloga posnetka (za primerjavo pred/po)"
+                >
+                  <option value="other">—</option>
+                  <option value="before">pred</option>
+                  <option value="after">po</option>
+                  <option value="detail">detajl</option>
+                </select>
+
                 {/* FAZA 19: risanje označb */}
                 <button
                   type="button"

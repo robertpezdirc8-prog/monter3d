@@ -939,6 +939,23 @@ function App() {
     }
   }, [photos]);
 
+  /**
+   * FAZA 20: označi vlogo posnetka (pred / po / detajl) — omogoča primerjavo.
+   */
+  const handleSetPhotoRole = useCallback(async (photoId: string, role: Photo['role']) => {
+    const photo = photos.find(p => p.id === photoId);
+    if (!photo) return;
+    const updated: Photo = { ...photo, role };
+    setPhotos(prev => prev.map(p => (p.id === photoId ? updated : p)));
+    try {
+      const projectId = currentProjectRef.current?.id;
+      if (projectId) await updatePhoto({ ...updated, projectId });
+    } catch (err) {
+      console.error('Failed to save photo role:', err);
+      setStorageWarning('Oznake posnetka ni bilo mogoče shraniti.');
+    }
+  }, [photos]);
+
   // Calculate stairs
   const calculateStairs = useCallback(() => {
     // FAZA 1: neveljavni vhodi zdaj vržejo napako — prikažemo jo, ne tiho NaN-građimo načrt.
@@ -1335,6 +1352,7 @@ function App() {
               onAnalyze={analyzePhoto}
               onDeletePhoto={handleDeletePhoto}
               onAnnotate={setAnnotatingPhotoId}
+              onSetPhotoRole={handleSetPhotoRole}
               canvasRef={canvasRef}
               showInstructions={showInstructions}
               onToggleInstructions={() => setShowInstructions(!showInstructions)}

@@ -99,6 +99,12 @@ v **PNG** — vse lokalno v brskalniku, brez nalaganja fotografij na internet (v
 spletnih orodij za fotomontažo, Abox Image Layout in PixGrid, ter dokumentacijski tok
 CompanyCam).
 
+### Predračun s fotografijami in primerjava pred/po
+- **PDF predračun** (korak Izvoz → 📄 PDF) vsebuje tudi **galerijo fotografij z napisi**
+  in narisane skice (SVG) — stranka vidi del, ne le številke.
+- **Vloga posnetka** (korak Zajem → spustni meni na miniaturi): `pred` / `po` / `detajl`;
+  dokumentacijska lista ima postavitev **»Primerjava pred / po«**.
+
 ### Označbe (skice) na fotografijah
 V koraku **Zajem** lahko čez posnetek narišeš označbe (✎) — označiš detajl, poškodbo ali
 mesto vrtanja. Skica je vektor, zato ostane ostra pri vsaki velikosti in se prikaže tudi v
