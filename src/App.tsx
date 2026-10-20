@@ -3,7 +3,7 @@ import type {
   Project, Photo, Measurement, WorkflowStep, ObjectType,
   MeasurementStatus, ScaleSource, FencePlan, StairsPlan,
   CostEstimate, MaterialItem, ImageQuality, FeaturePoint,
-  FenceConfig, StairsConfig, ProjectSettings, FenceSegmentInput, MaterialPrices
+  FenceConfig, StairsConfig, ProjectSettings, FenceSegmentInput, MaterialPrices, BoardFencePlan
 } from './types';
 import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetection } from './utils/cv';
 import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, formatMeasurement, exportMeasurementsCSV, selectFenceLengthMeasurements } from './utils/geometry';
@@ -52,6 +52,7 @@ import {
 } from './utils/projectState';
 import { buildFenceGeometry } from './utils/fenceGeometry';
 import { validateFencePlanAgainstProfile } from './utils/roksalRules';
+import { buildBoardFencePlan, estimateBoardMaterials } from './utils/boardFence';
 import { getProfileById, ROKSAL_PROFILES } from './data/roksalCatalog';
 import { createBackup, restoreBackup } from './utils/backup';
 
@@ -94,6 +95,8 @@ function App() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [fencePlan, setFencePlan] = useState<FencePlan | null>(null);
+  // FAZA 11: načrt deskne ograje (alternativa panelni konstrukciji).
+  const [boardPlan, setBoardPlan] = useState<BoardFencePlan | null>(null);
   const [stairsPlan, setStairsPlan] = useState<StairsPlan | null>(null);
   const [estimate, setEstimate] = useState<CostEstimate | null>(null);
   const [activeTab, setActiveTab] = useState<string>('capture');
@@ -167,6 +170,7 @@ function App() {
     setSelectedPhoto(photosToUse[0] ?? null);
     setMeasurements(snapshot.measurements);
     setFencePlan(snapshot.fencePlan);
+    setBoardPlan(snapshot.boardPlan);
     setStairsPlan(snapshot.stairsPlan);
     setEstimate(snapshot.estimate);
     setPixelToMeter(snapshot.settings.pixelToMeter);
@@ -217,6 +221,7 @@ function App() {
     // Nov projekt se začne s praznim stanjem — privzete nastavitve veljajo tudi v UI.
     setMeasurements([]);
     setFencePlan(null);
+    setBoardPlan(null);
     setStairsPlan(null);
     setEstimate(null);
     setPixelToMeter(null);
@@ -275,6 +280,7 @@ function App() {
         setSelectedPhoto(null);
         setMeasurements([]);
         setFencePlan(null);
+        setBoardPlan(null);
         setStairsPlan(null);
         setEstimate(null);
         setPixelToMeter(null);
@@ -310,6 +316,7 @@ function App() {
     const snapshot: ProjectStateSnapshot = {
       measurements,
       fencePlan,
+      boardPlan,
       stairsPlan,
       estimate,
       settings,
@@ -328,7 +335,7 @@ function App() {
         console.error('Failed to save project state:', err);
         setStorageWarning('Projekta ni bilo mogoče shraniti. Meritve so v tej seji še vidne — izvozi varnostno kopijo.');
       });
-  }, [measurements, fencePlan, stairsPlan, estimate, pixelToMeter, fenceConfig, stairsConfig, laborRate, laborHours, taxRate, capturedSteps, fenceSegments, materialPrices]);
+  }, [measurements, fencePlan, boardPlan, stairsPlan, estimate, pixelToMeter, fenceConfig, stairsConfig, laborRate, laborHours, taxRate, capturedSteps, fenceSegments, materialPrices]);
 
   // Load projects from IndexedDB on mount
   useEffect(() => {
@@ -762,6 +769,37 @@ function App() {
     }
 
     setFencePlan(plan);
+
+    // FAZA 11: deskna konstrukcija (deske iz kataloga) — alternativa panelni.
+    // Če je izbrana, se izračun in predračun naredita po desknih pravilih kataloga.
+    if (fenceConfig.constructionType === 'board' && profile) {
+      const board = buildBoardFencePlan({
+        profile,
+        segments: inputs.map(i => ({ id: i.id, length: i.length, bearingDeg: i.bearingDeg, heightChange: i.heightChange })),
+        fenceHeight: fenceConfig.panelHeight,
+        boardSpacing: fenceConfig.boardSpacing,
+      });
+      setBoardPlan(board);
+      setFencePlan(null);
+
+      if (board.errors.length > 0) {
+        setEstimate(null);
+        return;
+      }
+
+      const boardItems = estimateBoardMaterials(board, profile, materialPrices);
+      setEstimate(buildCostEstimate(
+        boardItems,
+        { hours: laborHours, rate: laborRate },
+        taxRate / 100,
+        measurements
+          .filter(m => m.isScaleReference !== true && m.source !== 'reference_scale' && m.algorithm !== 'reference_calibration')
+          .map(m => ({ status: m.status, scaleSource: m.scaleSource }))
+      ));
+      return;
+    }
+
+    setBoardPlan(null);
 
     // Calculate materials — cene so iz nastavitev projekta (ne več trdo zapisane)
     const materialItems = estimateFenceMaterials(plan, materialPrices);
@@ -1287,7 +1325,7 @@ function App() {
 
           {/* Quantity Calculation */}
           {currentStep === 'quantity_calc' && (
-            <QuantityView fencePlan={fencePlan} stairsPlan={stairsPlan} />
+            <QuantityView fencePlan={fencePlan} boardPlan={boardPlan} stairsPlan={stairsPlan} />
           )}
 
           {/* Estimate */}

@@ -14,6 +14,8 @@ export interface Project {
   photos: Photo[];
   measurements: Measurement[];
   fencePlan?: FencePlan;
+  /** FAZA 11: načrt deskne ograje (če je izbrana deskna konstrukcija). */
+  boardPlan?: BoardFencePlan;
   stairsPlan?: StairsPlan;
   terrainPlan?: TerrainPlan;
   materials: MaterialSelection;
@@ -33,6 +35,14 @@ export interface FenceConfig {
   slopeThreshold: number;
   /** FAZA 8 (P2): ID Roksal profila — omogoča preverjanje tehničnih pravil. */
   profileId?: string;
+  /**
+   * FAZA 11: način konstrukcije ograje.
+   * `panel` = panelna ograja (paneli + stebri), `board` = deskna ograja iz kataloga
+   * (deske + stebri + letve). Oba modela sta povezana z istim predračunom.
+   */
+  constructionType?: 'panel' | 'board';
+  /** FAZA 11: razmik med deskami v mm (za deskno konstrukcijo). */
+  boardSpacing?: number;
 }
 
 /** Konfiguracija izračuna stopnic (mere v metrih). */
@@ -59,6 +69,37 @@ export interface FenceSegmentInput {
   heightChange?: number;
 }
 
+/**
+ * FAZA 11: načrt deskne ograje (deske + stebri + letve) iz katalogovnega profila.
+ */
+export interface BoardFencePlan {
+  constructionType: 'board';
+  profileId: string;
+  profileName: string;
+  /** Skupna dolžina ograje (m). */
+  totalLength: number;
+  /** Višina ograje (m). */
+  fenceHeight: number;
+  /** Število desk (z odpadom). */
+  boards: number;
+  /** Število stebrov. */
+  posts: number;
+  /** Število vodoravnih nosilcev (letev). */
+  beams: number;
+  /** Potrebna dolžina desk (m). */
+  boardLength: number;
+  /** Razmik med stebri (m). */
+  postSpacing: number;
+  /** Razmik med nosilci (m). */
+  beamSpacing: number;
+  /** Ali profil zahteva aluminijasto cev. */
+  requiresAluminumTube: boolean;
+  /** Dolžina ALU cevi (m). */
+  aluminumTubeLength: number;
+  errors: string[];
+  warnings: string[];
+}
+
 /** Cene materialov za predračun (EUR). */
 export interface MaterialPrices {
   panelPricePerM2: number;
@@ -66,6 +107,10 @@ export interface MaterialPrices {
   railPricePerM: number;
   fastenerPriceEach: number;
   endCapPriceEach: number;
+  /** FAZA 11: cena desk (€/m) — deskna konstrukcija. */
+  boardPricePerM: number;
+  /** FAZA 11: cena aluminijaste cevi (€/m). */
+  aluTubePricePerM: number;
 }
 
 /** Nastavitve projekta, ki preživijo osvežitev strani. */

@@ -48,6 +48,9 @@ Količine → Predračun → Izvoz`
   **dvig**, zato so mogoči koti (L-oblike) in terenski dvigi — prej je bila mogoča samo
   ravna ograja.
 - **Cene materialov** so del nastavitev projekta (prej trdo zapisane v kodi).
+- **Dve konstrukciji ograje**: panelna (paneli + stebri) in deskna (deske iz kataloga
+  Roksal) — obe uporabljata ista pravila, cene in predračun (prej je bila deskna
+  konstrukcija izolirana v konfiguratorju in ni šla v predračun).
 - **Homografija** sprejme realen šum značilnic (~0,5 px) in model preveri s reprojekcijo;
   **RANSAC** je determinističen (seed), zato so rezultati ponovljivi in testabilni.
 - **Delovanje brez povezave**: service worker (`public/sw.js`) + manifest, namečen ob

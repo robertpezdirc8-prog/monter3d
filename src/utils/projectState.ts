@@ -13,6 +13,7 @@ import type {
   ProjectSettings,
   Measurement,
   FencePlan,
+  BoardFencePlan,
   StairsPlan,
   CostEstimate,
   FenceConfig,
@@ -23,6 +24,8 @@ import type {
 export interface ProjectStateSnapshot {
   measurements: Measurement[];
   fencePlan: FencePlan | null;
+  /** FAZA 11: načrt deskne ograje. */
+  boardPlan: BoardFencePlan | null;
   stairsPlan: StairsPlan | null;
   estimate: CostEstimate | null;
   settings: ProjectSettings;
@@ -50,6 +53,8 @@ export const DEFAULT_MATERIAL_PRICES: MaterialPrices = {
   railPricePerM: 12,
   fastenerPriceEach: 0.5,
   endCapPriceEach: 8,
+  boardPricePerM: 35,
+  aluTubePricePerM: 8,
 };
 
 export const DEFAULT_SETTINGS: ProjectSettings = {
@@ -106,6 +111,12 @@ export function normalizeSettings(raw?: Partial<ProjectSettings> | null): Projec
       mountingStyle,
       slopeThreshold: num(fence.slopeThreshold, DEFAULT_FENCE_CONFIG.slopeThreshold),
       ...(typeof fence.profileId === 'string' && fence.profileId ? { profileId: fence.profileId } : {}),
+      ...(fence.constructionType === 'board' || fence.constructionType === 'panel'
+        ? { constructionType: fence.constructionType }
+        : {}),
+      ...(isFinite(fence.boardSpacing as number) && (fence.boardSpacing as number) > 0
+        ? { boardSpacing: fence.boardSpacing as number }
+        : {}),
     },
     stairsConfig: {
       numSteps: Math.max(1, Math.round(positive(stairs.numSteps, DEFAULT_STAIRS_CONFIG.numSteps))),
@@ -135,6 +146,8 @@ export function normalizeSettings(raw?: Partial<ProjectSettings> | null): Projec
       railPricePerM: nonNegative(raw?.materialPrices?.railPricePerM, DEFAULT_MATERIAL_PRICES.railPricePerM),
       fastenerPriceEach: nonNegative(raw?.materialPrices?.fastenerPriceEach, DEFAULT_MATERIAL_PRICES.fastenerPriceEach),
       endCapPriceEach: nonNegative(raw?.materialPrices?.endCapPriceEach, DEFAULT_MATERIAL_PRICES.endCapPriceEach),
+      boardPricePerM: nonNegative(raw?.materialPrices?.boardPricePerM, DEFAULT_MATERIAL_PRICES.boardPricePerM),
+      aluTubePricePerM: nonNegative(raw?.materialPrices?.aluTubePricePerM, DEFAULT_MATERIAL_PRICES.aluTubePricePerM),
     },
   };
 }
@@ -144,6 +157,7 @@ export function snapshotProjectState(project: Project): ProjectStateSnapshot {
   return {
     measurements: Array.isArray(project.measurements) ? project.measurements : [],
     fencePlan: project.fencePlan ?? null,
+    boardPlan: project.boardPlan ?? null,
     stairsPlan: project.stairsPlan ?? null,
     estimate: project.estimate ?? null,
     settings: normalizeSettings(project.settings),
@@ -156,6 +170,7 @@ export function applySnapshotToProject(project: Project, snapshot: ProjectStateS
     ...project,
     measurements: snapshot.measurements,
     fencePlan: snapshot.fencePlan ?? undefined,
+    boardPlan: snapshot.boardPlan ?? undefined,
     stairsPlan: snapshot.stairsPlan ?? undefined,
     estimate: snapshot.estimate ?? undefined,
     settings: snapshot.settings,
@@ -179,6 +194,7 @@ export function emptySnapshot(): ProjectStateSnapshot {
   return {
     measurements: [],
     fencePlan: null,
+    boardPlan: null,
     stairsPlan: null,
     estimate: null,
     settings: normalizeSettings(DEFAULT_SETTINGS),
