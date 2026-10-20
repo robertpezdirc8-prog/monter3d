@@ -1,7 +1,21 @@
 {
   "name": "mera3d-pro",
   "private": true,
+  "version": "0.0.0",
+  "description": "Aplikacija za monterje: zajem fotografij, merjenje, izračun konstrukcije ograje/stopnic, materiali in predračun. Deluje brez strežnika, vsi podatki so lokalni.",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "construction",
+    "fence",
+    "measurement",
+    "offline-first",
+    "pwa",
+    "installer",
+    "roksal"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
