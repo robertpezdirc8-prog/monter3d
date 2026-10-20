@@ -43,6 +43,9 @@ Količine → Predračun → Izvoz`
   pred izgubo ob zaprtju zaslona); projekt je mogoče preklopiti med zajemom.
 - **Kalibracija merila** (korak Merilo): izberi dve točki na fotografiji in vpiši
   referenčno dolžino — meritve, narejene pred kalibracijo, se samodejno pretvorijo v metre.
+- **Ročni vnos dolžin** (korak Meritve): če dolžine ni mogoče izmeriti po fotografiji
+  (npr. po meritvi z metrom), jo vpiši ročno — gre v načrt in predračun enako kot
+  meritev na sliki.
 
 ## Geometrija in matematika (FAZA 8 / P1)
 

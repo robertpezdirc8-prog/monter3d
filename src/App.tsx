@@ -669,6 +669,32 @@ function App() {
     });
   }, [measuringMode]);
 
+  /**
+   * FAZA 14: ročni vnos dolžine (m). Uporabno na terenu, ko dolžina ni izmerjena
+   * na fotografiji (npr. po meritvi z metrom) — vrednost gre v načrt in predračun
+   * enako kot meritev na sliki.
+   */
+  const handleAddManualLength = useCallback((value: number) => {
+    if (!isFinite(value) || value <= 0) return;
+    const measurement: Measurement = {
+      id: uuidv4(),
+      type: 'length',
+      value,
+      unit: 'm',
+      source: 'manual',
+      scaleSource: 'manual_reference',
+      status: 'verified',
+      uncertainty: 2,
+      confidence: 0.9,
+      photoIds: [],
+      algorithm: 'manual_entry',
+      notes: 'Ročno vnesena dolžina',
+      createdAt: new Date(),
+      verifiedAt: new Date(),
+    };
+    setMeasurements(prev => [...prev, measurement]);
+  }, []);
+
   // Set reference scale
   const setScale = useCallback(() => {
     if (measurePoints.length !== 2 || !referenceLength) return;
@@ -1342,6 +1368,7 @@ function App() {
               onCanvasClick={handleCanvasClick}
               pixelToMeter={pixelToMeter}
               onAnalyze={analyzePhoto}
+              onAddManualLength={handleAddManualLength}
             />
           )}
 
