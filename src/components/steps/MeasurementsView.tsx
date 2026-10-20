@@ -5,7 +5,8 @@
 import { useState } from 'react';
 import type { Measurement, Photo } from '../../types';
 import { formatMeasurement } from '../../utils/geometry';
-export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, onCanvasClick, pixelToMeter, onAddManualLength, onDeleteMeasurement, onToggleExcluded }: {
+import { LENGTH_UNITS, formatLength, unitLabel, type LengthUnit } from '../../utils/units';
+export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, onCanvasClick, pixelToMeter, onAddManualLength, onDeleteMeasurement, onToggleExcluded, lengthUnit, onChangeLengthUnit }: {
   measurements: Measurement[];
   selectedPhoto: Photo | null;
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -21,6 +22,9 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
   onDeleteMeasurement: (id: string) => void;
   /** FAZA 17: vklop/izklop meritve v načrtu. */
   onToggleExcluded: (id: string) => void;
+  /** FAZA 31: enota vnosa in prikaza dolžin. */
+  lengthUnit: LengthUnit;
+  onChangeLengthUnit: (unit: LengthUnit) => void;
 }) {
   const [manualLength, setManualLength] = useState('');
   // FAZA 10 (P2): referenčna (kalibracijska) meritev je merilo fotografije,
@@ -62,7 +66,23 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
 
       {/* FAZA 14: ročni vnos dolžine (teren, kjer se ne meri po fotografiji) */}
       <div className="bg-slate-800 rounded-lg p-4 mb-4">
-        <h3 className="text-sm font-semibold text-slate-300 mb-2">⌨️ Ročna dolžina (brez fotografije)</h3>
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <h3 className="text-sm font-semibold text-slate-300">⌨️ Ročna dolžina (brez fotografije)</h3>
+          {/* FAZA 31: preklop enote */}
+          <label className="flex items-center gap-1 text-xs text-slate-400">
+            Enota
+            <select
+              value={lengthUnit}
+              onChange={e => onChangeLengthUnit(e.target.value as LengthUnit)}
+              aria-label="Enota dolžin"
+              className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+            >
+              {LENGTH_UNITS.map(u => (
+                <option key={u.id} value={u.id}>{u.label} ({u.short})</option>
+              ))}
+            </select>
+          </label>
+        </div>
         <p className="text-xs text-slate-400 mb-3">
           Vpiši dolžino v metrih (npr. dolžina ograje po meritvi z metrom). Vrednost se
           upošteva v načrtu in predračunu enako kot meritev na fotografiji.
@@ -78,11 +98,12 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
             aria-label="Ročna dolžina v metrih"
             className="w-32 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white"
           />
-          <span className="text-slate-400 text-sm">m</span>
+          <span className="text-slate-400 text-sm">{unitLabel(lengthUnit)}</span>
           <button
             onClick={() => {
               const v = parseFloat(manualLength);
               if (!isFinite(v) || v <= 0) return;
+              // Vrednost je v izbrani enoti; App jo pretvori v metre.
               onAddManualLength(v);
               setManualLength('');
             }}
@@ -127,7 +148,9 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
                     </span>
                   </td>
                   <td className="px-3 py-2 text-slate-200 font-mono">
-                    {formatMeasurement(m.value, m.unit, m.uncertainty)}
+                    {m.unit === 'm'
+                      ? formatLength(m.value, lengthUnit, m.uncertainty)
+                      : formatMeasurement(m.value, m.unit, m.uncertainty)}
                   </td>
                   <td className="px-3 py-2 text-slate-400 text-xs">{m.source}</td>
                   <td className="px-3 py-2 text-slate-400 text-xs">±{m.uncertainty.toFixed(1)}%</td>

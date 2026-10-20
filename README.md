@@ -47,6 +47,8 @@ Količine → Predračun → Izvoz`
 - **Ročni vnos dolžin** (korak Meritve): če dolžine ni mogoče izmeriti po fotografiji
   (npr. po meritvi z metrom), jo vpiši ročno — gre v načrt in predračun enako kot
   meritev na sliki.
+- **Enote dolžin** (m / cm / mm): preklop v koraku Meritve; računanje je vedno v metrih,
+  vpis in prikaz pa v izbrani enoti (npr. »650.0 cm ±2.0 %«).
 - **Popravki uporabnika**: meritev lahko izbrišeš 🗑 ali jo izključiš iz načrta
   (»izključena«), fotografijo pa izbrišeš v koraku Zajem. Izbrisana meritev se
   preračuna iz predračuna, izključena pa se ohrani kot dokumentacija.

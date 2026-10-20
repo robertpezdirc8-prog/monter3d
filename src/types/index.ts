@@ -126,6 +126,8 @@ export interface ProjectSettings {
   capturedSteps: string[];
   /** FAZA 8 (P1): segmenti ograje (koti in dvigi) po meritvah. */
   fenceSegments: FenceSegmentInput[];
+  /** FAZA 31: enota vnosa in prikaza dolžin ('m' | 'cm' | 'mm'). */
+  lengthUnit?: 'm' | 'cm' | 'mm';
   /** FAZA 8 (P1): cene materialov (neposredno uporabljene v predračunu). */
   materialPrices: MaterialPrices;
 }

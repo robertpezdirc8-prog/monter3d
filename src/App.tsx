@@ -61,6 +61,7 @@ import {
   type ProjectStateSnapshot,
 } from './utils/projectState';
 import { calculateFenceCalculation } from './utils/fenceCalculation';
+import { normalizeUnit, fromUnit, type LengthUnit } from './utils/units';
 import { getProfileById } from './data/roksalCatalog';
 import { createBackup, restoreBackup, createWorkspaceBackup, restoreWorkspaceBackup, parseBackup, parseWorkspaceBackup } from './utils/backup';
 import { downloadFile } from './utils/download';
@@ -122,6 +123,8 @@ function App() {
   // FAZA 8 (P1): segmenti ograje (azimut + dvig) in cene materialov
   const [fenceSegments, setFenceSegments] = useState<FenceSegmentInput[]>([]);
   const [materialPrices, setMaterialPrices] = useState<MaterialPrices>(DEFAULT_MATERIAL_PRICES);
+  // FAZA 31: enota vnosa in prikaza dolžin (m / cm / mm)
+  const [lengthUnit, setLengthUnit] = useState<LengthUnit>('m');
   const [vizStartPoint, setVizStartPoint] = useState<{x: number; y: number} | null>(null);
   const [vizEndPoint, setVizEndPoint] = useState<{x: number; y: number} | null>(null);
   const [vizFenceHeight, setVizFenceHeight] = useState(1.5);
@@ -245,6 +248,7 @@ function App() {
     setCapturedSteps(snapshot.settings.capturedSteps);
     setFenceSegments(snapshot.settings.fenceSegments);
     setMaterialPrices(snapshot.settings.materialPrices);
+    setLengthUnit(normalizeUnit(snapshot.settings.lengthUnit));
     setMeasurePoints([]);
     setMeasuringMode(false);
     setComparePhoto(null);
@@ -425,6 +429,7 @@ function App() {
       capturedSteps,
       fenceSegments,
       materialPrices,
+      lengthUnit,
     };
     const snapshot: ProjectStateSnapshot = {
       measurements,
@@ -448,7 +453,7 @@ function App() {
         console.error('Failed to save project state:', err);
         setStorageWarning('Projekta ni bilo mogoče shraniti. Meritve so v tej seji še vidne — izvozi varnostno kopijo.');
       });
-  }, [measurements, fencePlan, boardPlan, stairsPlan, estimate, pixelToMeter, fenceConfig, stairsConfig, laborRate, laborHours, taxRate, capturedSteps, fenceSegments, materialPrices, pushUndo]);
+  }, [measurements, fencePlan, boardPlan, stairsPlan, estimate, pixelToMeter, fenceConfig, stairsConfig, laborRate, laborHours, taxRate, capturedSteps, fenceSegments, materialPrices, lengthUnit, pushUndo]);
 
   // Load projects from IndexedDB on mount
   useEffect(() => {
@@ -779,11 +784,13 @@ function App() {
    * enako kot meritev na sliki.
    */
   const handleAddManualLength = useCallback((value: number) => {
-    if (!isFinite(value) || value <= 0) return;
+    // FAZA 31: uporabnik vpiše v izbrani enoti, shranimo v metre.
+    const metres = fromUnit(value, lengthUnit);
+    if (!isFinite(metres) || metres <= 0) return;
     const measurement: Measurement = {
       id: uuidv4(),
       type: 'length',
-      value,
+      value: metres,
       unit: 'm',
       source: 'manual',
       scaleSource: 'manual_reference',
@@ -797,8 +804,8 @@ function App() {
       verifiedAt: new Date(),
     };
     setMeasurements(prev => [...prev, measurement]);
-    logActivity('measurement_added', 'Ročno vnesena dolžina ' + value.toFixed(2) + ' m');
-  }, [logActivity]);
+    logActivity('measurement_added', 'Ročno vnesena dolžina ' + metres.toFixed(2) + ' m');
+  }, [logActivity, lengthUnit]);
 
   // Set reference scale
   const setScale = useCallback(() => {
@@ -1074,9 +1081,9 @@ function App() {
     } else if (format === 'pdf') {
       // FAZA 7 (P0): fotografije niso več del zapisa projekta, zato jih za poročilo
       // (število fotografij) podamo iz stanja.
-      generatePDFReport({ ...currentProject, photos }, measurements, fencePlan, stairsPlan, estimate, activity);
+      generatePDFReport({ ...currentProject, photos }, measurements, fencePlan, stairsPlan, estimate, activity, lengthUnit);
     }
-  }, [measurements, currentProject, photos, fencePlan, stairsPlan, estimate, activity, logActivity]);
+  }, [measurements, currentProject, photos, fencePlan, stairsPlan, estimate, activity, lengthUnit, logActivity]);
 
   /**
    * FAZA 7 (P0): varnostna kopija — JSON s projektom, stanjem IN fotografijami.
@@ -1555,6 +1562,8 @@ function App() {
               onAddManualLength={handleAddManualLength}
               onDeleteMeasurement={handleDeleteMeasurement}
               onToggleExcluded={handleToggleMeasurementExcluded}
+              lengthUnit={lengthUnit}
+              onChangeLengthUnit={setLengthUnit}
             />
           )}
 
