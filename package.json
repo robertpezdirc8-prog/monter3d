@@ -5,12 +5,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && eslint .",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:geometry": "node test-runner.mjs && node test-homography.js",
-    "fetch:images": "node scripts/fetch-roksal-images.mjs"
+    "fetch:images": "node scripts/fetch-roksal-images.mjs",
+    "check": "npm run typecheck && npm run test:geometry"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.1",

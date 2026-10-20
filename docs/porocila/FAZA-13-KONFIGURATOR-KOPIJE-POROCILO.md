@@ -46,8 +46,9 @@ ustrezno.
 `test-runner` 21/21 · `test-homography` 40/40 · `build` ✅
 
 ## Kaj ostane
-1. **CI koraki** (ESLint + `test-homography.js`) — še vedno zahtevajo ročno uporabo
-   `docs/porocila/CI-ENHANCEMENTS.patch` (GitHub App nima pravice `workflows`).
+1. **CI koraki** — od FAZA 16 dalje `npm run typecheck` preverja tudi ESLint, CI pa že
+   kliče `npm run typecheck`; zato je lint v CI brez spremembe workflow datoteke
+   (`docs/porocila/CI-ENHANCEMENTS.patch` je zdaj le neobvezna razlaga).
 2. **Namestitev aplikacije (PWA)** — manifest in service worker sta vgrajena, manjka pa
    poziv za namestitev in lepši zaslon za »offline« stanje.
 3. **Vnos ročnih dolžin** — trenutno je dolžina meritev vezana na klik na fotografijo;
