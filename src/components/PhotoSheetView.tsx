@@ -9,7 +9,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Measurement, Photo, Project } from '../types';
-import { buildPhotoSheetLayout, renderPhotoSheet, PHOTO_SHEET_PRESETS, type PhotoSheetLayoutKind } from '../utils/photoSheet';
+import {
+  buildPhotoSheetLayout, renderPhotoSheet, selectBestPhotosForSheet,
+  PHOTO_SHEET_PRESETS, type PhotoSheetLayoutKind,
+} from '../utils/photoSheet';
 import { generatePhotoSheetPDF } from '../utils/pdfExport';
 
 interface PhotoSheetViewProps {
@@ -139,6 +142,18 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, pro
                     className="w-20 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white"
                   />
                 </div>
+                <button
+                  onClick={() => {
+                    // FAZA 23: samodejno izberi najboljše posnetke (kakovost, skica, meritev)
+                    const najboljsi = selectBestPhotosForSheet(photos, measurements, 6);
+                    setSelectedIds(najboljsi);
+                    setShowPicker(true);
+                  }}
+                  className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded text-sm font-medium"
+                  title="Izberi najboljše posnetke (kakovost, skica, meritev)"
+                >
+                  🪄 Najboljše
+                </button>
                 <button
                   onClick={() => setShowPicker(v => !v)}
                   className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded text-sm font-medium"

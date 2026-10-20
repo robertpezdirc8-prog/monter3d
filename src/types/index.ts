@@ -163,6 +163,11 @@ export interface AnnotationStroke {
   color: string;
   /** Debelina črte glede na širino fotografije (0..1). */
   width: number;
+  /**
+   * FAZA 23: kratka besedilna opomba ob skici (npr. »vrtanje tukaj«) — brez nje
+   * je skica za stranko nejasna.
+   */
+  note?: string;
 }
 
 export interface PhotoAnnotation {

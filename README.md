@@ -116,8 +116,13 @@ CompanyCam).
 
 ### Označbe (skice) na fotografijah
 V koraku **Zajem** lahko čez posnetek narišeš označbe (✎) — označiš detajl, poškodbo ali
-mesto vrtanja. Skica je vektor, zato ostane ostra pri vsaki velikosti in se prikaže tudi v
-dokumentacijski listi (PNG in PDF za tisk).
+mesto vrtanja. Vsaki skici lahko pripišeš **opombo** (»vrtanje tukaj«). Skica je vektor,
+zato ostane ostra pri vsaki velikosti in se prikaže v dokumentacijski listi (PNG in PDF za
+tisk) ter v PDF predračunu.
+
+### Samodejna izbira najboljših fotografij
+Gumb **»🪄 Najboljše«** v dokumentacijski listi sam izbere najboljše posnetke (po kakovosti,
+skici in meritvi), nato jih lahko prilagodiš.
 
 ### Galerija slik
 Slike so shranjene **lokalno** v `public/roksal/images/` (galerija deluje brez povezave),

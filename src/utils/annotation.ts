@@ -63,6 +63,42 @@ export function drawAnnotation(
   }
 }
 
+/**
+ * Nariše opombo (kratko besedilo) ob skici — z ozadjem, da je berljiva tudi
+ * čez svetlo fotografijo.
+ */
+export function drawStrokeNote(
+  ctx: CanvasRenderingContext2D,
+  stroke: AnnotationStroke,
+  width: number,
+  height: number
+): void {
+  if (!stroke.note || stroke.points.length === 0) return;
+
+  const anchor = stroke.points[0];
+  const x = anchor.x * width;
+  const y = anchor.y * height;
+  const text = stroke.note.length > 28 ? `${stroke.note.slice(0, 28)}…` : stroke.note;
+
+  ctx.save();
+  ctx.font = `${Math.max(12, Math.round(height * 0.045))}px system-ui, sans-serif`;
+  const metrics = ctx.measureText(text);
+  const padX = 6;
+  const padY = 4;
+  const boxW = metrics.width + padX * 2;
+  const boxH = Math.max(18, Math.round(height * 0.045)) + padY * 2;
+
+  // Opomba naj bo vedno v celici (pod fotografijo, ne na njej)
+  const boxY = Math.min(Math.max(0, y - boxH - 6), Math.max(0, height - boxH));
+
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+  ctx.fillRect(x, boxY, boxW, boxH);
+  ctx.fillStyle = '#f8fafc';
+  ctx.textBaseline = 'top';
+  ctx.fillText(text, x + padX, boxY + padY);
+  ctx.restore();
+}
+
 /** Pretvori kazalca v normalizirano točko glede na platno. */
 export function toNormalizedPoint(
   clientX: number,
@@ -82,6 +118,22 @@ export function addStroke(
   stroke: AnnotationStroke
 ): PhotoAnnotation {
   return { strokes: [...(annotation?.strokes ?? []), stroke] };
+}
+
+/**
+ * Doda opremo (kratko besedilo) zadnji potezi — npr. »vrtanje tukaj«.
+ * Če opomba že obstaja, se prepiše.
+ */
+export function setNoteOnLastStroke(
+  annotation: PhotoAnnotation | undefined,
+  note: string
+): PhotoAnnotation {
+  const strokes = annotation?.strokes ?? [];
+  if (strokes.length === 0) return { strokes: [] };
+  const trimmed = note.trim();
+  const next = strokes.slice();
+  next[next.length - 1] = { ...next[next.length - 1], note: trimmed || undefined };
+  return { strokes: next };
 }
 
 /** Odstrani zadnjo potezo (undo). */

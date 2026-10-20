@@ -15,7 +15,7 @@
  */
 
 import type { Measurement, Photo } from '../types';
-import { drawAnnotation } from './annotation';
+import { drawAnnotation, drawStrokeNote } from './annotation';
 
 export interface PhotoSheetPreset {
   id: string;
@@ -293,6 +293,9 @@ export async function renderPhotoSheet(
         ctx.clip();
         ctx.translate(cell.x, cell.y);
         drawAnnotation(ctx, photo.annotation, cell.width, cell.height);
+        for (const stroke of photo.annotation.strokes) {
+          drawStrokeNote(ctx, stroke, cell.width, cell.height);
+        }
         ctx.restore();
       }
     } else {
@@ -330,4 +333,62 @@ function drawCover(
   const w = img.width * scale;
   const h = img.height * scale;
   ctx.drawImage(img, x + (width - w) / 2, y + (height - h) / 2, w, h);
+}
+
+/**
+ * FAZA 23: ocena fotografije za dokumentacijo — od koder izberemo najboljše.
+ *
+ * Točke: kakovost posnetka, prisotnost skice (kontekst), prisotnost meritve
+ * (podatek) in odsotnost zavrnjenega posnetka.
+ */
+export interface PhotoSheetScore {
+  photoId: string;
+  score: number;
+  reasons: string[];
+}
+
+export function scorePhotoForSheet(
+  photo: Photo,
+  measurements: Measurement[]
+): PhotoSheetScore {
+  const reasons: string[] = [];
+  let score = 0;
+
+  const quality = photo.quality?.overallScore ?? 0;
+  score += quality * 50;
+  if (quality >= 0.8) reasons.push('kakovosten posnetek');
+  else if (quality < 0.4) reasons.push('slaba kakovost');
+
+  if (photo.annotation?.strokes?.length) {
+    score += 25;
+    reasons.push('ima skico');
+  }
+
+  const measurement = measurementForPhoto(photo, measurements);
+  if (measurement) {
+    score += 20;
+    reasons.push('izmerjeno');
+  }
+
+  if (photo.status === 'rejected') {
+    score -= 40;
+    reasons.push('zavrnjen posnetek');
+  }
+
+  return { photoId: photo.id, score: Math.round(score), reasons };
+}
+
+/**
+ * Izbere najboljše fotografije za dokumentacijo (za stranko).
+ * Vrne izbrane ID-je v vrstnem redu, najboljše najprej.
+ */
+export function selectBestPhotosForSheet(
+  photos: Photo[],
+  measurements: Measurement[],
+  count: number
+): string[] {
+  const scored = photos
+    .map(p => scorePhotoForSheet(p, measurements))
+    .sort((a, b) => b.score - a.score);
+  return scored.slice(0, Math.max(0, count)).map(s => s.photoId);
 }
