@@ -2,9 +2,10 @@
  * MeasurementsView.tsx — korak »Meritve«: merjenje na fotografiji in pregled
  * izmerjenih vrednosti.
  */
+import { useState } from 'react';
 import type { Measurement, Photo } from '../../types';
 import { formatMeasurement } from '../../utils/geometry';
-export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, onCanvasClick, pixelToMeter }: {
+export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, onCanvasClick, pixelToMeter, onAddManualLength }: {
   measurements: Measurement[];
   selectedPhoto: Photo | null;
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -14,7 +15,10 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
   onCanvasClick: (e: React.MouseEvent<HTMLCanvasElement>) => void;
   pixelToMeter: number | null;
   onAnalyze: (p: Photo) => void;
+  /** Ročni vnos dolžine (m) — uporabno, ko dolžina ni izmerjena na fotografiji. */
+  onAddManualLength: (value: number) => void;
 }) {
+  const [manualLength, setManualLength] = useState('');
   // FAZA 10 (P2): referenčna (kalibracijska) meritev je merilo fotografije,
   // ne meritev objekta — zato je v seznamu ne prikazujemo.
   const objectMeasurements = measurements.filter(
@@ -51,6 +55,40 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
           }`}
         />
       )}
+
+      {/* FAZA 14: ročni vnos dolžine (teren, kjer se ne meri po fotografiji) */}
+      <div className="bg-slate-800 rounded-lg p-4 mb-4">
+        <h3 className="text-sm font-semibold text-slate-300 mb-2">⌨️ Ročna dolžina (brez fotografije)</h3>
+        <p className="text-xs text-slate-400 mb-3">
+          Vpiši dolžino v metrih (npr. dolžina ograje po meritvi z metrom). Vrednost se
+          upošteva v načrtu in predračunu enako kot meritev na fotografiji.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={manualLength}
+            onChange={e => setManualLength(e.target.value)}
+            placeholder="npr. 6.50"
+            aria-label="Ročna dolžina v metrih"
+            className="w-32 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white"
+          />
+          <span className="text-slate-400 text-sm">m</span>
+          <button
+            onClick={() => {
+              const v = parseFloat(manualLength);
+              if (!isFinite(v) || v <= 0) return;
+              onAddManualLength(v);
+              setManualLength('');
+            }}
+            disabled={!manualLength}
+            className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 disabled:text-slate-400 text-white text-sm font-medium"
+          >
+            Dodaj meritve
+          </button>
+        </div>
+      </div>
 
       {/* Measurements table */}
       <div className="bg-slate-800 rounded-lg overflow-hidden">

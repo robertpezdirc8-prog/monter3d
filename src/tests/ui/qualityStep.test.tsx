@@ -45,6 +45,70 @@ function mkPhoto(id: string, projectId: string, status: Photo['status'], overall
   };
 }
 
+describe('Ročni vnos dolžine (UI)', () => {
+  beforeEach(async () => {
+    cleanup();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    localStorage.clear();
+    for (const p of await getAllProjects()) {
+      await deleteProject(p.id);
+    }
+  });
+
+  it('ročno vnesena dolžina se prikaže kot preverjena meritev', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText('npr. Ograja - Družina Novak');
+    await user.clear(input);
+    await user.type(input, 'Ročna ograda');
+    await user.click(screen.getByRole('button', { name: /ustvari projekt/i }));
+
+    await user.click(screen.getByRole('button', { name: /meritve/i }));
+
+    const polje = await screen.findByLabelText(/ročna dolžina/i);
+    await user.type(polje, '6.5');
+    await user.click(screen.getByRole('button', { name: /dodaj meritve/i }));
+
+    expect(await screen.findByText('6.500 m ±2.0%')).toBeInTheDocument();
+    expect(screen.getAllByText(/PREVERJENA/).length).toBeGreaterThan(0);
+  });
+
+  it('ročno vnesena dolžina gre v načrt ograje in predračun', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText('npr. Ograja - Družina Novak');
+    await user.clear(input);
+    await user.type(input, 'Načrtna ograda');
+    await user.click(screen.getByRole('button', { name: /ustvari projekt/i }));
+
+    await user.click(screen.getByRole('button', { name: /meritve/i }));
+    const polje = await screen.findByLabelText(/ročna dolžina/i);
+    await user.type(polje, '6.5');
+    await user.click(screen.getByRole('button', { name: /dodaj meritve/i }));
+    await screen.findByText('6.500 m ±2.0%');
+
+    // Materiali -> izračunaj ograjo
+    await user.click(screen.getByRole('button', { name: /materiali/i }));
+    await user.click(await screen.findByRole('button', { name: /izračunaj ograjo/i }));
+
+    // Količine -> skupna dolžina mora biti 6,50 m
+    await user.click(screen.getByRole('button', { name: /količine/i }));
+    expect((await screen.findAllByText('6.50 m')).length).toBeGreaterThan(0);
+  });
+});
+
+  beforeEach(async () => {
+    cleanup();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    localStorage.clear();
+    for (const p of await getAllProjects()) {
+      await deleteProject(p.id);
+    }
+  });
+
+
 describe('Korak Kakovost (UI)', () => {
   beforeEach(async () => {
     cleanup();
