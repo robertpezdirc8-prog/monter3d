@@ -51,7 +51,8 @@ Količine → Predračun → Izvoz`
   (»izključena«), fotografijo pa izbrišeš v koraku Zajem. Izbrisana meritev se
   preračuna iz predračuna, izključena pa se ohrani kot dokumentacija.
 - **Razveljava**: po brisanju meritve, fotografije ali projekta se na dnu zaslona pokaže
-  ponudba »↶ Razveljavi« (samodejno izgine po 10 s).
+  ponudba »↶ Razveljavi« (samodejno izgine po 10 s). Zaporedne napake se razveljavljajo
+  ena za drugo (»+N še razveljivih«).
 
 ## Geometrija in matematika (FAZA 8 / P1)
 

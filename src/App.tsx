@@ -134,8 +134,25 @@ function App() {
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
   // FAZA 19: risanje označb (skic) čez fotografijo
   const [annotatingPhotoId, setAnnotatingPhotoId] = useState<string | null>(null);
-  // FAZA 22: razveljitev destruktivne akcije (brisanje)
-  const [undoAction, setUndoAction] = useState<{ message: string; run: () => void } | null>(null);
+  // FAZA 24: zgodovina razveljivih akcij (več korakov nazaj)
+  const [undoStack, setUndoStack] = useState<{ message: string; run: () => void }[]>([]);
+
+  const pushUndo = useCallback((message: string, run: () => void) => {
+    setUndoStack(prev => [...prev.slice(-9), { message, run }]);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    setUndoStack(prev => {
+      const zadnja = prev[prev.length - 1];
+      if (!zadnja) return prev;
+      zadnja.run();
+      return prev.slice(0, -1);
+    });
+  }, []);
+
+  const handleDismissUndo = useCallback(() => {
+    setUndoStack(prev => prev.slice(0, -1));
+  }, []);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -302,15 +319,13 @@ function App() {
 
       // FAZA 22: ponudi razveljavo
       if (izbrisanProjekt) {
-        setUndoAction({
-          message: `Projekt "${izbrisanProjekt.name}" je izbrisan.`,
-          run: () => {
+        pushUndo(`Projekt "${izbrisanProjekt.name}" je izbrisan.`,
+          () => {
             void saveProject(izbrisanProjekt).catch(err => console.error('Failed to restore project:', err));
             for (const photo of izbrisaneFotografije) {
               void savePhoto({ ...photo, projectId: id }).catch(err => console.error('Failed to restore photo:', err));
             }
             setProjects(prev => [...prev, izbrisanProjekt]);
-          },
         });
       }
 
@@ -334,7 +349,7 @@ function App() {
       console.error('Failed to delete project:', err);
       alert('Projekta ni bilo mogoče izbrisati.');
     }
-  }, [projects]);
+  }, [projects, pushUndo]);
 
   /**
    * FAZA 7 (P0): samodejno shrani celotno stanje projekta. Prej so se meritve,
@@ -377,7 +392,7 @@ function App() {
         console.error('Failed to save project state:', err);
         setStorageWarning('Projekta ni bilo mogoče shraniti. Meritve so v tej seji še vidne — izvozi varnostno kopijo.');
       });
-  }, [measurements, fencePlan, boardPlan, stairsPlan, estimate, pixelToMeter, fenceConfig, stairsConfig, laborRate, laborHours, taxRate, capturedSteps, fenceSegments, materialPrices]);
+  }, [measurements, fencePlan, boardPlan, stairsPlan, estimate, pixelToMeter, fenceConfig, stairsConfig, laborRate, laborHours, taxRate, capturedSteps, fenceSegments, materialPrices, pushUndo]);
 
   // Load projects from IndexedDB on mount
   useEffect(() => {
@@ -398,7 +413,7 @@ function App() {
     };
 
     loadProjects();
-  }, [openProject]);
+  }, [openProject, pushUndo]);
 
   /**
    * FAZA 8 (P1): shranjevanje fotografije z obravnavo napak (npr. polna kvota
@@ -913,15 +928,13 @@ function App() {
       calculateFence(remaining);
     }
     // FAZA 22: ponudi razveljavo
-    setUndoAction({
-      message: 'Meritev je izbrisana.',
-      run: () => {
+    pushUndo('Meritev je izbrisana.',
+      () => {
         setMeasurements(prev => [...prev, izbrisana]);
         if (segment) setFenceSegments(prev => [...prev, segment]);
         calculateFence([...remaining, izbrisana]);
-      },
     });
-  }, [measurements, fenceSegments, fencePlan, boardPlan, calculateFence]);
+  }, [measurements, fenceSegments, fencePlan, boardPlan, calculateFence, pushUndo]);
 
   /**
    * FAZA 17: vklop/izklop meritve v načrtu (dokumentacijska meritev).
@@ -949,23 +962,20 @@ function App() {
       // Meritve s to fotografijo ostanejo (so lahko pomembne), a uporabnik jih
       // lahko izključi iz načrta ali izbriše.
       // FAZA 22: ponudi razveljavo
-      setUndoAction({
-        message: 'Fotografija je izbrisana.',
-        run: () => {
-          const projectId = currentProjectRef.current?.id;
-          if (projectId) {
-            void savePhoto({ ...izbrisana, projectId }).catch(err =>
-              console.error('Failed to restore photo:', err)
-            );
-          }
-          setPhotos(prev => [...prev, izbrisana]);
-        },
+      pushUndo('Fotografija je izbrisana.', () => {
+        const projectId = currentProjectRef.current?.id;
+        if (projectId) {
+          void savePhoto({ ...izbrisana, projectId }).catch(err =>
+            console.error('Failed to restore photo:', err)
+          );
+        }
+        setPhotos(prev => [...prev, izbrisana]);
       });
     } catch (err) {
       console.error('Failed to delete photo:', err);
       setStorageWarning('Fotografije ni bilo mogoče izbrisati.');
     }
-  }, [photos]);
+  }, [photos, pushUndo]);
 
   /**
    * FAZA 19: shrani skico (označbe) na fotografijo — v stanju in v bazi.
@@ -1633,11 +1643,12 @@ function App() {
       </footer>
 
       {/* FAZA 22: razveljitev destruktivne akcije */}
-      {undoAction && (
+      {undoStack.length > 0 && (
         <UndoSnackbar
-          message={undoAction.message}
-          onUndo={() => { undoAction.run(); setUndoAction(null); }}
-          onDismiss={() => setUndoAction(null)}
+          message={undoStack[undoStack.length - 1].message}
+          pendingCount={undoStack.length}
+          onUndo={handleUndo}
+          onDismiss={handleDismissUndo}
         />
       )}
     </div>

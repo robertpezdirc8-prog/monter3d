@@ -16,11 +16,13 @@ interface UndoSnackbarProps {
   onUndo: () => void;
   /** Zaprtje brez razveljavitve (tudi ob preteku časovne omejitve). */
   onDismiss: () => void;
+  /** Število še razveljivih akcij (za prikaz »+N«). */
+  pendingCount?: number;
   /** Čas do samodejnega zaprtja (ms). */
   timeoutMs?: number;
 }
 
-export function UndoSnackbar({ message, onUndo, onDismiss, timeoutMs = 10000 }: UndoSnackbarProps) {
+export function UndoSnackbar({ message, onUndo, onDismiss, pendingCount = 1, timeoutMs = 10000 }: UndoSnackbarProps) {
   useEffect(() => {
     const timer = setTimeout(onDismiss, timeoutMs);
     return () => clearTimeout(timer);
@@ -33,6 +35,9 @@ export function UndoSnackbar({ message, onUndo, onDismiss, timeoutMs = 10000 }: 
       className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2.5 text-sm text-slate-100 shadow-lg"
     >
       <span>{message}</span>
+      {pendingCount > 1 && (
+        <span className="text-xs text-slate-400">+{pendingCount - 1} še razveljivih</span>
+      )}
       <button
         onClick={() => { onUndo(); }}
         className="rounded bg-amber-600 hover:bg-amber-500 px-3 py-1 text-xs font-semibold text-white"
