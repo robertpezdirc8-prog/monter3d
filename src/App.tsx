@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
 import type {
   Project, Photo, Measurement, WorkflowStep, ObjectType,
   FencePlan, StairsPlan, CostEstimate, ImageQuality, FeaturePoint,
@@ -9,12 +9,21 @@ import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetect
 import { calculateStairsPlan, buildCostEstimate, exportMeasurementsCSV, selectFenceLengthMeasurements } from './utils/geometry';
 import { generatePDFReport } from './utils/pdfExport';
 import { v4 as uuidv4 } from 'uuid';
+/**
+ * FAZA 30: razvojni/testni prikazi se naložijo šele ob potrebi (lazy),
+ * zato začetni paket za monterja ostane manjši.
+ */
+const MathTestRunner = lazy(() =>
+  import('./components/MathTestRunner').then(m => ({ default: m.MathTestRunner }))
+);
+const MeasurementAccuracyTests = lazy(() =>
+  import('./components/MeasurementAccuracyTests').then(m => ({ default: m.MeasurementAccuracyTests }))
+);
+
 import { FenceVisualization } from './components/FenceVisualization';
 import { FeatureMatchingView } from './components/FeatureMatching';
-import { MathTestRunner } from './components/MathTestRunner';
 import { CameraCapture } from './components/CameraCapture';
 import { MeasurementOverlay } from './components/MeasurementOverlay';
-import { MeasurementAccuracyTests } from './components/MeasurementAccuracyTests';
 import { PhotoMatchingView, type PhotoPairMatching } from './components/PhotoMatchingView';
 import { InstallPrompt } from './components/InstallPrompt';
 import { PhotoSheetView } from './components/PhotoSheetView';
@@ -1170,7 +1179,9 @@ function App() {
         <div className="p-4">
           <a href="#" className="text-blue-400 hover:text-blue-300 mb-4 inline-block">← Nazaj na aplikacijo</a>
         </div>
-        <MathTestRunner />
+        <Suspense fallback={<p className="text-sm text-slate-400 p-4">Nalaganje testnega prikaza…</p>}>
+          <MathTestRunner />
+        </Suspense>
       </div>
     );
   }
@@ -1629,7 +1640,9 @@ function App() {
           {/* Measurement Accuracy Tests */}
           {showAccuracyTests && (
             <div className="bg-slate-800 rounded-lg p-6 mt-4">
-              <MeasurementAccuracyTests />
+              <Suspense fallback={<p className="text-sm text-slate-400">Nalaganje…</p>}>
+                <MeasurementAccuracyTests />
+              </Suspense>
             </div>
           )}
         </div>
