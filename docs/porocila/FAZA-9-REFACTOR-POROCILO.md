@@ -51,6 +51,23 @@ reda (vsak test začne s prazno bazo in čistim `localStorage`).
 - `QualityBadge` in `StatusIcon` sta izvozena iz `QualityCheckView` (uporablja ju tudi
   `CaptureView`).
 
+## 4. Dve težavi, ki ju je pokazal CI (in popravki)
+
+**a) `jsdom@30` ne deluje na Node 20.** `jsdom 30` → `undici 8` uporablja
+`zlib.createZstdDecompress`, ki ga Node 20 še nima → ob zagonu UI testov:
+`Cannot read properties of undefined (reading 'bind')`. Znižano na `jsdom@^26.1.0`
+(undici 6), ki deluje na Node 18+. Preverjeno lokalno na Node 20.20.2, Node 22 in Node 24.
+
+**b) `npm ci` v CI je redno odpovedal.** `@huggingface/transformers` ima odvisnost
+`onnxruntime-node`, katere install skripta prenese ~100 MB naravnih binarnih datotek
+z CDN-ja (`ETIMEDOUT`). Ta vezava za brskalnik ni potrebna (tam se uporablja
+`onnxruntime-web`/WASM). Rešitev: repo-level `.npmrc` z `ignore-scripts=true`, kar
+onemogoča skripte, ki prenašajo binarne artefakte. Preverjeno: `npm ci` brez napake,
+build še vedno vsebuje WASM (dist 27 MB), 101/101 testov.
+
+To je dober primer, zakaj CI ni le »formalnost« — obe napaki bi v produkciji pomenili
+neuspelo namestitev odvisnosti pri uporabniku.
+
 ## Preverjanje
 `typecheck` ✅ · `lint` ✅ 0 napak · `vitest` ✅ **101/101** · `test-runner` 21/21 ·
 `test-homography` 40/40 · `build` ✅
