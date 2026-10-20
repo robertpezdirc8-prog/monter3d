@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../App';
+import { FenceConfigurator } from '../../components/FenceConfigurator';
 import { saveProject, savePhoto, getAllProjects, deleteProject, getPhotosByProject } from '../../utils/storage';
 import type { Project, Photo } from '../../types';
 
@@ -316,6 +317,36 @@ describe('Razveljavi po brisanju (UI)', () => {
     // Razveljavi še enkrat -> nazaj je tudi prva.
     await user.click(screen.getByRole('button', { name: /razveljavi/i }));
     expect(await screen.findByText('4.500 m ±2.0%')).toBeInTheDocument();
+  });
+});
+
+
+describe('Konfigurator ograje (UI)', () => {
+  it('iskanje profila, izbira in prenos v projekt', async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    const onClose = vi.fn();
+
+    render(<FenceConfigurator onClose={onClose} onApply={onApply} />);
+
+    // Iskanje profila filtrira seznam.
+    const iskanje = screen.getByLabelText(/profil \(iskanje\)/i);
+    await user.type(iskanje, 'romb');
+
+    const izbirnik = screen.getByRole('combobox', { name: /izberite profil/i }) as HTMLSelectElement;
+    const možnosti = Array.from(izbirnik.options).map(o => o.value);
+    expect(možnosti.length).toBeGreaterThan(0);
+    expect(možnosti.every(id => id === '' || id.includes('romb'))).toBe(true);
+
+    // Izberi profil in prenosi konfiguracijo v projekt.
+    const prvi = možnosti.find(id => id !== '');
+    await user.selectOptions(izbirnik, prvi!);
+    await user.click(screen.getByRole('button', { name: /uporabi v projektu/i }));
+
+    expect(onApply).toHaveBeenCalled();
+    const preneseno = onApply.mock.calls[0][0] as { profileId: string; boardSpacingMm: number };
+    expect(preneseno.profileId).toBe(prvi);
+    expect(preneseno.boardSpacingMm).toBeGreaterThan(0);
   });
 });
 

@@ -11,6 +11,9 @@ import type { RoksalProfile, RoksalColor } from '../data/roksalCatalog';
 import { parseFenceConfiguration, validateConfiguration, getExamplePrompts } from '../utils/naturalLanguageParser';
 import type { ParsedConfiguration } from '../utils/naturalLanguageParser';
 import { calculateFenceConstruction, validateFenceConfiguration } from '../utils/fenceConstruction';
+import { ConfiguratorInputs } from './configurator/ConfiguratorInputs';
+import { ConfiguratorPlan } from './configurator/ConfiguratorPlan';
+import { ConfiguratorSummary } from './configurator/ConfiguratorSummary';
 
 interface FenceConfiguratorProps {
   onClose?: () => void;
@@ -199,150 +202,24 @@ export function FenceConfigurator({ onClose, onApply }: FenceConfiguratorProps) 
               </div>
             </div>
 
-            {/* Manual Configuration */}
-            <div className="bg-slate-900 rounded-lg p-4 space-y-4">
-              <h3 className="text-sm font-semibold text-slate-300">
-                🔧 Ročna konfiguracija
-              </h3>
-
-              {/* Profile Selection */}
-              <div>
-                <label htmlFor="config-profile-search" className="text-xs text-slate-400 mb-1 block">
-                  Profil (iskanje)
-                </label>
-                <input
-                  id="config-profile-search"
-                  type="search"
-                  value={profileQuery}
-                  onChange={e => setProfileQuery(e.target.value)}
-                  placeholder="npr. polna, 100, 1500"
-                  className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-1.5 text-white text-sm mb-2"
-                />
-                <select
-                  value={selectedProfile?.id || ''}
-                  onChange={(e) => handleProfileChange(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"
-                  aria-label="Izberite profil"
-                >
-                  <option value="">Izberite profil</option>
-                  {filteredProfiles.map(profile => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.name} ({profile.width}×{profile.thickness}×{profile.length}mm)
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Prikazanih {filteredProfiles.length} od {ROKSAL_PROFILES.length} profilov
-                </p>
-                {selectedProfile && (
-                  <p className="text-xs text-slate-400 mt-1">{selectedProfile.notes}</p>
-                )}
-              </div>
-
-              {/* Color Selection */}
-              {selectedProfile && (
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Barva</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {selectedProfile.colors.map(color => (
-                      <button
-                        key={color.id}
-                        onClick={() => setSelectedColor(color)}
-                        className={`aspect-square rounded border-2 transition-all ${
-                          selectedColor?.id === color.id
-                            ? 'border-emerald-500 scale-110'
-                            : 'border-slate-600 hover:border-slate-500'
-                        }`}
-                        style={{ backgroundColor: color.hex }}
-                        title={color.name}
-                      />
-                    ))}
-                  </div>
-                  {selectedColor && (
-                    <p className="text-xs text-slate-400 mt-1">
-                      {selectedColor.name}
-                      {selectedColor.notes && ` - ${selectedColor.notes}`}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Orientation */}
-              {selectedProfile && selectedProfile.orientation === 'both' && (
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Orientacija</label>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setOrientation('vertical')}
-                      className={`flex-1 px-3 py-2 rounded text-sm ${
-                        orientation === 'vertical'
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-slate-700 text-slate-300'
-                      }`}
-                    >
-                      Pokončno
-                    </button>
-                    <button
-                      onClick={() => setOrientation('horizontal')}
-                      className={`flex-1 px-3 py-2 rounded text-sm ${
-                        orientation === 'horizontal'
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-slate-700 text-slate-300'
-                      }`}
-                    >
-                      Prečno
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Dimensions */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">
-                    Višina: {fenceHeight}mm
-                  </label>
-                  <input
-                    type="range"
-                    min="800"
-                    max="2000"
-                    step="50"
-                    value={fenceHeight}
-                    onChange={(e) => setFenceHeight(Number(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">
-                    Dolžina: {fenceLength}mm
-                  </label>
-                  <input
-                    type="range"
-                    min="1000"
-                    max="10000"
-                    step="100"
-                    value={fenceLength}
-                    onChange={(e) => setFenceLength(Number(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-              </div>
-
-              {/* Board Spacing */}
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">
-                  Razmik med deskami: {boardSpacing}mm
-                </label>
-                <input
-                  type="range"
-                  min="5"
-                  max="50"
-                  value={boardSpacing}
-                  onChange={(e) => setBoardSpacing(Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-            </div>
+            <ConfiguratorInputs
+              profiles={filteredProfiles}
+              totalProfiles={ROKSAL_PROFILES.length}
+              profileQuery={profileQuery}
+              onProfileQueryChange={setProfileQuery}
+              selectedProfile={selectedProfile}
+              onProfileChange={handleProfileChange}
+              selectedColor={selectedColor}
+              onColorChange={setSelectedColor}
+              orientation={orientation}
+              onOrientationChange={setOrientation}
+              fenceHeight={fenceHeight}
+              onFenceHeightChange={setFenceHeight}
+              fenceLength={fenceLength}
+              onFenceLengthChange={setFenceLength}
+              boardSpacing={boardSpacing}
+              onBoardSpacingChange={setBoardSpacing}
+            />
 
             {/* Validation Results */}
             {validation && (
@@ -413,264 +290,19 @@ export function FenceConfigurator({ onClose, onApply }: FenceConfiguratorProps) 
               </div>
             </div>
 
-            {/* Visual Construction Plan */}
-            {construction && selectedProfile && (
-              <div className="bg-slate-900 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-slate-300 mb-3">
-                  📐 Vizualni načrt montaže
-                </h3>
-                <div className="bg-slate-800 rounded p-3">
-                  <svg
-                    viewBox="0 0 400 200"
-                    className="w-full h-auto"
-                    style={{ maxHeight: '200px' }}
-                  >
-                    {/* Background */}
-                    <rect x="0" y="0" width="400" height="200" fill="#1e293b" />
-                    
-                    {/* Ground line */}
-                    <line x1="0" y1="180" x2="400" y2="180" stroke="#475569" strokeWidth="2" />
-                    
-                    {/* Posts */}
-                    {Array.from({ length: construction.numberOfPosts }).map((_, i) => {
-                      const x = 20 + (i * (360 / (construction.numberOfPosts - 1 || 1)));
-                      return (
-                        <g key={`post-${i}`}>
-                          <rect
-                            x={x - 3}
-                            y="40"
-                            width="6"
-                            height="140"
-                            fill="#64748b"
-                            stroke="#94a3b8"
-                            strokeWidth="1"
-                          />
-                          {/* Post label */}
-                          {i === 0 && (
-                            <text x={x} y="35" textAnchor="middle" fill="#94a3b8" fontSize="8">
-                              Stebriček
-                            </text>
-                          )}
-                        </g>
-                      );
-                    })}
-                    
-                    {/* Beams (horizontal supports) */}
-                    {orientation === 'vertical' && Array.from({ length: construction.numberOfBeams }).map((_, i) => {
-                      const y = 50 + (i * (120 / (construction.numberOfBeams - 1 || 1)));
-                      return (
-                        <line
-                          key={`beam-${i}`}
-                          x1="20"
-                          y1={y}
-                          x2="380"
-                          y2={y}
-                          stroke="#64748b"
-                          strokeWidth="3"
-                        />
-                      );
-                    })}
-                    
-                    {/* Boards */}
-                    {orientation === 'vertical' ? (
-                      // Vertical boards
-                      Array.from({ length: Math.min(construction.numberOfBoards, 20) }).map((_, i) => {
-                        const x = 25 + (i * (350 / Math.min(construction.numberOfBoards, 20)));
-                        return (
-                          <rect
-                            key={`board-${i}`}
-                            x={x}
-                            y="50"
-                            width="8"
-                            height="120"
-                            fill={selectedColor?.hex || '#8b6f47'}
-                            stroke="#475569"
-                            strokeWidth="0.5"
-                          />
-                        );
-                      })
-                    ) : (
-                      // Horizontal boards
-                      Array.from({ length: Math.min(construction.numberOfBoards, 10) }).map((_, i) => {
-                        const y = 50 + (i * (120 / Math.min(construction.numberOfBoards, 10)));
-                        return (
-                          <rect
-                            key={`board-${i}`}
-                            x="25"
-                            y={y}
-                            width="350"
-                            height="8"
-                            fill={selectedColor?.hex || '#8b6f47'}
-                            stroke="#475569"
-                            strokeWidth="0.5"
-                          />
-                        );
-                      })
-                    )}
-                    
-                    {/* Aluminum tube indicator for ROMB */}
-                    {construction.requiresAluminumTube && (
-                      <g>
-                        <line
-                          x1="20"
-                          y1="110"
-                          x2="380"
-                          y2="110"
-                          stroke="#fbbf24"
-                          strokeWidth="2"
-                          strokeDasharray="5,5"
-                        />
-                        <text x="200" y="105" textAnchor="middle" fill="#fbbf24" fontSize="8">
-                          ALU cev
-                        </text>
-                      </g>
-                    )}
-                    
-                    {/* Screws indicator */}
-                    {construction.screwType === 'visible' && (
-                      <g>
-                        {Array.from({ length: 5 }).map((_, i) => {
-                          const x = 50 + (i * 70);
-                          return (
-                            <circle
-                              key={`screw-${i}`}
-                              cx={x}
-                              cy="110"
-                              r="2"
-                              fill="#ef4444"
-                            />
-                          );
-                        })}
-                        <text x="200" y="130" textAnchor="middle" fill="#ef4444" fontSize="8">
-                          Vidni vijaki
-                        </text>
-                      </g>
-                    )}
-                    
-                    {/* Dimensions */}
-                    <text x="200" y="195" textAnchor="middle" fill="#94a3b8" fontSize="10">
-                      Dolžina: {(fenceLength / 1000).toFixed(1)}m | Višina: {(fenceHeight / 1000).toFixed(1)}m
-                    </text>
-                  </svg>
-                  <p className="text-xs text-slate-500 mt-2 text-center">
-                    Shematični prikaz - ni uradna tehnična risba
-                  </p>
-                </div>
-              </div>
-            )}
+            <ConfiguratorPlan
+              construction={construction}
+              profile={selectedProfile}
+              color={selectedColor}
+              orientation={orientation}
+              fenceHeight={fenceHeight}
+              fenceLength={fenceLength}
+            />
 
-            {/* Construction Summary */}
-            {construction && selectedProfile && (
-              <div className="bg-slate-900 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-slate-300 mb-3">
-                  📊 Povzetek konstrukcije
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Število stebričkov:</span>
-                    <span className="text-white font-medium">{construction.numberOfPosts}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Razmak stebričkov:</span>
-                    <span className={`font-medium ${construction.postSpacingValid ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {construction.actualPostSpacing}mm
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Število nosilcev:</span>
-                    <span className="text-white font-medium">{construction.numberOfBeams}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Število desk:</span>
-                    <span className="text-white font-medium">{construction.numberOfBoards}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Razmik med deskami:</span>
-                    <span className={`font-medium ${construction.boardSpacingValid ? 'text-emerald-400' : 'text-amber-400'}`}>
-                      {construction.actualBoardSpacing}mm
-                    </span>
-                  </div>
-                  <div className="border-t border-slate-700 pt-2 mt-2">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Skupna dolžina desk:</span>
-                      <span className="text-white font-medium">
-                        {(construction.totalBoardLength / 1000).toFixed(2)} m
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Potrebnih profilov:</span>
-                      <span className="text-white font-medium">
-                        {construction.profilesNeeded} × {(construction.profileLength / 1000).toFixed(1)}m
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Odpad:</span>
-                      <span className="text-white font-medium">
-                        {(construction.waste / 1000).toFixed(2)} m
-                      </span>
-                    </div>
-                  </div>
-                  {construction.requiresAluminumTube && (
-                    <div className="bg-amber-900/30 border border-amber-700 rounded p-2 mt-2">
-                      <p className="text-xs text-amber-200">
-                        ⚠️ Potrebna aluminijasta cev za ROMB profil
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Technical Specifications */}
-            {selectedProfile && (
-              <div className="bg-slate-900 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-slate-300 mb-3">
-                  📋 Tehnične specifikacije
-                </h3>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Mere profila:</span>
-                    <span className="text-white">
-                      {selectedProfile.width}×{selectedProfile.thickness}×{selectedProfile.length}mm
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Max razmak stebrov:</span>
-                    <span className="text-white">{selectedProfile.maxPostSpacing}mm</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Vijačenje:</span>
-                    <span className="text-white">
-                      {selectedProfile.screwVisible ? 'Vidno iz lica' : 'Skrito'}
-                    </span>
-                  </div>
-                  {selectedProfile.hasAluminumTube && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Aluminijasta cev:</span>
-                      <span className="text-emerald-400">✓ Da</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Orientacija:</span>
-                    <span className="text-white">
-                      {selectedProfile.orientation === 'vertical' ? 'Samo pokončno' :
-                       selectedProfile.orientation === 'horizontal' ? 'Samo prečno' :
-                       'Pokončno ali prečno'}
-                    </span>
-                  </div>
-                  {selectedProfile.technicalNotes && selectedProfile.technicalNotes.length > 0 && (
-                    <div className="border-t border-slate-700 pt-2 mt-2">
-                      <p className="text-slate-400 mb-1">Tehnične opombe:</p>
-                      <ul className="text-slate-300 space-y-1">
-                        {selectedProfile.technicalNotes.map((note, i) => (
-                          <li key={i} className="text-xs">• {note}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            <ConfiguratorSummary
+              construction={construction}
+              profile={selectedProfile}
+            />
 
             {/* Export Button */}
             {construction && selectedProfile && selectedColor && (
