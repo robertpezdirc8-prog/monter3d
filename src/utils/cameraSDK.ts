@@ -97,7 +97,7 @@ export const TRADE_PROFILES: Record<TradeId, TradeProfile> = {
       { id: 'fas_celo', label: 'Celotna fasada', hint: 'Zajemi celotno ploskev s koraki (parallax), desno→levo.', minPhotos: 3 },
       { id: 'fas_poškodbe', label: 'Razpoke in poškodbe', hint: 'Detalj vsake razpoke z A4 listom poleg za merilo.', minPhotos: 1, reference: 'a4' },
       { id: 'fas_okna', label: 'Okna in odprtine', hint: 'Širina/visina odprtin, globina vhodnega okvirja.', minPhotos: 2, reference: 'metro' },
-      { id: 'fas_detajli', label: 'Robovi in detajli', hint: 'Kapi, štoklani, fuge, toplotne črpe—kjer je vidna poškodba.', minPhotos: 2 },
+      { id: 'fas_detajli', label: 'Robovi in detajli', hint: 'Kapi, štoklani, fuge in toplotne črpe — kjer je vidna poškodba.', minPhotos: 2 },
       { id: 'fas_osnova', label: 'Podlaga/sistem', hint: 'Tip podlage: žbuka, ETICS, lesena opa—bližje posnemi material.', minPhotos: 1 },
     ],
   },
@@ -108,10 +108,10 @@ export const TRADE_PROFILES: Record<TradeId, TradeProfile> = {
     description: 'Strešine: naklon, dimenzije ploskev, detajli strešnih oken in ostrešij.',
     requirements: [
       { id: 'kro_ploskev', label: 'Strešne ploskve', hint: 'Vsaka ploskev posebej, pravokotno čim bližje ravnini strehe.', minPhotos: 2 },
-      { id: 'kro_naklon', label: 'Naklon strehe', hint: 'Posnemi med tem ko držiš levelirjem ob levi/strehi (telefon poroča nagib).', minPhotos: 1, reference: 'level' },
-      { id: 'kro_dimenzije', label: 'Dimenzije (razpon×dolžina)', hint: 'Z merilnim trakom vidnim na sliki — od robu do grebena.', minPhotos: 2, reference: 'metro' },
+      { id: 'kro_naklon', label: 'Naklon strehe', hint: 'Posnimi, ko držiš žaga ali vodilo ob strehi (telefon poroča nagib).', minPhotos: 1, reference: 'level' },
+      { id: 'kro_dimenzije', label: 'Dimenzije (razpon×dolžina)', hint: 'Z merilnim trakom vidnim na sliki — od roba do grebena.', minPhotos: 2, reference: 'metro' },
       { id: 'kro_prehodi', label: 'Strešna okna, dimniki, sonde', hint: 'Obseg in lego vsakega prehoda glede na strešne module.', minPhotos: 2 },
-      { id: 'kro_odvod', label: 'Odvod in sneg', hint: 'Žlebovi, mračnice, protisnežne ovire—stanje in razmiki.', minPhotos: 1 },
+      { id: 'kro_odvod', label: 'Odvod in sneg', hint: 'Žlebovi, mreže, protisnežne ovire — stanje in razmiki.', minPhotos: 1 },
     ],
   },
 };
