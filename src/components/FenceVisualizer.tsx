@@ -45,7 +45,6 @@ export function FenceVisualizer({ photo, onClose }: FenceVisualizerProps) {
     boardSpacing: 20,
     fenceHeight: 1000
   });
-  const [showOriginal, setShowOriginal] = useState(true);
   const [sliderPosition, setSliderPosition] = useState(50);
 
   // Load image onto canvas

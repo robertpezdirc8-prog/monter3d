@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { Photo, FeaturePoint } from '../types';
+import type {Photo } from '../types';
 
 interface CoverageMapProps {
   photos: Photo[];

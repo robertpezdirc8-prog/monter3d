@@ -74,6 +74,7 @@ export function harrisCornerDetection(
   blockSize: number = 5, k: number = 0.04, threshold: number = 0.01,
   gridSize: number = 8
 ): FeatureDescriptor[] {
+  const half = Math.floor(blockSize / 2);
   const blurred = gaussianBlur(gray, width, height, 1.0);
   const Ix = new Float32Array(width * height);
   const Iy = new Float32Array(width * height);
@@ -87,7 +88,6 @@ export function harrisCornerDetection(
     }
   }
 
-  const half = Math.floor(blockSize / 2);
   const cellW = Math.floor(width / gridSize);
   const cellH = Math.floor(height / gridSize);
   const features: FeatureDescriptor[] = [];
@@ -210,7 +210,6 @@ export function computeDescriptors(
     ]);
   }
 
-  const half = Math.floor(patchSize / 2);
   for (const f of features) {
     const desc = new Uint8Array(32);
     for (let i = 0; i < 256; i++) {
@@ -615,78 +614,6 @@ function oneSidedJacobiSVD(
 
 // Jacobi eigenvalue algorithm for symmetric matrices
 // Returns eigenvalues and eigenvectors
-function jacobiEigenSolver(
-  A: number[][], 
-  maxIterations: number = 100, 
-  tolerance: number = 1e-10
-): { eigenvalues: number[]; eigenvectors: number[][] } | null {
-  const n = A.length;
-  
-  // Create copy of A
-  const S = A.map(row => [...row]);
-  
-  // Initialize eigenvector matrix as identity
-  const V: number[][] = Array.from({ length: n }, (_, i) => 
-    Array.from({ length: n }, (_, j) => i === j ? 1 : 0)
-  );
-  
-  for (let iter = 0; iter < maxIterations; iter++) {
-    // Find largest off-diagonal element
-    let maxVal = 0;
-    let p = 0, q = 1;
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        if (Math.abs(S[i][j]) > maxVal) {
-          maxVal = Math.abs(S[i][j]);
-          p = i;
-          q = j;
-        }
-      }
-    }
-    
-    // Check convergence
-    if (maxVal < tolerance) break;
-    
-    // Compute rotation angle
-    const theta = (S[q][q] - S[p][p]) / (2 * S[p][q]);
-    const t = Math.sign(theta) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
-    const c = 1 / Math.sqrt(t * t + 1);
-    const s = t * c;
-    
-    // Update S (only affected rows/columns)
-    const Sp = [...S[p]];
-    const Sq = [...S[q]];
-    
-    for (let i = 0; i < n; i++) {
-      if (i !== p && i !== q) {
-        const Sip = S[i][p];
-        const Siq = S[i][q];
-        S[i][p] = S[p][i] = c * Sip - s * Siq;
-        S[i][q] = S[q][i] = s * Sip + c * Siq;
-      }
-    }
-    
-    S[p][p] = c * c * Sp[p] - 2 * s * c * Sp[q] + s * s * Sq[q];
-    S[q][q] = s * s * Sp[p] + 2 * s * c * Sp[q] + c * c * Sq[q];
-    S[p][q] = S[q][p] = 0;
-    
-    // Update eigenvector matrix
-    for (let i = 0; i < n; i++) {
-      const Vip = V[i][p];
-      const Viq = V[i][q];
-      V[i][p] = c * Vip - s * Viq;
-      V[i][q] = s * Vip + c * Viq;
-    }
-  }
-  
-  // Extract eigenvalues from diagonal
-  const eigenvalues: number[] = [];
-  for (let i = 0; i < n; i++) {
-    eigenvalues.push(S[i][i]);
-  }
-  
-  return { eigenvalues, eigenvectors: V };
-}
 
 // Compute null space of wide matrix A (m x n, m < n) using rank-revealing QR with pivoting
 // Returns basis vector for 1D null space (for homography with 4 points)
@@ -878,12 +805,6 @@ function vectorNorm(v: number[]): number {
   return Math.sqrt(sum);
 }
 
-function normalize(v: number[]): void {
-  let norm = 0;
-  for (const x of v) norm += x * x;
-  norm = Math.sqrt(norm);
-  if (norm > 0) for (let i = 0; i < v.length; i++) v[i] /= norm;
-}
 
 // Matrix multiplication for 3x3 matrices (stored as 9-element arrays)
 function matMul3x3(A: number[], B: number[]): number[] {
@@ -899,60 +820,7 @@ function matMul3x3(A: number[], B: number[]): number[] {
 }
 
 // Simple least squares solver
-function solveLeastSquares(A: number[][]): number[] | null {
-  const m = A.length;
-  const n = A[0].length;
-  if (m < n) return null;
-  
-  // A^T * A * x = A^T * b (b = last column)
-  const ATA: number[][] = Array.from({ length: n - 1 }, () => new Array(n - 1).fill(0));
-  const ATb: number[] = new Array(n - 1).fill(0);
-  
-  for (let i = 0; i < n - 1; i++) {
-    for (let j = 0; j < n - 1; j++) {
-      for (let k = 0; k < m; k++) {
-        ATA[i][j] += A[k][i] * A[k][j];
-      }
-    }
-    for (let k = 0; k < m; k++) {
-      ATb[i] += A[k][i] * A[k][n - 1];
-    }
-  }
-  
-  return gaussianElimination(ATA, ATb);
-}
 
-function gaussianElimination(A: number[][], b: number[]): number[] | null {
-  const n = A.length;
-  const aug = A.map((row, i) => [...row, b[i]]);
-  
-  for (let i = 0; i < n; i++) {
-    let maxRow = i;
-    for (let k = i + 1; k < n; k++) {
-      if (Math.abs(aug[k][i]) > Math.abs(aug[maxRow][i])) maxRow = k;
-    }
-    [aug[i], aug[maxRow]] = [aug[maxRow], aug[i]];
-    
-    if (Math.abs(aug[i][i]) < 1e-10) return null;
-    
-    for (let k = i + 1; k < n; k++) {
-      const factor = aug[k][i] / aug[i][i];
-      for (let j = i; j <= n; j++) {
-        aug[k][j] -= factor * aug[i][j];
-      }
-    }
-  }
-  
-  const x = new Array(n);
-  for (let i = n - 1; i >= 0; i--) {
-    x[i] = aug[i][n];
-    for (let j = i + 1; j < n; j++) {
-      x[i] -= aug[i][j] * x[j];
-    }
-    x[i] /= aug[i][i];
-  }
-  return x;
-}
 
 // RANSAC homography estimation
 //
@@ -1113,7 +981,7 @@ export function assessImageQuality(imageData: ImageData): {
   glareDetected: boolean;
   overallScore: number;
 } {
-  const { data, width, height } = imageData;
+  const { width, height } = imageData;
   const gray = toGrayscale(imageData);
   
   // Brightness

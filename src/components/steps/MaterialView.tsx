@@ -3,16 +3,16 @@
  * (koti in dvigi) ter cene materialov.
  */
 import { useState } from 'react';
-import type { Project, Measurement, FenceSegmentInput, MaterialPrices } from '../../types';
+import type { Project, Measurement, FenceSegmentInput, MaterialPrices, FenceConfig, StairsConfig } from '../../types';
 import { selectFenceLengthMeasurements } from '../../utils/geometry';
 import { ROKSAL_PROFILES } from '../../data/roksalCatalog';
 import { FenceSegmentEditor } from '../FenceSegmentEditor';
 export function MaterialView({ currentProject, fenceConfig, onFenceConfigChange, stairsConfig, onStairsConfigChange, onCalculateFence, onCalculateStairs, measurements, fenceSegments, onFenceSegmentsChange, materialPrices, onMaterialPricesChange }: {
   currentProject: Project | null;
-  fenceConfig: any;
-  onFenceConfigChange: (c: any) => void;
-  stairsConfig: any;
-  onStairsConfigChange: (c: any) => void;
+  fenceConfig: FenceConfig;
+  onFenceConfigChange: (c: FenceConfig) => void;
+  stairsConfig: StairsConfig;
+  onStairsConfigChange: (c: StairsConfig) => void;
   onCalculateFence: () => void;
   onCalculateStairs: () => void;
   measurements: Measurement[];
@@ -176,7 +176,7 @@ export function MaterialView({ currentProject, fenceConfig, onFenceConfigChange,
                 <select
                   id="fence-mounting"
                   value={fenceConfig.mountingStyle}
-                  onChange={e => onFenceConfigChange({ ...fenceConfig, mountingStyle: e.target.value })}
+                  onChange={e => onFenceConfigChange({ ...fenceConfig, mountingStyle: e.target.value as FenceConfig['mountingStyle'] })}
                   className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white mt-1"
                 >
                   <option value="level">Ravna (level)</option>

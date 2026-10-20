@@ -9,6 +9,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { ROKSAL_PROFILES, ROKSAL_COLORS, getProfileById } from '../data/roksalCatalog';
 import type { RoksalProfile, RoksalColor } from '../data/roksalCatalog';
 import { parseFenceConfiguration, validateConfiguration, getExamplePrompts } from '../utils/naturalLanguageParser';
+import type { ParsedConfiguration } from '../utils/naturalLanguageParser';
 import { calculateFenceConstruction, validateFenceConfiguration } from '../utils/fenceConstruction';
 
 interface FenceConfiguratorProps {
@@ -23,8 +24,8 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
   const [fenceHeight, setFenceHeight] = useState(1000); // mm
   const [fenceLength, setFenceLength] = useState(3000); // mm
   const [boardSpacing, setBoardSpacing] = useState(20); // mm
-  const [parseResult, setParseResult] = useState<any>(null);
-  const [validationResult, setValidationResult] = useState<any>(null);
+  const [parseResult, setParseResult] = useState<ParsedConfiguration | null>(null);
+  const [, setValidationResult] = useState<ReturnType<typeof validateConfiguration> | null>(null);
 
   // Handle natural language input
   const handleParseInput = useCallback(() => {

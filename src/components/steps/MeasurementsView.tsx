@@ -4,7 +4,7 @@
  */
 import type { Measurement, Photo } from '../../types';
 import { formatMeasurement } from '../../utils/geometry';
-export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, measurePoints, onCanvasClick, pixelToMeter, onAnalyze }: {
+export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, onCanvasClick, pixelToMeter }: {
   measurements: Measurement[];
   selectedPhoto: Photo | null;
   canvasRef: React.RefObject<HTMLCanvasElement>;

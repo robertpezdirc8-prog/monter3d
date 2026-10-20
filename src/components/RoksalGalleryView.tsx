@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import { ROKSAL_GALLERY, getImagesByProfile, getImagesByColor, getImagesByCategory, getImagesByOrientation } from '../data/roksalGallery';
+import { ROKSAL_GALLERY } from '../data/roksalGallery';
 import { ROKSAL_PROFILES, ROKSAL_COLORS, getColorById } from '../data/roksalCatalog';
 import { RoksalImageView } from './RoksalImageView';
 import type { RoksalImage } from '../data/roksalGallery';

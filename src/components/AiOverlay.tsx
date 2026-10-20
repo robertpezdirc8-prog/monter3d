@@ -27,7 +27,7 @@ function getColor(label: string): string {
   return LABEL_COLORS[label];
 }
 
-export function AiOverlay({ detections, width, height, useVideoDimensions }: AiOverlayProps) {
+export function AiOverlay({ detections, width, height }: AiOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {

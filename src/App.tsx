@@ -1,28 +1,23 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type {
   Project, Photo, Measurement, WorkflowStep, ObjectType,
-  MeasurementStatus, ScaleSource, FencePlan, StairsPlan,
-  CostEstimate, MaterialItem, ImageQuality, FeaturePoint,
+  FencePlan, StairsPlan, CostEstimate, ImageQuality, FeaturePoint,
   FenceConfig, StairsConfig, ProjectSettings, FenceSegmentInput, MaterialPrices, BoardFencePlan
 } from './types';
 import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetection } from './utils/cv';
-import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, formatMeasurement, exportMeasurementsCSV, selectFenceLengthMeasurements } from './utils/geometry';
+import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, exportMeasurementsCSV, selectFenceLengthMeasurements } from './utils/geometry';
 import { generatePDFReport } from './utils/pdfExport';
 import { v4 as uuidv4 } from 'uuid';
 import { FenceVisualization } from './components/FenceVisualization';
-import { CoverageMapView, CameraGuide } from './components/CoverageMap';
 import { FeatureMatchingView } from './components/FeatureMatching';
-import { ProjectSummary } from './components/ProjectSummary';
 import { MathTestRunner } from './components/MathTestRunner';
 import { CameraCapture } from './components/CameraCapture';
 import { MeasurementOverlay } from './components/MeasurementOverlay';
 import { MeasurementAccuracyTests } from './components/MeasurementAccuracyTests';
-import { GuidedCapture } from './components/GuidedCapture';
-import { PhotoMatchingView } from './components/PhotoMatchingView';
+import { PhotoMatchingView, type PhotoPairMatching } from './components/PhotoMatchingView';
 import { FenceVisualizer } from './components/FenceVisualizer';
 import { RoksalGalleryView } from './components/RoksalGalleryView';
 import { FenceConfigurator } from './components/FenceConfigurator';
-import { FenceSegmentEditor } from './components/FenceSegmentEditor';
 import { NewProjectView } from './components/steps/NewProjectView';
 import { CaptureView } from './components/steps/CaptureView';
 import { QualityCheckView } from './components/steps/QualityCheckView';
@@ -32,7 +27,6 @@ import { MaterialView } from './components/steps/MaterialView';
 import { QuantityView } from './components/steps/QuantityView';
 import { EstimateView } from './components/steps/EstimateView';
 import { ExportView } from './components/steps/ExportView';
-import { IconCamera, IconRuler, IconFence, IconStairs, IconCheck, IconWarning, IconX, IconExport, IconPlus, IconSave } from './components/icons';
 import { getObjectTypeLabel } from './utils/labels';
 import TradeMenu from './components/TradeMenu';
 import TradeCapture from './components/TradeCapture';
@@ -53,7 +47,7 @@ import {
 import { buildFenceGeometry } from './utils/fenceGeometry';
 import { validateFencePlanAgainstProfile } from './utils/roksalRules';
 import { buildBoardFencePlan, estimateBoardMaterials } from './utils/boardFence';
-import { getProfileById, ROKSAL_PROFILES } from './data/roksalCatalog';
+import { getProfileById } from './data/roksalCatalog';
 import { createBackup, restoreBackup } from './utils/backup';
 
 const STATUS_TO_STEP: Record<string, WorkflowStep> = {
@@ -99,7 +93,6 @@ function App() {
   const [boardPlan, setBoardPlan] = useState<BoardFencePlan | null>(null);
   const [stairsPlan, setStairsPlan] = useState<StairsPlan | null>(null);
   const [estimate, setEstimate] = useState<CostEstimate | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('capture');
   const [showInstructions, setShowInstructions] = useState(true);
   const [measuringMode, setMeasuringMode] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<{x: number; y: number}[]>([]);
@@ -121,11 +114,10 @@ function App() {
   const [vizColor, setVizColor] = useState('#2d3436');
   const [comparePhoto, setComparePhoto] = useState<Photo | null>(null);
   const [showCamera, setShowCamera] = useState(false);
-  const [showMeasurement, setShowMeasurement] = useState(false);
   const [showAccuracyTests, setShowAccuracyTests] = useState(false);
   const [capturedSteps, setCapturedSteps] = useState<string[]>([]);
   const [currentCaptureStep, setCurrentCaptureStep] = useState<string | null>(null);
-  const [photoMatchings, setPhotoMatchings] = useState<any[]>([]);
+  const [photoMatchings, setPhotoMatchings] = useState<PhotoPairMatching[]>([]);
   // FAZA 8 (P1): opozorila o shrambi (npr. polna kvota) — prikazana kot pasica,
   // ne kot blokirajoč alert, da uporabnik ne izgubi dela.
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
@@ -134,7 +126,6 @@ function App() {
   const [showFenceConfigurator, setShowFenceConfigurator] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // FAZA 7 (P0): zadnje shranjeno stanje prepreči neskončno pisanje v IndexedDB.
@@ -470,7 +461,7 @@ function App() {
       const matchings = await computeAllMatchings(photos);
       
       // Convert to format expected by PhotoMatchingView
-      const viewMatchings = matchings.map(m => ({
+      const viewMatchings: PhotoPairMatching[] = matchings.map(m => ({
         photo1: photos.find(p => p.id === m.photo1Id)!,
         photo2: photos.find(p => p.id === m.photo2Id)!,
         features1: m.features1,
@@ -480,7 +471,12 @@ function App() {
         homography: m.homography,
         reprojError: m.reprojError,
         status: m.status,
-        message: m.message
+        message: m.message,
+        // Podatki za risanje povezav med značilnicami (prej niso bili posredovani,
+        // zato je bil prikaz ujemanja prazen).
+        features1Points: m.features1Points,
+        features2Points: m.features2Points,
+        inlierMatches: m.inlierMatches,
       }));
       
       setPhotoMatchings(viewMatchings);
@@ -1260,10 +1256,7 @@ function App() {
                       Izračunaj ujemanja
                     </button>
                   </div>
-                  <PhotoMatchingView
-                    matchings={photoMatchings}
-                    onSelectPhoto={setSelectedPhoto}
-                  />
+                  <PhotoMatchingView matchings={photoMatchings} />
                 </div>
               )}
             </div>

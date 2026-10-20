@@ -1,6 +1,6 @@
 // Mera3D Pro - Geometry & Calculation Utilities
 
-import type { Measurement, FenceSegment, FencePlan, StairsPlan, StairStep, TerrainPlan, TerrainSegment, CostEstimate, MaterialItem } from '../types';
+import type { Measurement, Project, FenceSegment, FencePlan, StairsPlan, StairStep, TerrainPlan, TerrainSegment, CostEstimate, MaterialItem } from '../types';
 
 const EPS = 1e-9;
 
@@ -587,6 +587,6 @@ export function exportMeasurementsCSV(measurements: {
 }
 
 // Export project to JSON
-export function exportProjectJSON(project: any): string {
+export function exportProjectJSON(project: Project): string {
   return JSON.stringify(project, null, 2);
 }

@@ -127,18 +127,45 @@ export interface CameraSDKOptions {
 }
 
 /** Branje zmožnosti tracka — varno, vrnimo prazno če brskalnik ne podpira. */
-function readCapabilities(track: MediaStreamTrack): any {
-  const src = track as any;
+interface TrackCapabilities {
+  facingMode?: string[];
+  zoom?: { min: number; max: number; step: number };
+  torch?: boolean;
+  focusMode?: string[];
+  exposureMode?: string[];
+  whiteBalanceMode?: string[];
+  [key: string]: unknown;
+}
+
+function readCapabilities(track: MediaStreamTrack): TrackCapabilities {
+  const src = track as MediaStreamTrack & { getCapabilities?: () => TrackCapabilities };
   if (typeof src.getCapabilities === 'function') {
-    try { return src.getCapabilities(); } catch { /* ignore */ }
+    try { return (src.getCapabilities() ?? {}) as TrackCapabilities; } catch { /* ignore */ }
   }
   return {};
+}
+
+/** Minimalen opis brskalnikovega API-ja ImageCapture (ni v TS standardnih tipih). */
+interface ImageCaptureLike {
+  takePhoto(): Promise<{ data: Blob }>;
+  getPhotoCapabilities?(): Promise<{ photoResolution?: { width: number; height: number } }>;
+  grabFrame?(): Promise<VideoFrame>;
+}
+
+interface AdvancedTrack extends MediaStreamTrack {
+  applyConstraints(constraints: MediaTrackConstraints & { advanced?: unknown[] }): Promise<void>;
+}
+
+declare global {
+  interface Window {
+    ImageCapture?: new (track: MediaStreamTrack) => ImageCaptureLike;
+  }
 }
 
 export class CameraSDK {
   private stream: MediaStream | null = null;
   private videoEl: HTMLVideoElement | null = null;
-  private imageCapture: any = null;
+  private imageCapture: ImageCaptureLike | null = null;
 
   get isLive(): boolean {
     return this.stream !== null && this.stream.getVideoTracks().length > 0;
@@ -167,8 +194,8 @@ export class CameraSDK {
     videoEl.srcObject = this.stream;
     await videoEl.play();
     const track = this.activeTrack;
-    if (track && typeof (window as any).ImageCapture === 'function') {
-      try { this.imageCapture = new (window as any).ImageCapture(track); }
+    if (track && typeof window.ImageCapture === 'function') {
+      try { this.imageCapture = new window.ImageCapture(track); }
       catch { this.imageCapture = null; }
     }
   }
@@ -232,7 +259,7 @@ export class CameraSDK {
     if (!cap.zoom) return null;
     const clamped = Math.min(Math.max(value, cap.zoom.min), cap.zoom.max ?? value);
     try {
-      await (track as any).applyConstraints({ advanced: [{ zoom: clamped }] as any });
+      await (track as AdvancedTrack).applyConstraints({ advanced: [{ zoom: clamped }] });
       return clamped;
     } catch { return null; }
   }
@@ -244,7 +271,7 @@ export class CameraSDK {
     const cap = readCapabilities(track);
     if (!cap.torch) return false;
     try {
-      await (track as any).applyConstraints({ advanced: [{ torch: on }] as any });
+      await (track as AdvancedTrack).applyConstraints({ advanced: [{ torch: on }] });
       return on;
     } catch { return false; }
   }
@@ -261,13 +288,13 @@ export class CameraSDK {
       const vh = settings.height ?? this.videoEl.videoHeight ?? 1;
       const relX = Math.min(Math.max(x / (this.videoEl.clientWidth || 1), 0), 1);
       const relY = Math.min(Math.max(y / (this.videoEl.clientHeight || 1), 0), 1);
-      await (track as any).applyConstraints({
-        advanced: [{ focusMode: 'single-shot' } as any],
+      await (track as AdvancedTrack).applyConstraints({
+        advanced: [{ focusMode: 'single-shot' }],
       });
       // Points-of-interest (nov API, fallback tiho ignoriran)
       try {
-        await (track as any).applyConstraints({
-          advanced: [{ pointsOfInterest: { x: relX, y: relY } } as any],
+        await (track as AdvancedTrack).applyConstraints({
+          advanced: [{ pointsOfInterest: { x: relX, y: relY } }],
         });
       } catch { /* ni podprto */ }
       void vw; void vh;
@@ -402,12 +429,12 @@ export async function collectCaptureMeta(): Promise<CaptureMeta> {
   };
   // Nagnom: DeviceOrientation (iOS potrebuje dovoljenje v gesture handlerju)
   try {
-    const anyDO = (DeviceOrientationEvent as any)?.requestPermission;
+    const anyDO = (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<'granted' | 'denied'> })?.requestPermission;
     if (typeof anyDO === 'function' && anyDO) {
       const perm = await anyDO.call(DeviceOrientationEvent);
       if (perm !== 'granted') throw new Error('orientation denied');
     }
-    const reading = await new Promise<any>((resolve, reject) => {
+    const reading = await new Promise<DeviceOrientationEvent>((resolve, reject) => {
       const to = setTimeout(() => reject(new Error('orientation timeout')), 1500);
       const on = (e: DeviceOrientationEvent) => {
         window.removeEventListener('deviceorientation', on);
@@ -416,7 +443,7 @@ export async function collectCaptureMeta(): Promise<CaptureMeta> {
       window.addEventListener('deviceorientation', on, { once: true });
     });
     meta.tiltDeg = reading.beta != null ? Math.round(reading.beta - 90) : null;
-    const ch = (reading as any).webkitCompassHeading;
+    const ch = (reading as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
     meta.headingDeg = typeof ch === 'number' ? Math.round(ch)
       : reading.alpha != null ? Math.round((360 - reading.alpha) % 360) : null;
   } catch { /* tih fallback */ }
