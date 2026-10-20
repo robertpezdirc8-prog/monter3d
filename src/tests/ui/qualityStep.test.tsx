@@ -279,6 +279,44 @@ describe('Razveljavi po brisanju (UI)', () => {
     await user.click(screen.getByRole('button', { name: /razveljavi/i }));
     expect(await screen.findByText('4.500 m ±2.0%')).toBeInTheDocument();
   });
+
+  it('več zaporednih brisanj lahko razveljavimo eno za drugim', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText('npr. Ograja - Družina Novak');
+    await user.clear(input);
+    await user.type(input, 'Zgodovina projekt');
+    await user.click(screen.getByRole('button', { name: /ustvari projekt/i }));
+
+    await user.click(screen.getByRole('button', { name: /meritve/i }));
+    const polje = await screen.findByLabelText(/ročna dolžina/i);
+
+    // Dodaj dve meritvi.
+    await user.type(polje, '4.5');
+    await user.click(screen.getByRole('button', { name: /dodaj meritve/i }));
+    await screen.findByText('4.500 m ±2.0%');
+    await user.type(polje, '3.2');
+    await user.click(screen.getByRole('button', { name: /dodaj meritve/i }));
+    await screen.findByText('3.200 m ±2.0%');
+
+    // Izbriši prvo, nato drugo -> dve razveljivi akciji.
+    await user.click(screen.getByRole('button', { name: /izbriši meritev 4\.500 m/i }));
+    await screen.findByText(/meritev je izbrisana/i);
+    await user.click(screen.getByRole('button', { name: /izbriši meritev 3\.200 m/i }));
+
+    // Prikazano je, da sta razveljivi dve akciji.
+    expect(await screen.findByText(/1 še razveljivih/i)).toBeInTheDocument();
+
+    // Razveljavi -> nazadnja izbrisana meritev.
+    await user.click(screen.getByRole('button', { name: /razveljavi/i }));
+    expect(await screen.findByText('3.200 m ±2.0%')).toBeInTheDocument();
+    expect(screen.queryByText('4.500 m ±2.0%')).toBeNull();
+
+    // Razveljavi še enkrat -> nazaj je tudi prva.
+    await user.click(screen.getByRole('button', { name: /razveljavi/i }));
+    expect(await screen.findByText('4.500 m ±2.0%')).toBeInTheDocument();
+  });
 });
 
 
