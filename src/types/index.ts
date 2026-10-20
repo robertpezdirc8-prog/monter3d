@@ -212,6 +212,11 @@ export interface Measurement {
    * NE sme šteti v dolžino ograje / količine / predračun.
    */
   isScaleReference?: boolean;
+  /**
+   * FAZA 17: meritev je dokumentacijska — uporabnik jo je izključil iz
+   * načrta in predračuna (npr. posnetek za dokumentacijo, ne za dolžino).
+   */
+  excludedFromPlan?: boolean;
   uncertainty: number; // percentage
   confidence: number;
   photoIds: string[];

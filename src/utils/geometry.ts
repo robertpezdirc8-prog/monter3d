@@ -13,9 +13,11 @@ const EPS = 1e-9;
  */
 export function isFenceLengthMeasurement(
   m: Pick<Measurement, 'status' | 'unit' | 'scaleSource' | 'algorithm' | 'value'> &
-    Partial<Pick<Measurement, 'source' | 'isScaleReference'>>
+    Partial<Pick<Measurement, 'source' | 'isScaleReference' | 'excludedFromPlan'>>
 ): boolean {
   if (m.isScaleReference === true) return false;
+  // FAZA 17: uporabnik je meritev izključil iz načrta (dokumentacijska).
+  if (m.excludedFromPlan === true) return false;
   if (m.source === 'reference_scale' || m.source === 'calibration_marker') return false;
   if (m.algorithm === 'reference_calibration') return false;
   if (m.status !== 'verified') return false;

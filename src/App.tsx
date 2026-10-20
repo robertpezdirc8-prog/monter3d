@@ -32,7 +32,7 @@ import { getObjectTypeLabel } from './utils/labels';
 import TradeMenu from './components/TradeMenu';
 import TradeCapture from './components/TradeCapture';
 import type { TradeId } from './utils/cameraSDK';
-import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId, deleteProject, deletePhotosByProject, loadProjectWithPhotos } from './utils/storage';
+import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId, deleteProject, deletePhoto, deletePhotosByProject, loadProjectWithPhotos } from './utils/storage';
 import {
   DEFAULT_FENCE_CONFIG,
   DEFAULT_STAIRS_CONFIG,
@@ -754,10 +754,14 @@ function App() {
   }, [measurePoints, referenceLength, selectedPhoto]);
 
   // Calculate fence plan
-  const calculateFence = useCallback(() => {
+  // FAZA 17: measurementsOverride omogoča preračun po brisanju meritve, še
+  // preden se novo stanje renderira.
+  const calculateFence = useCallback((measurementsOverride?: Measurement[]) => {
     // FAZA 7 (P0): izloči referenčno (kalibracijsko) meritev — sicer merilni trak
     // postane dodaten segment ograje in napihne količine/predračun.
-    const validMeasurements = selectFenceLengthMeasurements(measurements);
+    // Varnost: parameter je lahko tudi klik dogodek (onClick={calculateFence}).
+    const source = Array.isArray(measurementsOverride) ? measurementsOverride : measurements;
+    const validMeasurements = selectFenceLengthMeasurements(source);
     
     if (validMeasurements.length < 1) {
       // No valid measurements - cannot calculate fence
@@ -862,6 +866,48 @@ function App() {
     );
     setEstimate(costEstimate);
   }, [measurements, fenceConfig, laborHours, laborRate, taxRate, fenceSegments, materialPrices]);
+
+  /**
+   * FAZA 17: brisanje meritve. Če je bil izračunan načrt, ga takoj preračunamo,
+   * da v predračunu ne ostane izbrisana dolžina.
+   */
+  const handleDeleteMeasurement = useCallback((id: string) => {
+    const remaining = measurements.filter(m => m.id !== id);
+    setMeasurements(remaining);
+    setFenceSegments(prev => prev.filter(s => s.id !== id));
+    if (fencePlan || boardPlan) {
+      calculateFence(remaining);
+    }
+  }, [measurements, fencePlan, boardPlan, calculateFence]);
+
+  /**
+   * FAZA 17: vklop/izklop meritve v načrtu (dokumentacijska meritev).
+   */
+  const handleToggleMeasurementExcluded = useCallback((id: string) => {
+    const updated = measurements.map(m =>
+      m.id === id ? { ...m, excludedFromPlan: !m.excludedFromPlan } : m
+    );
+    setMeasurements(updated);
+    if (fencePlan || boardPlan) {
+      calculateFence(updated);
+    }
+  }, [measurements, fencePlan, boardPlan, calculateFence]);
+
+  /**
+   * FAZA 17: brisanje fotografije iz projekta (npr. zamegljena ali nepotrebna).
+   */
+  const handleDeletePhoto = useCallback(async (photoId: string) => {
+    try {
+      await deletePhoto(photoId);
+      setPhotos(prev => prev.filter(p => p.id !== photoId));
+      setSelectedPhoto(prev => (prev?.id === photoId ? null : prev));
+      // Meritve s to fotografijo ostanejo (so lahko pomembne), a uporabnik jih
+      // lahko izključi iz načrta ali izbriše.
+    } catch (err) {
+      console.error('Failed to delete photo:', err);
+      setStorageWarning('Fotografije ni bilo mogoče izbrisati.');
+    }
+  }, []);
 
   // Calculate stairs
   const calculateStairs = useCallback(() => {
@@ -1234,6 +1280,7 @@ function App() {
               selectedPhoto={selectedPhoto}
               onSelectPhoto={setSelectedPhoto}
               onAnalyze={analyzePhoto}
+              onDeletePhoto={handleDeletePhoto}
               canvasRef={canvasRef}
               showInstructions={showInstructions}
               onToggleInstructions={() => setShowInstructions(!showInstructions)}
@@ -1363,6 +1410,8 @@ function App() {
               pixelToMeter={pixelToMeter}
               onAnalyze={analyzePhoto}
               onAddManualLength={handleAddManualLength}
+              onDeleteMeasurement={handleDeleteMeasurement}
+              onToggleExcluded={handleToggleMeasurementExcluded}
             />
           )}
 
