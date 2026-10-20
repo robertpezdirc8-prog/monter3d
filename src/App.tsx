@@ -6,7 +6,7 @@ import type {
   PhotoAnnotation
 } from './types';
 import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetection } from './utils/cv';
-import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, exportMeasurementsCSV, selectFenceLengthMeasurements } from './utils/geometry';
+import { calculateStairsPlan, buildCostEstimate, exportMeasurementsCSV, selectFenceLengthMeasurements } from './utils/geometry';
 import { generatePDFReport } from './utils/pdfExport';
 import { v4 as uuidv4 } from 'uuid';
 import { FenceVisualization } from './components/FenceVisualization';
@@ -49,9 +49,7 @@ import {
   emptySnapshot,
   type ProjectStateSnapshot,
 } from './utils/projectState';
-import { buildFenceGeometry } from './utils/fenceGeometry';
-import { validateFencePlanAgainstProfile } from './utils/roksalRules';
-import { buildBoardFencePlan, estimateBoardMaterials } from './utils/boardFence';
+import { calculateFenceCalculation } from './utils/fenceCalculation';
 import { getProfileById } from './data/roksalCatalog';
 import { createBackup, restoreBackup, createWorkspaceBackup, restoreWorkspaceBackup, parseBackup, parseWorkspaceBackup } from './utils/backup';
 import { downloadFile } from './utils/download';
@@ -803,114 +801,55 @@ function App() {
   // FAZA 17: measurementsOverride omogoča preračun po brisanju meritve, še
   // preden se novo stanje renderira.
   const calculateFence = useCallback((measurementsOverride?: Measurement[]) => {
-    // FAZA 7 (P0): izloči referenčno (kalibracijsko) meritev — sicer merilni trak
-    // postane dodaten segment ograje in napihne količine/predračun.
-    // Varnost: parameter je lahko tudi klik dogodek (onClick={calculateFence}).
+    // FAZA 26: enoten izracun (panelna in deskna konstrukcija) v enem modulu.
     const source = Array.isArray(measurementsOverride) ? measurementsOverride : measurements;
     const validMeasurements = selectFenceLengthMeasurements(source);
-    
+
     if (validMeasurements.length < 1) {
-      // No valid measurements - cannot calculate fence
       setFencePlan(null);
+      setBoardPlan(null);
       setEstimate(null);
       return;
     }
 
-    // FAZA 8 (P1): segmenti so povezani in imajo lasten SMER (azimut) ter dvig,
-    // zato je mogoče modelirati tudi kote (L-oblike) in terenske razlike.
+    // Segmenti: dolzina iz meritve + azimut/dvig iz urejevalnika segmentov.
     const overrides = new Map(fenceSegments.map(s => [s.id, s]));
-    const inputs: FenceSegmentInput[] = validMeasurements.map(m => {
-      const override = overrides.get(m.id);
+    const segments = validMeasurements.map(m => {
+      const o = overrides.get(m.id);
       return {
         id: m.id,
         length: m.value,
-        bearingDeg: override?.bearingDeg ?? 0,
-        heightChange: override?.heightChange ?? 0,
+        bearingDeg: o?.bearingDeg ?? 0,
+        heightChange: o?.heightChange ?? 0,
       };
     });
 
-    const geometry = buildFenceGeometry(inputs);
-    if (geometry.errors.length > 0) {
-      console.error('Invalid fence geometry:', geometry.errors);
-      setFencePlan(null);
+    const profile = fenceConfig.profileId ? getProfileById(fenceConfig.profileId) : undefined;
+    const result = calculateFenceCalculation({
+      segments,
+      config: fenceConfig,
+      profile,
+      prices: materialPrices,
+    });
+
+    setFencePlan(result.plan);
+    setBoardPlan(result.boardPlan);
+
+    if (result.errors.length > 0 || result.materials.length === 0) {
       setEstimate(null);
       return;
     }
 
-    const segments = geometry.segments.map(s => ({
-      startPoint: s.startPoint,
-      endPoint: s.endPoint,
-      heightChange: s.heightChange,
-    }));
-
-    const plan = calculateFencePlan(segments, fenceConfig);
-    // Opozorila iz geometrije (sklenjena ograja, končna višina) pridejo v načrt.
-    if (geometry.warnings.length > 0) {
-      plan.warnings = [...(plan.warnings ?? []), ...geometry.warnings];
-    }
-
-    // FAZA 8 (P2): preverjanje proti tehničnim pravilom Roksal (izbrani profil).
-    // Kršitev pravil je napaka, zato predračuna ni — enako kot pri drugih napakah.
-    const profile = fenceConfig.profileId ? getProfileById(fenceConfig.profileId) : undefined;
-    const ruleCheck = validateFencePlanAgainstProfile(plan, profile, { fenceHeightM: fenceConfig.panelHeight });
-    if (ruleCheck.errors.length > 0) {
-      plan.errors = [...(plan.errors ?? []), ...ruleCheck.errors];
-    }
-    if (ruleCheck.warnings.length > 0) {
-      plan.warnings = [...(plan.warnings ?? []), ...ruleCheck.warnings];
-    }
-    if (ruleCheck.notes.length > 0) {
-      plan.warnings = [...(plan.warnings ?? []), ...ruleCheck.notes];
-    }
-
-    setFencePlan(plan);
-
-    // FAZA 11: deskna konstrukcija (deske iz kataloga) — alternativa panelni.
-    // Če je izbrana, se izračun in predračun naredita po desknih pravilih kataloga.
-    if (fenceConfig.constructionType === 'board' && profile) {
-      const board = buildBoardFencePlan({
-        profile,
-        segments: inputs.map(i => ({ id: i.id, length: i.length, bearingDeg: i.bearingDeg, heightChange: i.heightChange })),
-        fenceHeight: fenceConfig.panelHeight,
-        boardSpacing: fenceConfig.boardSpacing,
-        orientation: fenceConfig.orientation,
-      });
-      setBoardPlan(board);
-      setFencePlan(null);
-
-      if (board.errors.length > 0) {
-        setEstimate(null);
-        return;
-      }
-
-      const boardItems = estimateBoardMaterials(board, profile, materialPrices);
-      setEstimate(buildCostEstimate(
-        boardItems,
-        { hours: laborHours, rate: laborRate },
-        taxRate / 100,
-        measurements
-          .filter(m => m.isScaleReference !== true && m.source !== 'reference_scale' && m.algorithm !== 'reference_calibration')
-          .map(m => ({ status: m.status, scaleSource: m.scaleSource }))
-      ));
-      return;
-    }
-
-    setBoardPlan(null);
-
-    // Calculate materials — cene so iz nastavitev projekta (ne več trdo zapisane)
-    const materialItems = estimateFenceMaterials(plan, materialPrices);
-
-    const costEstimate = buildCostEstimate(
-      materialItems,
+    setEstimate(buildCostEstimate(
+      result.materials,
       { hours: laborHours, rate: laborRate },
       taxRate / 100,
-      // FAZA 7 (P0): referenčna kalibracija ni meritev objekta in ne sodi v statistiko
-      // predračuna; neveljavne/opozorilne meritve pa morajo ostati vidne.
-      measurements
+      // FAZA 7 (P0): referencna kalibracija ni meritev objekta in ne sodi v statistiko
+      // predracuna; neveljavne/opozorilne meritve pa morajo ostati vidne.
+      source
         .filter(m => m.isScaleReference !== true && m.source !== 'reference_scale' && m.algorithm !== 'reference_calibration')
         .map(m => ({ status: m.status, scaleSource: m.scaleSource }))
-    );
-    setEstimate(costEstimate);
+    ));
   }, [measurements, fenceConfig, laborHours, laborRate, taxRate, fenceSegments, materialPrices]);
 
   /**
