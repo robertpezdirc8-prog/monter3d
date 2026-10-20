@@ -226,7 +226,8 @@ describe('Izvoz in varnostna kopija (UI)', () => {
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
 
-    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    // Časovna meja je večja: uvoz gre skozi asinhrono branje datoteke in obdelavo.
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled(), { timeout: 5000 });
     const projekti = await getAllProjects();
     expect(projekti.map(p => p.name)).toContain('Izvozni projekt');
   });

@@ -61,8 +61,8 @@ Količine → Predračun → Izvoz`
   ravna ograja.
 - **Cene materialov** so del nastavitev projekta (prej trdo zapisane v kodi).
 - **Dve konstrukciji ograje**: panelna (paneli + stebri) in deskna (deske iz kataloga
-  Roksal) — obe uporabljata ista pravila, cene in predračun (prej je bila deskna
-  konstrukcija izolirana v konfiguratorju in ni šla v predračun).
+  Roksal) — obe gredo skozi **enoten izračun** (geometrija → tehnična pravila →
+  materiali → predračun), zato sta napaki in opozorila pri obeh enaka.
 - **Konfigurator** prenaša izbiro (profil, višina, razmik med deskami) neposredno v
   projekt, zato ni več ločen izračun, temveč napredno orodje istega toka.
 - **Homografija** sprejme realen šum značilnic (~0,5 px) in model preveri s reprojekcijo;
