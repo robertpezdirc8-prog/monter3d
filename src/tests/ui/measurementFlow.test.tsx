@@ -83,8 +83,11 @@ describe('Merilni tok (UI)', () => {
     await seedProjectWithPhoto();
 
     render(<App />);
-    // Projekt se naloži in fotografija je izbrana.
-    expect(await screen.findByText('Merilni projekt')).toBeInTheDocument();
+    // Počakamo, da se projekt DEJANSKO naloži (korak »Zajem« se prikaže šele po
+    // openProject). Sicer lahko klik na navigacijo pride pretoo, kot se projekt naloži,
+    // in nalaganje nato korak prepiše nazaj — to je bila vzrok za občasni flake.
+    expect(await screen.findByText(/Zajem fotografij/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Merilni projekt').length).toBeGreaterThan(0);
 
     // --- Meritev (brez kalibracije je v slikovnih točkah) ---
     await user.click(screen.getByRole('button', { name: /meritve/i }));

@@ -137,10 +137,17 @@ function App() {
   // FAZA 7 (P0): zadnje shranjeno stanje prepreči neskončno pisanje v IndexedDB.
   const currentProjectRef = useRef<Project | null>(null);
   const lastSavedSignature = useRef<string | null>(null);
+  // FAZA 10: trenutni korak, da nalaganje projekta uporabnika ne vrže nazaj na
+  // korak, v katerega je sam preklopil (npr. med nalaganjem fotografij).
+  const currentStepRef = useRef<WorkflowStep>('new_project');
 
   useEffect(() => {
     currentProjectRef.current = currentProject;
   }, [currentProject]);
+
+  useEffect(() => {
+    currentStepRef.current = currentStep;
+  }, [currentStep]);
 
   /**
    * FAZA 7 (P0): naloži projekt skupaj s CELOTNIM stanjem (meritve, načrti,
@@ -178,7 +185,10 @@ function App() {
     setReferenceLength('');
     setVizStartPoint(null);
     setVizEndPoint(null);
-    setCurrentStep(STATUS_TO_STEP[projectToUse.status] ?? 'capture');
+    // Samodejni skok na korak projekta samo, če uporabnik še ni preklopil koraka.
+    if (currentStepRef.current === 'new_project') {
+      setCurrentStep(STATUS_TO_STEP[projectToUse.status] ?? 'capture');
+    }
     setCurrentProjectId(projectToUse.id);
   }, []);
 
