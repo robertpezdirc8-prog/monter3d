@@ -31,7 +31,7 @@ import { getObjectTypeLabel } from './utils/labels';
 import TradeMenu from './components/TradeMenu';
 import TradeCapture from './components/TradeCapture';
 import type { TradeId } from './utils/cameraSDK';
-import { saveProject, getProject, getAllProjects, savePhoto, setCurrentProjectId, getCurrentProjectId, deleteProject, deletePhotosByProject, loadProjectWithPhotos } from './utils/storage';
+import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId, deleteProject, deletePhotosByProject, loadProjectWithPhotos } from './utils/storage';
 import {
   DEFAULT_FENCE_CONFIG,
   DEFAULT_STAIRS_CONFIG,
@@ -48,7 +48,7 @@ import { buildFenceGeometry } from './utils/fenceGeometry';
 import { validateFencePlanAgainstProfile } from './utils/roksalRules';
 import { buildBoardFencePlan, estimateBoardMaterials } from './utils/boardFence';
 import { getProfileById } from './data/roksalCatalog';
-import { createBackup, restoreBackup } from './utils/backup';
+import { createBackup, restoreBackup, createWorkspaceBackup, restoreWorkspaceBackup, parseBackup, parseWorkspaceBackup } from './utils/backup';
 
 const STATUS_TO_STEP: Record<string, WorkflowStep> = {
   capture: 'capture',
@@ -243,6 +243,27 @@ function App() {
     // Save to IndexedDB
     saveProject(project).catch(err => console.error('Failed to save project:', err));
     setCurrentProjectId(project.id);
+  }, []);
+
+  /**
+   * FAZA 13: konfigurator (napredna orodje) prenese izbiro v projekt, kjer se
+   * uporabi za izračun predračuna — prej je bil to slepa ulica.
+   */
+  const handleApplyFenceConfig = useCallback((result: {
+    profileId: string;
+    fenceHeightM: number;
+    boardSpacingMm: number;
+    orientation: 'vertical' | 'horizontal';
+  }) => {
+    setFenceConfig(prev => ({
+      ...prev,
+      constructionType: 'board',
+      profileId: result.profileId,
+      panelHeight: result.fenceHeightM,
+      boardSpacing: result.boardSpacingMm,
+      orientation: result.orientation,
+    }));
+    setShowFenceConfigurator(false);
   }, []);
 
   // Odpri obstoječi projekt s klikom na seznam
@@ -774,6 +795,7 @@ function App() {
         segments: inputs.map(i => ({ id: i.id, length: i.length, bearingDeg: i.bearingDeg, heightChange: i.heightChange })),
         fenceHeight: fenceConfig.panelHeight,
         boardSpacing: fenceConfig.boardSpacing,
+        orientation: fenceConfig.orientation,
       });
       setBoardPlan(board);
       setFencePlan(null);
@@ -897,15 +919,59 @@ function App() {
     }
   }, [currentProject, photos]);
 
-  // Uvoz/obnova varnostne kopije -> nov projekt, ki ga takoj odpremo
+  /**
+   * FAZA 13: varnostna kopija celotnega delovnega okolja (vsi projekti) —
+   * za prenos na drugo napravo ali arhiviranje.
+   */
+  const handleExportWorkspaceBackup = useCallback(async () => {
+    try {
+      const allProjects = await getAllProjects();
+      if (allProjects.length === 0) {
+        alert('Ni projektov za varnostno kopijo.');
+        return;
+      }
+      const photosByProject = new Map<string, Photo[]>();
+      for (const p of allProjects) {
+        photosByProject.set(p.id, await getPhotosByProject(p.id));
+      }
+      const json = createWorkspaceBackup(allProjects, photosByProject);
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadFile(json, `mera3d_vse_projekti_${stamp}.json`, 'application/json');
+    } catch (err) {
+      console.error('Failed to create workspace backup:', err);
+      alert('Varnostne kopije vseh projektov ni bilo mogoče ustvariti.');
+    }
+  }, []);
+
+
+
+  /**
+   * Uvoz varnostne kopije — podpira OBE obliki:
+   *  - kopija enega projekta (projekt + fotografije),
+   *  - kopija celotnega delovnega okolja (vsi projekti).
+   */
   const handleImportBackup = useCallback(async (file: File) => {
     try {
       const text = await file.text();
-      const result = await restoreBackup(text);
+
+      // 1) posamezni projekt
+      const single = parseBackup(text);
+      if (single.ok) {
+        const result = await restoreBackup(text);
+        const refreshed = await getAllProjects();
+        setProjects(refreshed);
+        const restored = await getProject(result.projectId);
+        if (restored) await openProject(restored);
+        return;
+      }
+
+      // 2) celotno delovno okolje
+      const workspace = parseWorkspaceBackup(text);
+      if (!workspace.ok) throw new Error(workspace.error);
+      const result = await restoreWorkspaceBackup(text);
       const refreshed = await getAllProjects();
       setProjects(refreshed);
-      const restored = await getProject(result.projectId);
-      if (restored) await openProject(restored);
+      setStorageWarning(`Obnovljenih ${result.projectIds.length} projektov (${result.photoCount} fotografij).`);
     } catch (err) {
       console.error('Failed to restore backup:', err);
       alert(err instanceof Error ? err.message : 'Varnostne kopije ni bilo mogoče obnoviti.');
@@ -976,6 +1042,7 @@ function App() {
       {showFenceConfigurator && (
         <FenceConfigurator
           onClose={() => setShowFenceConfigurator(false)}
+          onApply={handleApplyFenceConfig}
         />
       )}
 
@@ -1134,6 +1201,7 @@ function App() {
               onOpenProject={handleOpenProject}
               onDeleteProject={handleDeleteProject}
               onImportBackup={handleImportBackup}
+              onExportWorkspaceBackup={handleExportWorkspaceBackup}
             />
           )}
 

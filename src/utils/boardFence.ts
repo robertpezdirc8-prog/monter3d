@@ -33,6 +33,8 @@ export interface BoardFenceInput {
   boardSpacing?: number;
   /** Delež odpada za deske (privzeto 5 %). */
   wastePercent?: number;
+  /** Orientacija desk (privzeto sledi profilu). */
+  orientation?: 'vertical' | 'horizontal';
 }
 
 /**
@@ -79,7 +81,7 @@ export function buildBoardFencePlan(input: BoardFenceInput): BoardFencePlan {
   for (const seg of valid) {
     const result = calculateFenceConstruction({
       profile,
-      orientation: profile.orientation === 'horizontal' ? 'horizontal' : 'vertical',
+      orientation: input.orientation ?? (profile.orientation === 'horizontal' ? 'horizontal' : 'vertical'),
       fenceHeight: heightMm,
       fenceLength: seg.length * 1000,
       boardSpacing,

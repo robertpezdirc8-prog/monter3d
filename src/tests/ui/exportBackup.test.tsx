@@ -9,7 +9,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../App';
-import { saveProject, savePhoto, getAllProjects, deleteProject } from '../../utils/storage';
+import { saveProject, savePhoto, getAllProjects, deleteProject, getPhotosByProject } from '../../utils/storage';
+import { createWorkspaceBackup, parseWorkspaceBackup, restoreWorkspaceBackup } from '../../utils/backup';
 import type { Project, Photo } from '../../types';
 
 const BLOCKED = 'blob:test';
@@ -173,6 +174,45 @@ describe('Izvoz in varnostna kopija (UI)', () => {
       const projekti = await getAllProjects();
       expect(projekti.map(p => p.name)).toContain('Izvozni projekt');
     });
+  });
+
+  it('zajame vse projekte s fotografijami in jih obnovi kot nove', async () => {
+    const p1 = mkProject('p-1'); p1.name = 'Projekt A';
+    const p2 = mkProject('p-2'); p2.name = 'Projekt B';
+    await saveProject(p1);
+    await saveProject(p2);
+    await savePhoto(mkPhoto('ph-a', 'p-1'));
+    await savePhoto(mkPhoto('ph-b', 'p-2'));
+
+    const photosByProject = new Map<string, Photo[]>([
+      ['p-1', [mkPhoto('ph-a', 'p-1')]],
+      ['p-2', [mkPhoto('ph-b', 'p-2')]],
+    ]);
+    const json = createWorkspaceBackup([p1, p2], photosByProject);
+
+    const parsed = parseWorkspaceBackup(json);
+    expect(parsed.ok).toBe(true);
+
+    // Obnova ustvari NOVA projekta (izvirnik ostane nedotaknut).
+    const result = await restoreWorkspaceBackup(json);
+    expect(result.projectIds.length).toBe(2);
+    expect(result.photoCount).toBe(2);
+    expect(result.projectIds).not.toContain('p-1');
+
+    const vsi = await getAllProjects();
+    expect(vsi.length).toBe(4); // 2 izvirnika + 2 obnovljena
+    const obnovljeni = vsi.filter(p => result.projectIds.includes(p.id));
+    expect(obnovljeni.map(p => p.name).sort()).toEqual(['Projekt A', 'Projekt B']);
+    expect(obnovljeni[0].measurements.length).toBe(1);
+
+    for (const id of result.projectIds) {
+      expect((await getPhotosByProject(id)).length).toBe(1);
+    }
+  });
+
+  it('zavrne datoteko, ki ni varnostna kopija', () => {
+    expect(parseWorkspaceBackup('{ni json').ok).toBe(false);
+    expect(parseWorkspaceBackup(JSON.stringify({ app: 'drugo', version: 1, projects: [] })).ok).toBe(false);
   });
 
   it('uvoz neveljavne datoteke ne uniči obstoječih projektov', async () => {

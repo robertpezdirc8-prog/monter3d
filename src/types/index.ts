@@ -43,6 +43,8 @@ export interface FenceConfig {
   constructionType?: 'panel' | 'board';
   /** FAZA 11: razmik med deskami v mm (za deskno konstrukcijo). */
   boardSpacing?: number;
+  /** FAZA 11: orientacija desk (pri profilih, ki dovolijo obe). */
+  orientation?: 'vertical' | 'horizontal';
 }
 
 /** Konfiguracija izračuna stopnic (mere v metrih). */
