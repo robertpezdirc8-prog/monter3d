@@ -379,6 +379,48 @@ describe('Zgodovina projekta (UI)', () => {
 });
 
 
+describe('Hitri ocen brez fotografij (UI)', () => {
+  beforeEach(async () => {
+    cleanup();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    localStorage.clear();
+    for (const p of await getAllProjects()) {
+      await deleteProject(p.id);
+    }
+  });
+
+  it('ročna dolžina → načrt → količine → predračun, brez ene fotografije', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText('npr. Ograja - Družina Novak');
+    await user.clear(input);
+    await user.type(input, 'Hitri ocen');
+    await user.click(screen.getByRole('button', { name: /ustvari projekt/i }));
+
+    // 1) ročno vnesena dolžina (ni fotografije)
+    await user.click(screen.getByRole('button', { name: /meritve/i }));
+    const polje = await screen.findByLabelText(/ročna dolžina/i);
+    await user.type(polje, '6.5');
+    await user.click(screen.getByRole('button', { name: /dodaj meritve/i }));
+    await screen.findByText('6.500 m ±2.0%');
+
+    // 2) izračun ograje
+    await user.click(screen.getByRole('button', { name: /materiali/i }));
+    await user.click(await screen.findByRole('button', { name: /izračunaj ograjo/i }));
+
+    // 3) količine so izračunane iz ročno vnesene dolžine
+    await user.click(screen.getByRole('button', { name: /količine/i }));
+    expect((await screen.findAllByText('6.50 m')).length).toBeGreaterThan(0);
+
+    // 4) predračun obstaja
+    await user.click(screen.getByRole('button', { name: /predračun/i }));
+    // Predracun ima vsoto (Skupaj) in znesek v EUR.
+    expect((await screen.findAllByText(/skupaj/i)).length).toBeGreaterThan(0);
+    expect(document.body.textContent).toMatch(/€/);
+  });
+});
+
 describe('Korak Kakovost (UI)', () => {
   beforeEach(beforeEachClean);
 

@@ -6,6 +6,9 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { OverlayModeControls, type OverlayMode } from './overlay/OverlayModeControls';
+import { OverlayReferenceInput } from './overlay/OverlayReferenceInput';
+import { OverlayMeasurementList } from './overlay/OverlayMeasurementList';
 import { calculateScaleFromReference, calculateRealDistance, assessMeasurementReliability } from '../utils/cv';
 import type { Point2D } from '../utils/cv';
 
@@ -15,7 +18,7 @@ interface MeasurementPoint {
   label?: string;
 }
 
-interface MeasurementSegment {
+export interface MeasurementSegment {
   id: string;
   from: MeasurementPoint;
   to: MeasurementPoint;
@@ -32,7 +35,6 @@ interface MeasurementOverlayProps {
   onMeasurementsChange?: (segments: MeasurementSegment[]) => void;
 }
 
-type Mode = 'idle' | 'reference' | 'measure';
 
 export function MeasurementOverlay({
   imageUrl,
@@ -43,7 +45,7 @@ export function MeasurementOverlay({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const [mode, setMode] = useState<Mode>('idle');
+  const [mode, setMode] = useState<OverlayMode>('idle');
   const [referencePoints, setReferencePoints] = useState<Point2D[]>([]);
   const [referenceDistance, setReferenceDistance] = useState<string>('');
   const [pixelToMeter, setPixelToMeter] = useState<number | null>(null);
@@ -281,64 +283,20 @@ export function MeasurementOverlay({
 
   return (
     <div className="space-y-4">
-      {/* Mode controls */}
-      <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={() => { setMode('reference'); resetReference(); }}
-          className={`px-3 py-2 rounded text-sm font-medium ${
-            mode === 'reference' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-          }`}
-        >
-          📏 Nastavi referenco
-        </button>
-        <button
-          onClick={() => setMode('measure')}
-          disabled={!pixelToMeter}
-          className={`px-3 py-2 rounded text-sm font-medium ${
-            mode === 'measure' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          📐 Meri
-        </button>
-        <button
-          onClick={clearMeasurements}
-          className="px-3 py-2 rounded text-sm font-medium bg-slate-700 text-slate-300 hover:bg-slate-600"
-        >
-          🗑 Počisti mere
-        </button>
-      </div>
+      <OverlayModeControls
+        mode={mode}
+        hasScale={pixelToMeter !== null}
+        onStartReference={() => { setMode('reference'); resetReference(); }}
+        onStartMeasure={() => setMode('measure')}
+        onClear={clearMeasurements}
+      />
 
-      {/* Reference input */}
-      {mode === 'reference' && (
-        <div className="bg-amber-900/30 border border-amber-700 rounded-lg p-3">
-          <p className="text-amber-200 text-sm mb-2">
-            {referencePoints.length === 0 && 'Kliknite na začetek referenčne mere na fotografiji'}
-            {referencePoints.length === 1 && 'Kliknite na konec referenčne mere'}
-            {referencePoints.length === 2 && 'Vnesite dejansko dolžino reference v metrih'}
-          </p>
-          {referencePoints.length === 2 && (
-            <div className="flex gap-2 items-center">
-              <input
-                type="number"
-                step="0.001"
-                min="0.01"
-                value={referenceDistance}
-                onChange={(e) => setReferenceDistance(e.target.value)}
-                placeholder="npr. 1.80"
-                className="bg-slate-800 border border-slate-600 rounded px-3 py-1 text-white text-sm w-32"
-              />
-              <span className="text-amber-200 text-sm">m</span>
-              <button
-                onClick={confirmReference}
-                disabled={!referenceDistance || parseFloat(referenceDistance) <= 0}
-                className="px-3 py-1 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-500 disabled:opacity-50"
-              >
-                ✓ Potrdi
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      <OverlayReferenceInput
+        referencePointCount={referencePoints.length}
+        referenceDistance={referenceDistance}
+        onReferenceDistanceChange={setReferenceDistance}
+        onConfirm={confirmReference}
+      />
 
       {/* Scale info */}
       {pixelToMeter && (
@@ -371,63 +329,11 @@ export function MeasurementOverlay({
         />
       </div>
 
-      {/* Measurement results */}
-      {segments.length > 0 && (
-        <div className="bg-slate-800 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">
-            Izmerjeni odseki ({segments.length})
-          </h3>
-          <div className="space-y-2">
-            {segments.map((seg, i) => (
-              <div key={seg.id} className="flex items-center justify-between bg-slate-700/50 rounded p-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">#{i + 1}</span>
-                  <span className="text-sm text-white font-mono">
-                    {seg.realDistance !== null 
-                      ? `${seg.realDistance.toFixed(3)} m`
-                      : '—'
-                    }
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    ({seg.pixelDistance.toFixed(0)} px)
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-0.5 rounded ${
-                    seg.reliability >= 0.8 ? 'bg-emerald-900/60 text-emerald-300' :
-                    seg.reliability >= 0.5 ? 'bg-amber-900/60 text-amber-300' :
-                    'bg-red-900/60 text-red-300'
-                  }`}>
-                    {(seg.reliability * 100).toFixed(0)}% zanesljivo
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Total length */}
-          {segments.every(s => s.realDistance !== null) && (
-            <div className="mt-3 pt-3 border-t border-slate-600">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-300">Skupna dolžina:</span>
-                <span className="text-lg font-bold text-emerald-400">
-                  {segments.reduce((sum, s) => sum + (s.realDistance || 0), 0).toFixed(3)} m
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Warnings */}
-          {segments.some(s => s.warnings.length > 0) && (
-            <div className="mt-3 pt-3 border-t border-slate-600">
-              <p className="text-xs text-amber-400 mb-1">⚠ Opozorila:</p>
-              {segments.flatMap(s => s.warnings).map((w, i) => (
-                <p key={i} className="text-xs text-amber-300">• {w}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <OverlayMeasurementList
+        segments={segments}
+        totalLength={segments.reduce((sum, s) => sum + (s.realDistance || 0), 0)}
+        warnings={segments.flatMap(s => s.warnings)}
+      />
 
       {/* Instructions */}
       {mode === 'idle' && !pixelToMeter && (
