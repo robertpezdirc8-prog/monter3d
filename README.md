@@ -11,7 +11,7 @@ npm ci
 npm run dev            # razvojni strežnik (http://localhost:3000)
 npm run typecheck      # TypeScript (strict)
 npm run lint           # ESLint (napake = 0, opozorila pri `any`)
-npm test               # vitest
+npm test               # vitest (logika + UI testi z jsdom)
 npm run test:geometry  # dodatni geometrijski testi (node)
 npm run build          # produkcijski build
 ```
@@ -52,16 +52,19 @@ Količine → Predračun → Izvoz`
 ## Struktura
 
 ```
-src/App.tsx            # delovni tok in UI
+src/App.tsx            # orkestrator: stanje, tok, navigacija, shranjevanje
 src/components/        # komponente (kamera, merjenje, vizualizacije, urejevalnik segmentov)
+src/components/steps/  # komponente po korakih delovnega toka
 src/utils/geometry.ts  # izračuni (ograja, stopnice, predračun)
 src/utils/fenceGeometry.ts # segmenti ograje (azimut, dvig, koti)
+src/utils/roksalRules.ts   # tehnična pravila kataloga proti načrtu
 src/utils/cv.ts        # računalniška vizija (Harris, deskriptorji, homografija, RANSAC)
 src/utils/projectState.ts # shranjevanje/nalaganje stanja projekta
 src/utils/backup.ts    # varnostna kopija in obnova
 src/utils/storage.ts   # IndexedDB (projekti, fotografije)
 src/data/              # katalog Roksal, galerija
-src/tests/             # vitest testi
+src/tests/             # vitest testi (logika)
+src/tests/ui/          # UI testi (jsdom + Testing Library)
 public/sw.js           # service worker (offline)
 ```
 
