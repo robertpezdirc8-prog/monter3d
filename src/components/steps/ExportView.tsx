@@ -3,9 +3,11 @@
  */
 import type { Project, Measurement, FencePlan, StairsPlan, CostEstimate } from '../../types';
 import { ProjectSummary } from '../ProjectSummary';
-export function ExportView({ onExport, onExportBackup, measurements, currentProject, fencePlan, stairsPlan, estimate, pixelToMeter }: {
+export function ExportView({ onExport, onExportBackup, onOpenPhotoSheet, measurements, currentProject, fencePlan, stairsPlan, estimate, pixelToMeter }: {
   onExport: (format: 'csv' | 'json' | 'pdf') => void;
   onExportBackup: () => void;
+  /** FAZA 18: odpre dokumentacijsko listo (kontaktno listo fotografij). */
+  onOpenPhotoSheet: () => void;
   measurements: Measurement[];
   currentProject: Project | null;
   fencePlan: FencePlan | null;
@@ -62,6 +64,15 @@ export function ExportView({ onExport, onExportBackup, measurements, currentProj
           <span className="text-3xl">🧰</span>
           <p className="text-sm font-medium text-slate-200 mt-2">Varnostna kopija</p>
           <p className="text-xs text-slate-400 mt-1">Projekt + fotografije (obnovljivo)</p>
+        </button>
+        <button
+          onClick={onOpenPhotoSheet}
+          className="bg-blue-900/40 hover:bg-blue-900/70 border border-blue-800 rounded-lg p-6 text-center transition-colors"
+          title="Združi zajete fotografije v dokumentacijsko listo (PNG) za stranko"
+        >
+          <span className="text-3xl">📸</span>
+          <p className="text-sm font-medium text-slate-200 mt-2">Dokumentacijska lista</p>
+          <p className="text-xs text-slate-400 mt-1">Fotografije z merami → PNG</p>
         </button>
       </div>
 

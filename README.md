@@ -92,6 +92,13 @@ Poročila o fazah dela so v `docs/porocila/`, dodatna dokumentacija v `docs/`.
 Aplikacija je namestljiva (PWA): manifest + service worker omogočata delovanje brez
 omrežja, v glavi pa se pokaže gumb »⬇ Namesti« in opozorilo, ko naprava ni povezana.
 
+### Dokumentacijska lista (fotomontaža)
+Korak **Izvoz → 📸 Dokumentacijska lista** združi zajete fotografije v mrežo z napisi
+(meritev + čas), glavo (ime projekta, datum) in nogo (dolžina, količine) ter jo izvozi
+v **PNG** — vse lokalno v brskalniku, brez nalaganja fotografij na internet (vzorec iz
+spletnih orodij za fotomontažo, Abox Image Layout in PixGrid, ter dokumentacijski tok
+CompanyCam).
+
 ### Galerija slik
 Slike so shranjene **lokalno** v `public/roksal/images/` (galerija deluje brez povezave),
 osveži pa jih z `npm run fetch:images`. Vir slik je roksal.com — pogoje uporabe preveri v

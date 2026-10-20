@@ -2,7 +2,7 @@
 /**
  * UI test: korak »Kakovost« — pregled posnetkov in njihovih ocen.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../App';
@@ -115,6 +115,68 @@ describe('Upravljanje napak uporabnika (UI)', () => {
     await waitFor(() => {
       expect(screen.queryByText('6.50 m')).toBeNull();
     });
+  });
+});
+
+describe('Dokumentacijska lista (UI)', () => {
+  beforeEach(async () => {
+    cleanup();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    localStorage.clear();
+    for (const p of await getAllProjects()) {
+      await deleteProject(p.id);
+    }
+  });
+
+  it('odpre predogled in izvozi PNG (lokalno, brez nalaganja)', async () => {
+    const user = userEvent.setup();
+    const project = mkProject('proj-lista');
+    await saveProject(project);
+    await savePhoto(mkPhoto('ph-1', project.id, 'analyzed', 0.8));
+    localStorage.setItem('currentProjectId', project.id);
+
+    // canvas v jsdom nima 2D konteksta -> nadomestek
+    const ctxStub = {
+      fillRect: vi.fn(), fillText: vi.fn(), drawImage: vi.fn(), strokeRect: vi.fn(),
+      beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(),
+      set fillStyle(_v: string) { /* noop */ },
+      set font(_v: string) { /* noop */ },
+      set textBaseline(_v: string) { /* noop */ },
+      set lineWidth(_v: number) { /* noop */ },
+      set strokeStyle(_v: string) { /* noop */ },
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      () => ctxStub as unknown as CanvasRenderingContext2D
+    );
+    // jsdom ne nalaga slik -> nadomestek Image, ki takoj 'naloži'
+    class FakeImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      width = 800;
+      height = 600;
+      set src(_value: string) { setTimeout(() => this.onload?.(), 0); }
+    }
+    vi.stubGlobal('Image', FakeImage);
+
+    // toBlob v jsdom ni implementiran -> nadomestek, ki vrne prazen Blob
+    HTMLCanvasElement.prototype.toBlob = vi.fn(function (cb: BlobCallback) {
+      cb(new Blob(['x'], { type: 'image/png' }));
+    });
+
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+
+    render(<App />);
+    await screen.findByText(/Zajem fotografij/i);
+
+    await user.click(screen.getByRole('button', { name: /izvoz/i }));
+    await user.click(await screen.findByRole('button', { name: /dokumentacijska lista/i }));
+
+    expect((await screen.findAllByText(/Dokumentacijska lista/)).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/predogled dokumentacijske liste/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /izvozi png/i }));
+
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
   });
 });
 

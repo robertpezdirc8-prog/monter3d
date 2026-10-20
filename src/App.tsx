@@ -16,6 +16,7 @@ import { MeasurementOverlay } from './components/MeasurementOverlay';
 import { MeasurementAccuracyTests } from './components/MeasurementAccuracyTests';
 import { PhotoMatchingView, type PhotoPairMatching } from './components/PhotoMatchingView';
 import { InstallPrompt } from './components/InstallPrompt';
+import { PhotoSheetView } from './components/PhotoSheetView';
 import { FenceVisualizer } from './components/FenceVisualizer';
 import { RoksalGalleryView } from './components/RoksalGalleryView';
 import { FenceConfigurator } from './components/FenceConfigurator';
@@ -126,6 +127,8 @@ function App() {
   const [showFenceVisualizer, setShowFenceVisualizer] = useState(false);
   const [showRoksalGallery, setShowRoksalGallery] = useState(false);
   const [showFenceConfigurator, setShowFenceConfigurator] = useState(false);
+  // FAZA 18: dokumentacijska lista (kontaktna lista fotografij) za stranko
+  const [showPhotoSheet, setShowPhotoSheet] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1103,6 +1106,20 @@ function App() {
         />
       )}
 
+      {showPhotoSheet && (
+        <PhotoSheetView
+          photos={photos}
+          measurements={measurements}
+          projectName={currentProject?.name ?? 'Mera3D Pro'}
+          summary={fencePlan
+            ? `Dolžina ograje ${fencePlan.totalLength.toFixed(2)} m · ${fencePlan.totalPanels} paneli · ${fencePlan.totalPosts} stebrov`
+            : boardPlan
+              ? `Dolžina ograje ${boardPlan.totalLength.toFixed(2)} m · ${boardPlan.boards} desk · ${boardPlan.posts} stebrov`
+              : undefined}
+          onClose={() => setShowPhotoSheet(false)}
+        />
+      )}
+
       {showFenceConfigurator && (
         <FenceConfigurator
           onClose={() => setShowFenceConfigurator(false)}
@@ -1479,6 +1496,7 @@ function App() {
             <ExportView
               onExport={exportData}
               onExportBackup={handleExportBackup}
+              onOpenPhotoSheet={() => setShowPhotoSheet(true)}
               measurements={measurements}
               currentProject={currentProject}
               fencePlan={fencePlan}
