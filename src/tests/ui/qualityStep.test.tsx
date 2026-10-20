@@ -421,6 +421,40 @@ describe('Hitri ocen brez fotografij (UI)', () => {
   });
 });
 
+describe('Enote dolžin (UI)', () => {
+  beforeEach(async () => {
+    cleanup();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    localStorage.clear();
+    for (const p of await getAllProjects()) {
+      await deleteProject(p.id);
+    }
+  });
+
+  it('vnos v centimetrih se pretvori v metre, prikaz pa je v izbrani enoti', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText('npr. Ograja - Družina Novak');
+    await user.clear(input);
+    await user.type(input, 'Enote');
+    await user.click(screen.getByRole('button', { name: /ustvari projekt/i }));
+
+    await user.click(screen.getByRole('button', { name: /meritve/i }));
+
+    // Preklop na centimetre.
+    await user.selectOptions(screen.getByLabelText('Enota dolžin'), 'cm');
+
+    // Vpis 650 cm mora pomeniti 6,5 m.
+    const polje = await screen.findByLabelText(/ročna dolžina/i);
+    await user.type(polje, '650');
+    await user.click(screen.getByRole('button', { name: /dodaj meritve/i }));
+
+    // Prikaz je v izbrani enoti.
+    expect(await screen.findByText('650.0 cm ±2.0%')).toBeInTheDocument();
+  });
+});
+
 describe('Korak Kakovost (UI)', () => {
   beforeEach(beforeEachClean);
 

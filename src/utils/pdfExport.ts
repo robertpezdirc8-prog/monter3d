@@ -1,6 +1,7 @@
 import type { Project, Photo, Measurement, FencePlan, StairsPlan, CostEstimate } from '../types';
 import type { ActivityEntry } from './activityLog';
 import { ACTIVITY_PRESENTATION } from './activityLog';
+import { formatLength, type LengthUnit } from './units';
 
 export function generatePDFReport(
   project: Project,
@@ -8,7 +9,8 @@ export function generatePDFReport(
   fencePlan: FencePlan | null,
   stairsPlan: StairsPlan | null,
   estimate: CostEstimate | null,
-  activity: ActivityEntry[] = []
+  activity: ActivityEntry[] = [],
+  lengthUnit: LengthUnit = 'm'
 ): void {
   // Create a new window for printing
   const printWindow = window.open('', '_blank');
@@ -267,8 +269,8 @@ export function generatePDFReport(
       <tbody>
         ${validMeasurements.map(m => `
         <tr>
-          <td>${m.value.toFixed(3)}</td>
-          <td>${m.unit}</td>
+          <td>${m.unit === 'm' ? formatLength(m.value, lengthUnit) : m.value.toFixed(3) + ' ' + m.unit}</td>
+          <td>${m.unit === 'm' ? '' : m.unit}</td>
           <td>${m.source}</td>
           <td>±${m.uncertainty.toFixed(1)}%</td>
         </tr>

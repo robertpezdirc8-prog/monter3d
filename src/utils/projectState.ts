@@ -8,6 +8,7 @@
  * Modul je namenoma brez React odvisnosti, da ga je mogoče neposredno testirati.
  */
 
+import { normalizeUnit } from './units';
 import type {
   Project,
   ProjectSettings,
@@ -67,6 +68,7 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
   capturedSteps: [],
   fenceSegments: [],
   materialPrices: DEFAULT_MATERIAL_PRICES,
+  lengthUnit: 'm',
 };
 
 const num = (value: unknown, fallback: number): number =>
@@ -140,6 +142,7 @@ export function normalizeSettings(raw?: Partial<ProjectSettings> | null): Projec
             heightChange: isFinite(s.heightChange as number) ? (s.heightChange as number) : 0,
           }))
       : [],
+    lengthUnit: normalizeUnit(raw?.lengthUnit),
     materialPrices: {
       panelPricePerM2: nonNegative(raw?.materialPrices?.panelPricePerM2, DEFAULT_MATERIAL_PRICES.panelPricePerM2),
       postPriceEach: nonNegative(raw?.materialPrices?.postPriceEach, DEFAULT_MATERIAL_PRICES.postPriceEach),
