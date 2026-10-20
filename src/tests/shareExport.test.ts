@@ -90,6 +90,35 @@ describe('buildShareDocument', () => {
     expect(html).toContain('&lt;img src=x');
   });
 
+  it('dokument vsebuje potek dela (dnevnik)', () => {
+    const html = buildShareDocument({
+      project,
+      photos: [],
+      measurements: [],
+      activity: [
+        {
+          id: 'a1', projectId: 'p1', type: 'measurement_added',
+          message: 'Meritev 6.50 m', timestamp: new Date('2026-01-02T09:15:00Z'),
+        },
+        {
+          id: 'a2', projectId: 'p1', type: 'plan_calculated',
+          message: 'Izračunana ograja: 6.50 m', timestamp: new Date('2026-01-02T10:00:00Z'),
+        },
+      ],
+    });
+
+    expect(html).toContain('Potek dela');
+    expect(html).toContain('Meritev 6.50 m');
+    expect(html).toContain('Izračunana ograja: 6.50 m');
+    // Dogodki so urejeni po času.
+    expect(html.indexOf('Meritev 6.50 m')).toBeLessThan(html.indexOf('Izračunana ograja: 6.50 m'));
+  });
+
+  it('brez dnevnika dokument nima poteka dela', () => {
+    const html = buildShareDocument({ project, photos: [], measurements: [] });
+    expect(html).not.toContain('Potek dela');
+  });
+
   it('ocena velikosti upošteva fotografije', () => {
     const velike = [{ ...photo, dataUrl: 'x'.repeat(2 * 1024 * 1024) }];
     expect(estimateShareSizeMB(velike)).toBeGreaterThan(1);

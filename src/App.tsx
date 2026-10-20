@@ -1132,6 +1132,7 @@ function App() {
         boardPlan,
         estimate,
         lengthUnit,
+        activity,
       });
       const safeName = currentProject.name.replace(/[^\w-]+/g, '_').slice(0, 40) || 'projekt';
       downloadFile(html, `dokumentacija_${safeName}.html`, 'text/html;charset=utf-8');
@@ -1140,7 +1141,7 @@ function App() {
       console.error('Failed to share documentation:', err);
       alert('Dokumentacije ni bilo mogoče ustvariti.');
     }
-  }, [currentProject, photos, measurements, fencePlan, boardPlan, estimate, lengthUnit, logActivity]);
+  }, [currentProject, photos, measurements, fencePlan, boardPlan, estimate, lengthUnit, activity, logActivity]);
 
   /**
    * FAZA 13: varnostna kopija celotnega delovnega okolja (vsi projekti) —
