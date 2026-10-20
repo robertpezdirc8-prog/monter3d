@@ -6,7 +6,7 @@ import type {
   Customer, RoksalQuote, UserRole, ProjectMontageInput
 } from './types';
 import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetection } from './utils/cv';
-import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, formatMeasurement, exportMeasurementsCSV } from './utils/geometry';
+import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, exportMeasurementsCSV } from './utils/geometry';
 import { generatePDFReport } from './utils/pdfExport';
 import { v4 as uuidv4 } from 'uuid';
 import { CoverageMapView, CameraGuide } from './components/CoverageMap';
@@ -1620,6 +1620,7 @@ function MeasurementsView({ measurements, onGoToMeasure }: {
                     : m.status === 'warning'
                     ? 'OPOZORILO'
                     : 'NEVELJAVNA';
+                const precision = m.unit === 'm' ? 3 : m.unit === 'cm' ? 1 : 2;
 
                 return (
                   <tr key={m.id} className="border-t border-slate-700/50">
@@ -1637,7 +1638,7 @@ function MeasurementsView({ measurements, onGoToMeasure }: {
                       </span>
                     </td>
                     <td className="px-3 py-2 text-slate-200 font-mono">
-                      {formatMeasurement(m.value, m.unit, m.uncertainty)}
+                      {m.value.toFixed(precision)} {m.unit}
                     </td>
                     <td className="hidden md:table-cell px-3 py-2 text-slate-400 text-xs">{m.source}</td>
                     <td className="px-3 py-2 text-slate-400 text-xs">±{m.uncertainty.toFixed(1)}%</td>
