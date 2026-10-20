@@ -84,8 +84,6 @@ function App() {
   const [estimate, setEstimate] = useState<CostEstimate | null>(null);
   const [activeTab, setActiveTab] = useState<string>('capture');
   const [showInstructions, setShowInstructions] = useState(true);
-  const [measuringMode, setMeasuringMode] = useState(false);
-  const [measurePoints, setMeasurePoints] = useState<{x: number; y: number}[]>([]);
   const [pixelToMeter, setPixelToMeter] = useState<number | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [fenceConfig, setFenceConfig] = useState({
@@ -162,7 +160,6 @@ function App() {
     setEstimate(null);
     setSelectedPhoto(null);
     setPixelToMeter(null);
-    setMeasurePoints([]);
     setCapturedSteps([]);
     setCurrentCaptureStep(null);
     setPhotoMatchings([]);
@@ -586,74 +583,6 @@ function App() {
     img.src = photo.dataUrl;
   }, []);
 
-  // Handle measurement on image
-  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!measuringMode) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pxScale = e.currentTarget.width / rect.width;
-    const x = (e.clientX - rect.left) * pxScale;
-    const y = (e.clientY - rect.top) * pxScale;
-    
-    setMeasurePoints(prev => {
-      const newPoints = [...prev, { x, y }];
-      if (newPoints.length === 2) {
-        // Calculate distance
-        const dx = newPoints[1].x - newPoints[0].x;
-        const dy = newPoints[1].y - newPoints[0].y;
-        const pixelDist = Math.sqrt(dx * dx + dy * dy);
-        
-        // Draw measurement line
-        if (canvasRef.current) {
-          const ctx = canvasRef.current.getContext('2d')!;
-          const uiScale = canvasRef.current.width / rect.width;
-          ctx.strokeStyle = '#00ff00';
-          ctx.lineWidth = 2 * uiScale;
-          ctx.setLineDash([5 * uiScale, 5 * uiScale]);
-          ctx.beginPath();
-          ctx.moveTo(newPoints[0].x, newPoints[0].y);
-          ctx.lineTo(newPoints[1].x, newPoints[1].y);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          
-          // Draw points
-          ctx.fillStyle = '#ff0000';
-          newPoints.forEach(p => {
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 5 * uiScale, 0, Math.PI * 2);
-            ctx.fill();
-          });
-          
-          // Label
-          const midX = (newPoints[0].x + newPoints[1].x) / 2;
-          const midY = (newPoints[0].y + newPoints[1].y) / 2;
-          const metricDist = pixelToMeter ? (pixelDist * pixelToMeter).toFixed(3) : `${pixelDist.toFixed(0)} px`;
-          ctx.fillStyle = '#00ff00';
-          ctx.font = `bold ${14 * uiScale}px sans-serif`;
-          ctx.fillText(`${metricDist}${pixelToMeter ? ' m' : ''}`, midX + 5 * uiScale, midY - 5 * uiScale);
-        }
-        
-        // Create measurement record
-        const measurement: Measurement = {
-          id: uuidv4(),
-          type: 'length',
-          value: pixelToMeter ? pixelDist * pixelToMeter : pixelDist,
-          unit: pixelToMeter ? 'm' : 'px',
-          source: 'manual',
-          scaleSource: pixelToMeter ? 'manual_reference' : 'unknown',
-          status: pixelToMeter ? 'verified' : 'warning',
-          uncertainty: pixelToMeter ? 3 : 20,
-          confidence: pixelToMeter ? 0.85 : 0.3,
-          photoIds: selectedPhoto ? [selectedPhoto.id] : [],
-          algorithm: 'pixel_distance',
-          createdAt: new Date()
-        };
-        setMeasurements(prev => [...prev, measurement]);
-        return [];
-      }
-      return newPoints;
-    });
-  }, [measuringMode, pixelToMeter, selectedPhoto]);
-
   // Calculate fence plan
   const calculateFence = useCallback(() => {
     // Only use verified measurements with metric units
@@ -851,7 +780,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col overflow-x-hidden">
       {/* Camera Capture Modal */}
       {showCamera && (
         <CameraCapture
@@ -895,17 +824,17 @@ function App() {
       )}
 
       {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <header className="bg-slate-800 border-b border-slate-700 px-3 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <span className="text-2xl">📐</span>
-          <div>
-            <h1 className="text-lg font-bold text-emerald-400">Mera3D Pro</h1>
-            <p className="text-xs text-slate-400">Profesionalne 3D-meritve in montaža</p>
+          <div className="min-w-0">
+            <h1 className="truncate text-base sm:text-lg font-bold text-emerald-400">Mera3D Pro</h1>
+            <p className="hidden sm:block text-xs text-slate-400">Profesionalne 3D-meritve in montaža</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <RoleSwitcher role={role} onChange={handleRoleChange} />
-          <span className="text-xs bg-emerald-900/50 text-emerald-300 px-2 py-1 rounded">
+          <span className="hidden sm:inline text-xs bg-emerald-900/50 text-emerald-300 px-2 py-1 rounded">
             Offline ✓
           </span>
           <button
@@ -921,7 +850,7 @@ function App() {
             💶 Cene
           </button>
           {currentProject && (
-            <span className="text-sm text-slate-300">
+            <span className="hidden md:inline max-w-[180px] truncate text-sm text-slate-300">
               {currentProject.name}
             </span>
           )}
@@ -929,13 +858,15 @@ function App() {
       </header>
 
       {/* Workflow Progress */}
-      <nav className="bg-slate-800/50 border-b border-slate-700 px-4 py-2 overflow-x-auto">
+      <nav className="bg-slate-800/50 border-b border-slate-700 px-2 sm:px-4 py-2 overflow-x-auto">
         <div className="flex gap-1 min-w-max">
           {steps.map((step, idx) => (
             <button
               key={step.key}
               onClick={() => setCurrentStep(step.key)}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+              title={step.label}
+              aria-label={step.label}
+              className={`flex shrink-0 items-center gap-1 px-2 sm:px-3 py-1.5 rounded text-xs font-medium transition-colors ${
                 currentStep === step.key
                   ? 'bg-emerald-600 text-white'
                   : steps.findIndex(s => s.key === currentStep) > idx
@@ -950,11 +881,20 @@ function App() {
         </div>
       </nav>
 
+      {currentProject && (
+        <div className="lg:hidden flex items-center justify-between gap-3 border-b border-slate-700 bg-slate-800/40 px-4 py-2 text-xs">
+          <span className="truncate font-medium text-slate-200">{currentProject.name}</span>
+          <span className="shrink-0 text-slate-400">
+            {photos.length} foto · {measurements.length} meritev
+          </span>
+        </div>
+      )}
+
       {/* Main Content */}
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Sidebar - Project Info */}
         {currentProject && (
-          <aside className="lg:w-64 bg-slate-800/30 border-b lg:border-b-0 lg:border-r border-slate-700 p-4 overflow-y-auto">
+          <aside className="hidden lg:block lg:w-64 bg-slate-800/30 border-b lg:border-b-0 lg:border-r border-slate-700 p-4 overflow-y-auto">
             <h3 className="text-sm font-semibold text-slate-300 mb-3">Projekt</h3>
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
@@ -1016,7 +956,7 @@ function App() {
         )}
 
         {/* Main Panel */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-4">
           {/* New Project Step */}
           {currentStep === 'new_project' && (
             <NewProjectView onCreateProject={createProject} projects={projects} />
@@ -1164,14 +1104,7 @@ function App() {
           {currentStep === 'measurements' && (
             <MeasurementsView
               measurements={measurements}
-              selectedPhoto={selectedPhoto}
-              canvasRef={canvasRef}
-              measuringMode={measuringMode}
-              onToggleMeasuring={() => setMeasuringMode(!measuringMode)}
-              measurePoints={measurePoints}
-              onCanvasClick={handleCanvasClick}
-              pixelToMeter={pixelToMeter}
-              onAnalyze={analyzePhoto}
+              onGoToMeasure={() => setCurrentStep('scale_verification')}
             />
           )}
 
@@ -1247,16 +1180,17 @@ function App() {
       </main>
 
       {/* Status Bar */}
-      <footer className="bg-slate-800 border-t border-slate-700 px-4 py-1.5 flex items-center justify-between text-xs text-slate-400">
-        <div className="flex items-center gap-4">
-          <span>Motor: Harris + BRIEF</span>
-          <span>|</span>
-          <span>RANSAC: pripravljen</span>
-          <span>|</span>
+      <footer className="bg-slate-800 border-t border-slate-700 px-3 sm:px-4 py-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-slate-400">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <span className="hidden sm:inline">Motor: Harris + BRIEF</span>
+          <span className="hidden sm:inline">|</span>
+          <span className="hidden sm:inline">RANSAC: pripravljen</span>
+          <span className="hidden sm:inline">|</span>
           <span className="text-emerald-400">Lokalno delovanje ✓</span>
         </div>
-        <div>
-          <span>Mera3D Pro v4.1 — Brez AI-modelov v končnem izdelku</span>
+        <div className="truncate">
+          <span className="hidden sm:inline">Mera3D Pro v4.1 — Brez AI-modelov v končnem izdelku</span>
+          <span className="sm:hidden">Mera3D Pro v4.1</span>
         </div>
       </footer>
     </div>
@@ -1644,91 +1578,77 @@ function StatusIcon({ status }: { status: string }) {
   return <span className="text-amber-400"><IconWarning /></span>;
 }
 
-function MeasurementsView({ measurements, selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, measurePoints, onCanvasClick, pixelToMeter, onAnalyze }: {
+function MeasurementsView({ measurements, onGoToMeasure }: {
   measurements: Measurement[];
-  selectedPhoto: Photo | null;
-  canvasRef: React.RefObject<HTMLCanvasElement>;
-  measuringMode: boolean;
-  onToggleMeasuring: () => void;
-  measurePoints: {x: number; y: number}[];
-  onCanvasClick: (e: React.MouseEvent<HTMLCanvasElement>) => void;
-  pixelToMeter: number | null;
-  onAnalyze: (p: Photo) => void;
+  onGoToMeasure: () => void;
 }) {
   return (
     <div>
       <h2 className="text-xl font-bold text-emerald-400 mb-4">📐 Meritve</h2>
 
-      <div className="flex gap-2 mb-4 flex-wrap">
+      <div className="mb-4">
         <button
-          onClick={onToggleMeasuring}
-          className={`px-4 py-2 rounded font-medium text-sm ${
-            measuringMode ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300'
-          }`}
+          onClick={onGoToMeasure}
+          className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
         >
-          {measuringMode ? '🎯 Merjenje aktivno - kliknite na sliko' : '📏 Novo merjenje'}
+          📏 Izmeri na fotografiji
         </button>
-        {!pixelToMeter && (
-          <span className="px-3 py-2 bg-amber-900/30 text-amber-300 rounded text-xs">
-            ⚠ Kalibrirajte merilo za metrične vrednosti
-          </span>
-        )}
       </div>
-
-      {selectedPhoto && (
-        <canvas
-          ref={canvasRef}
-          onClick={onCanvasClick}
-          className={`w-full rounded border-2 max-h-80 object-contain mb-4 ${
-            measuringMode ? 'border-emerald-500 cursor-crosshair' : 'border-slate-700'
-          }`}
-        />
-      )}
 
       {/* Measurements table */}
-      <div className="bg-slate-800 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-700/50">
-              <th className="text-left px-3 py-2 text-slate-300">Status</th>
-              <th className="text-left px-3 py-2 text-slate-300">Vrednost</th>
-              <th className="text-left px-3 py-2 text-slate-300">Vir</th>
-              <th className="text-left px-3 py-2 text-slate-300">Negotovost</th>
-              <th className="text-left px-3 py-2 text-slate-300">Algoritem</th>
-            </tr>
-          </thead>
-          <tbody>
-            {measurements.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
-                  Ni meritev. Kliknite na sliko v načinu merjenja.
-                </td>
+      {measurements.length === 0 ? (
+        <div className="bg-slate-800 rounded-lg p-6 text-center text-sm text-slate-500">
+          Ni meritev. Odprite «Merilo» in izmerite na fotografiji.
+        </div>
+      ) : (
+        <div className="bg-slate-800 rounded-lg overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-700/50">
+                <th className="text-left px-3 py-2 text-slate-300">Status</th>
+                <th className="text-left px-3 py-2 text-slate-300">Vrednost</th>
+                <th className="hidden md:table-cell text-left px-3 py-2 text-slate-300">Vir</th>
+                <th className="text-left px-3 py-2 text-slate-300">Negotovost</th>
+                <th className="hidden md:table-cell text-left px-3 py-2 text-slate-300">Algoritem</th>
               </tr>
-            ) : (
-              measurements.map(m => (
-                <tr key={m.id} className="border-t border-slate-700/50">
-                  <td className="px-3 py-2">
-                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${
-                      m.status === 'verified' ? 'bg-emerald-900/30 text-emerald-400' :
-                      m.status === 'warning' ? 'bg-amber-900/30 text-amber-400' :
-                      'bg-red-900/30 text-red-400'
-                    }`}>
-                      {m.status === 'verified' ? '✓' : m.status === 'warning' ? '⚠' : '✗'}
-                      {m.status === 'verified' ? 'PREVERJENA' : m.status === 'warning' ? 'OPOZORILO' : 'NEVELJAVNA'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-slate-200 font-mono">
-                    {formatMeasurement(m.value, m.unit, m.uncertainty)}
-                  </td>
-                  <td className="px-3 py-2 text-slate-400 text-xs">{m.source}</td>
-                  <td className="px-3 py-2 text-slate-400 text-xs">±{m.uncertainty.toFixed(1)}%</td>
-                  <td className="px-3 py-2 text-slate-400 text-xs">{m.algorithm}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {measurements.map(m => {
+                const statusLabel =
+                  m.status === 'verified'
+                    ? 'PREVERJENA'
+                    : m.status === 'warning'
+                    ? 'OPOZORILO'
+                    : 'NEVELJAVNA';
+
+                return (
+                  <tr key={m.id} className="border-t border-slate-700/50">
+                    <td className="px-3 py-2">
+                      <span
+                        title={statusLabel}
+                        className={`inline-flex items-center gap-1 whitespace-nowrap text-xs px-2 py-0.5 rounded ${
+                          m.status === 'verified' ? 'bg-emerald-900/30 text-emerald-400' :
+                          m.status === 'warning' ? 'bg-amber-900/30 text-amber-400' :
+                          'bg-red-900/30 text-red-400'
+                        }`}
+                      >
+                        {m.status === 'verified' ? '✓' : m.status === 'warning' ? '⚠' : '✗'}
+                        <span className="hidden sm:inline">{statusLabel}</span>
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-slate-200 font-mono">
+                      {formatMeasurement(m.value, m.unit, m.uncertainty)}
+                    </td>
+                    <td className="hidden md:table-cell px-3 py-2 text-slate-400 text-xs">{m.source}</td>
+                    <td className="px-3 py-2 text-slate-400 text-xs">±{m.uncertainty.toFixed(1)}%</td>
+                    <td className="hidden md:table-cell px-3 py-2 text-slate-400 text-xs">{m.algorithm}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Measurement rules */}
       <div className="mt-4 bg-slate-800 rounded-lg p-4">
