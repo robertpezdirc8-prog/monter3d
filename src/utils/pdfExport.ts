@@ -1,11 +1,14 @@
 import type { Project, Photo, Measurement, FencePlan, StairsPlan, CostEstimate } from '../types';
+import type { ActivityEntry } from './activityLog';
+import { ACTIVITY_PRESENTATION } from './activityLog';
 
 export function generatePDFReport(
   project: Project,
   measurements: Measurement[],
   fencePlan: FencePlan | null,
   stairsPlan: StairsPlan | null,
-  estimate: CostEstimate | null
+  estimate: CostEstimate | null,
+  activity: ActivityEntry[] = []
 ): void {
   // Create a new window for printing
   const printWindow = window.open('', '_blank');
@@ -388,6 +391,8 @@ export function generatePDFReport(
 
   ${photoGalleryHtml(project.photos, measurements)}
 
+  ${activityLogHtml(activity)}
+
   <div class="footer">
     <p><strong>Mera3D Pro</strong> — Profesionalne 3D-meritve in montaža</p>
     <p>Dokument izdelan: ${new Date().toLocaleString('sl-SI')}</p>
@@ -448,6 +453,41 @@ function photoGalleryHtml(photos: Photo[], measurements: Measurement[]): string 
   return `
   <h3 style="margin: 24px 0 8px 0;">📷 Fotografije (${photos.length})</h3>
   <div class="photo-grid">${cells}</div>
+  `;
+}
+
+/**
+ * FAZA 28: potek dela v PDF poročilu — stranka vidi, kaj je bilo izvedeno in kdaj.
+ */
+function activityLogHtml(activity: ActivityEntry[]): string {
+  if (!activity || activity.length === 0) return '';
+
+  const vrstici = activity
+    .slice()
+    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+    .map(entry => {
+      const presentation = ACTIVITY_PRESENTATION[entry.type] ?? { icon: '•', label: 'Dogodek' };
+      const cas = entry.timestamp.toLocaleString('sl-SI');
+      return `<tr>
+        <td style="white-space: nowrap; color: #6b7280;">${cas}</td>
+        <td style="white-space: nowrap;">${presentation.icon} ${presentation.label}</td>
+        <td>${entry.message}</td>
+      </tr>`;
+    })
+    .join('');
+
+  return `
+  <h3 style="margin: 24px 0 8px 0;">🕘 Potek dela</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Čas</th>
+        <th>Dejanje</th>
+        <th>Opis</th>
+      </tr>
+    </thead>
+    <tbody>${vrstici}</tbody>
+  </table>
   `;
 }
 
