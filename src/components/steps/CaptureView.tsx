@@ -7,12 +7,14 @@ import { IconCamera } from '../icons';
 import { GuidedCapture } from '../GuidedCapture';
 import { CoverageMapView, CameraGuide } from '../CoverageMap';
 import { QualityBadge } from './QualityCheckView';
-export function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPhoto, onAnalyze, canvasRef, showInstructions, onToggleInstructions, onOpenCamera, objectType, capturedSteps, onCaptureStep }: {
+export function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPhoto, onAnalyze, onDeletePhoto, canvasRef, showInstructions, onToggleInstructions, onOpenCamera, objectType, capturedSteps, onCaptureStep }: {
   photos: Photo[];
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   fileInputRef: React.RefObject<HTMLInputElement>;
   selectedPhoto: Photo | null;
   onSelectPhoto: (p: Photo) => void;
+  /** FAZA 17: brisanje fotografije iz projekta. */
+  onDeletePhoto: (photoId: string) => void;
   onAnalyze: (p: Photo) => void;
   canvasRef: React.RefObject<HTMLCanvasElement>;
   showInstructions: boolean;
@@ -153,22 +155,38 @@ export function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onS
           </h3>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
             {photos.map(photo => (
-              <button
+              <div
                 key={photo.id}
-                onClick={() => { onSelectPhoto(photo); onAnalyze(photo); }}
                 className={`relative rounded overflow-hidden aspect-video border-2 transition-all ${
                   selectedPhoto?.id === photo.id ? 'border-emerald-400 scale-105' : 'border-slate-700 hover:border-slate-500'
                 }`}
               >
-                <img src={photo.dataUrl} alt="" className="w-full h-full object-cover" />
-                <div className={`absolute top-1 right-1 w-3 h-3 rounded-full ${
+                <button
+                  type="button"
+                  onClick={() => { onSelectPhoto(photo); onAnalyze(photo); }}
+                  className="block w-full h-full"
+                  title="Izberi in analiziraj fotografijo"
+                >
+                  <img src={photo.dataUrl} alt="" className="w-full h-full object-cover" />
+                </button>
+                <div className={`absolute top-1 right-1 w-3 h-3 rounded-full pointer-events-none ${
                   photo.status === 'analyzed' ? 'bg-emerald-400' :
                   photo.status === 'rejected' ? 'bg-red-400' : 'bg-amber-400'
                 }`} />
-                <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5">
+                <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 pointer-events-none">
                   <span className="text-[10px] text-white">{(photo.quality.overallScore * 100).toFixed(0)}%</span>
                 </div>
-              </button>
+                {/* FAZA 17: brisanje fotografije */}
+                <button
+                  type="button"
+                  onClick={() => onDeletePhoto(photo.id)}
+                  className="absolute top-1 left-1 text-[10px] bg-red-900/80 hover:bg-red-700 text-white rounded px-1 leading-tight"
+                  aria-label={`Izbriši fotografijo ${photo.id}`}
+                  title="Izbriši fotografijo"
+                >
+                  🗑
+                </button>
+              </div>
             ))}
           </div>
         </div>

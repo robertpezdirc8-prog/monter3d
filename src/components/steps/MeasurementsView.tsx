@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import type { Measurement, Photo } from '../../types';
 import { formatMeasurement } from '../../utils/geometry';
-export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, onCanvasClick, pixelToMeter, onAddManualLength }: {
+export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measuringMode, onToggleMeasuring, onCanvasClick, pixelToMeter, onAddManualLength, onDeleteMeasurement, onToggleExcluded }: {
   measurements: Measurement[];
   selectedPhoto: Photo | null;
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -17,6 +17,10 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
   onAnalyze: (p: Photo) => void;
   /** Ročni vnos dolžine (m) — uporabno, ko dolžina ni izmerjena na fotografiji. */
   onAddManualLength: (value: number) => void;
+  /** FAZA 17: brisanje meritve. */
+  onDeleteMeasurement: (id: string) => void;
+  /** FAZA 17: vklop/izklop meritve v načrtu. */
+  onToggleExcluded: (id: string) => void;
 }) {
   const [manualLength, setManualLength] = useState('');
   // FAZA 10 (P2): referenčna (kalibracijska) meritev je merilo fotografije,
@@ -105,7 +109,7 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
           <tbody>
             {objectMeasurements.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
                   Ni meritev. Kliknite na sliko v načinu merjenja.
                 </td>
               </tr>
@@ -128,6 +132,34 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
                   <td className="px-3 py-2 text-slate-400 text-xs">{m.source}</td>
                   <td className="px-3 py-2 text-slate-400 text-xs">±{m.uncertainty.toFixed(1)}%</td>
                   <td className="px-3 py-2 text-slate-400 text-xs">{m.algorithm}</td>
+                  {/* FAZA 17: vklop v načrt + brisanje meritve */}
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <label
+                        className="inline-flex items-center gap-1 text-[10px] text-slate-400 cursor-pointer"
+                        title={m.excludedFromPlan
+                          ? 'Meritev je izključena iz načrta in predračuna'
+                          : 'Vključi meritev v načrt in predračun'}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!m.excludedFromPlan}
+                          onChange={() => onToggleExcluded(m.id)}
+                          aria-label={`Vključi meritev ${formatMeasurement(m.value, m.unit, m.uncertainty)} v načrt`}
+                          className="accent-emerald-500"
+                        />
+                        {m.excludedFromPlan ? 'izključena' : 'v načrtu'}
+                      </label>
+                      <button
+                        onClick={() => onDeleteMeasurement(m.id)}
+                        className="text-[10px] text-red-300 hover:text-red-100 px-1.5 py-0.5 rounded hover:bg-red-900/40"
+                        aria-label={`Izbriši meritev ${formatMeasurement(m.value, m.unit, m.uncertainty)}`}
+                        title="Izbriši meritev"
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))
             )}

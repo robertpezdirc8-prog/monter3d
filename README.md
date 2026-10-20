@@ -47,6 +47,9 @@ Količine → Predračun → Izvoz`
 - **Ročni vnos dolžin** (korak Meritve): če dolžine ni mogoče izmeriti po fotografiji
   (npr. po meritvi z metrom), jo vpiši ročno — gre v načrt in predračun enako kot
   meritev na sliki.
+- **Popravki uporabnika**: meritev lahko izbrišeš 🗑 ali jo izključiš iz načrta
+  (»izključena«), fotografijo pa izbrišeš v koraku Zajem. Izbrisana meritev se
+  preračuna iz predračuna, izključena pa se ohrani kot dokumentacija.
 
 ## Geometrija in matematika (FAZA 8 / P1)
 
