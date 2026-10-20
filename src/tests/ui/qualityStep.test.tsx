@@ -245,6 +245,43 @@ describe('Označbe na fotografiji (UI)', () => {
 });
 
 
+describe('Razveljavi po brisanju (UI)', () => {
+  beforeEach(async () => {
+    cleanup();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    localStorage.clear();
+    for (const p of await getAllProjects()) {
+      await deleteProject(p.id);
+    }
+  });
+
+  it('izbrisana meritev se lahko razveljavi', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText('npr. Ograja - Družina Novak');
+    await user.clear(input);
+    await user.type(input, 'Undo projekt');
+    await user.click(screen.getByRole('button', { name: /ustvari projekt/i }));
+
+    await user.click(screen.getByRole('button', { name: /meritve/i }));
+    const polje = await screen.findByLabelText(/ročna dolžina/i);
+    await user.type(polje, '4.5');
+    await user.click(screen.getByRole('button', { name: /dodaj meritve/i }));
+    await screen.findByText('4.500 m ±2.0%');
+
+    // Izbriši meritev -> pojavi se ponudba za razveljavo.
+    await user.click(screen.getByRole('button', { name: /izbriši meritev 4\.500 m/i }));
+    expect(await screen.findByText(/meritev je izbrisana/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('4.500 m ±2.0%')).toBeNull());
+
+    // Razveljavi -> meritev je nazaj.
+    await user.click(screen.getByRole('button', { name: /razveljavi/i }));
+    expect(await screen.findByText('4.500 m ±2.0%')).toBeInTheDocument();
+  });
+});
+
+
 describe('Korak Kakovost (UI)', () => {
   beforeEach(beforeEachClean);
 
