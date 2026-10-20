@@ -51,6 +51,31 @@ export function MaterialView({ currentProject, fenceConfig, onFenceConfigChange,
           <div className="bg-slate-800 rounded-lg p-4">
             <h3 className="text-sm font-semibold text-slate-300 mb-3">Konfiguracija ograje</h3>
 
+            {/* FAZA 11: način konstrukcije (panelna ali deskna ograja) */}
+            <div className="mb-3">
+              <label htmlFor="fence-construction" className="text-xs text-slate-400">
+                Konstrukcija
+              </label>
+              <select
+                id="fence-construction"
+                value={fenceConfig.constructionType ?? 'panel'}
+                onChange={e => onFenceConfigChange({
+                  ...fenceConfig,
+                  constructionType: e.target.value as 'panel' | 'board',
+                })}
+                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white mt-1"
+              >
+                <option value="panel">Panelna ograja (paneli + stebri)</option>
+                <option value="board">Deskna ograja (deske iz kataloga)</option>
+              </select>
+              {fenceConfig.constructionType === 'board' && (
+                <p className="text-xs text-slate-400 mt-1">
+                  Deskna konstrukcija uporablja tehnična pravila izbranega Roksal profila
+                  (razmiki stebrov in nosilcev) — zato je profil obvezen.
+                </p>
+              )}
+            </div>
+
             {/* FAZA 8 (P2): izbira profila omogoča preverjanje tehničnih pravil */}
             <div className="mb-3">
               <label htmlFor="fence-profile" className="text-xs text-slate-400">
@@ -79,6 +104,27 @@ export function MaterialView({ currentProject, fenceConfig, onFenceConfigChange,
                 </p>
               )}
             </div>
+
+            {fenceConfig.constructionType === 'board' && (
+              <div className="mb-3">
+                <label htmlFor="fence-board-spacing" className="text-xs text-slate-400">
+                  Razmik med deskami (mm)
+                </label>
+                <input
+                  id="fence-board-spacing"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={fenceConfig.boardSpacing ?? ''}
+                  placeholder="priporočen razmik profila"
+                  onChange={e => onFenceConfigChange({
+                    ...fenceConfig,
+                    boardSpacing: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                  })}
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white mt-1"
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>

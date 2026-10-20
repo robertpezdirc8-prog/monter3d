@@ -1,11 +1,49 @@
 /**
  * QuantityView.tsx — korak »Količine«: pregled izračunanega načrta.
  */
-import type { FencePlan, StairsPlan } from '../../types';
-export function QuantityView({ fencePlan, stairsPlan }: { fencePlan: FencePlan | null; stairsPlan: StairsPlan | null }) {
+import type { BoardFencePlan, FencePlan, StairsPlan } from '../../types';
+export function QuantityView({ fencePlan, boardPlan, stairsPlan }: { fencePlan: FencePlan | null; boardPlan?: BoardFencePlan | null; stairsPlan: StairsPlan | null }) {
   return (
     <div>
       <h2 className="text-xl font-bold text-emerald-400 mb-4">🔢 Količine in materialni seznam</h2>
+
+      {/* FAZA 11: deskna ograja (deske iz kataloga) */}
+      {boardPlan && (
+        <div className="bg-slate-800 rounded-lg p-4 mb-4">
+          <h3 className="text-sm font-semibold text-slate-300 mb-3">🪵 Deskna ograja — {boardPlan.profileName}</h3>
+
+          {boardPlan.errors.length > 0 && (
+            <div className="mb-3 rounded-lg border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-200">
+              <p className="font-semibold mb-1">⛔ Napake pri konstrukciji (predračun ni mogoč)</p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                {boardPlan.errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            </div>
+          )}
+          {boardPlan.warnings.length > 0 && (
+            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+              <p className="font-semibold mb-1">⚠️ Opozorila</p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                {boardPlan.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard label="Skupna dolžina" value={`${boardPlan.totalLength.toFixed(2)} m`} />
+            <StatCard label="Deske" value={`${boardPlan.boards} kos`} />
+            <StatCard label="Stebri" value={`${boardPlan.posts} kos`} />
+            <StatCard label="Nosilci" value={`${boardPlan.beams} kos`} />
+            <StatCard label="Razmik stebrov" value={`${(boardPlan.postSpacing * 1000).toFixed(0)} mm`} />
+            <StatCard label="Razmik nosilcev" value={`${(boardPlan.beamSpacing * 1000).toFixed(0)} mm`} />
+            <StatCard label="Višina" value={`${boardPlan.fenceHeight.toFixed(2)} m`} />
+            <StatCard
+              label="ALU cev"
+              value={boardPlan.requiresAluminumTube ? `${boardPlan.aluminumTubeLength.toFixed(1)} m` : 'ni potrebna'}
+            />
+          </div>
+        </div>
+      )}
 
       {fencePlan && (
         <div className="bg-slate-800 rounded-lg p-4 mb-4">

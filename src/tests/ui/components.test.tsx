@@ -54,6 +54,7 @@ describe('FenceSegmentEditor (UI)', () => {
     const onSegmentsChange = vi.fn((s: FenceSegmentInput[]) => { segments.push(...s); });
     const prices: MaterialPrices = {
       panelPricePerM2: 85, postPriceEach: 45, railPricePerM: 12, fastenerPriceEach: 0.5, endCapPriceEach: 8,
+      boardPricePerM: 35, aluTubePricePerM: 8,
     };
 
     render(
@@ -89,7 +90,7 @@ describe('FenceSegmentEditor (UI)', () => {
         measurements={[]}
         segments={[]}
         onSegmentsChange={() => undefined}
-        prices={{ panelPricePerM2: 85, postPriceEach: 45, railPricePerM: 12, fastenerPriceEach: 0.5, endCapPriceEach: 8 }}
+        prices={{ panelPricePerM2: 85, postPriceEach: 45, railPricePerM: 12, fastenerPriceEach: 0.5, endCapPriceEach: 8, boardPricePerM: 35, aluTubePricePerM: 8 }}
         onPricesChange={() => undefined}
       />
     );
@@ -121,6 +122,40 @@ describe('RoksalImageView (UI)', () => {
 });
 
 describe('MaterialView (UI)', () => {
+  it('izbira konstrukcije (panelna/deskna) posodobi fenceConfig', () => {
+    const onFenceConfigChange = vi.fn();
+    const fenceConfig: FenceConfig = {
+      panelWidth: 1.8, panelHeight: 1.5, postWidth: 0.06, maxGap: 0.12,
+      mountingStyle: 'stepped', slopeThreshold: 5,
+    };
+    const stairsConfig: StairsConfig = { numSteps: 5, totalRise: 1.2, totalRun: 2.5, handrailHeight: 0.9 };
+
+    render(
+      <MaterialView
+        currentProject={null}
+        fenceConfig={fenceConfig}
+        onFenceConfigChange={onFenceConfigChange}
+        stairsConfig={stairsConfig}
+        onStairsConfigChange={() => undefined}
+        onCalculateFence={() => undefined}
+        onCalculateStairs={() => undefined}
+        measurements={[]}
+        fenceSegments={[]}
+        onFenceSegmentsChange={() => undefined}
+        materialPrices={{ panelPricePerM2: 85, postPriceEach: 45, railPricePerM: 12, fastenerPriceEach: 0.5, endCapPriceEach: 8, boardPricePerM: 35, aluTubePricePerM: 8 }}
+        onMaterialPricesChange={() => undefined}
+      />
+    );
+
+    const izbirnik = screen.getByLabelText(/konstrukcija/i) as HTMLSelectElement;
+    fireEvent.change(izbirnik, { target: { value: 'board' } });
+
+    expect(onFenceConfigChange).toHaveBeenCalled();
+    const klici = onFenceConfigChange.mock.calls;
+    const novi = klici[klici.length - 1][0] as FenceConfig;
+    expect(novi.constructionType).toBe('board');
+  });
+
   it('izbira Roksal profila vrne novi fenceConfig s profileId', () => {
     const onFenceConfigChange = vi.fn();
     const fenceConfig: FenceConfig = {
@@ -141,7 +176,7 @@ describe('MaterialView (UI)', () => {
         measurements={[]}
         fenceSegments={[]}
         onFenceSegmentsChange={() => undefined}
-        materialPrices={{ panelPricePerM2: 85, postPriceEach: 45, railPricePerM: 12, fastenerPriceEach: 0.5, endCapPriceEach: 8 }}
+        materialPrices={{ panelPricePerM2: 85, postPriceEach: 45, railPricePerM: 12, fastenerPriceEach: 0.5, endCapPriceEach: 8, boardPricePerM: 35, aluTubePricePerM: 8 }}
         onMaterialPricesChange={() => undefined}
       />
     );
