@@ -19,6 +19,7 @@ import { PhotoMatchingView, type PhotoPairMatching } from './components/PhotoMat
 import { InstallPrompt } from './components/InstallPrompt';
 import { PhotoSheetView } from './components/PhotoSheetView';
 import { PhotoAnnotator } from './components/PhotoAnnotator';
+import { UndoSnackbar } from './components/UndoSnackbar';
 import { FenceVisualizer } from './components/FenceVisualizer';
 import { RoksalGalleryView } from './components/RoksalGalleryView';
 import { FenceConfigurator } from './components/FenceConfigurator';
@@ -133,6 +134,8 @@ function App() {
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
   // FAZA 19: risanje označb (skic) čez fotografijo
   const [annotatingPhotoId, setAnnotatingPhotoId] = useState<string | null>(null);
+  // FAZA 22: razveljitev destruktivne akcije (brisanje)
+  const [undoAction, setUndoAction] = useState<{ message: string; run: () => void } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -289,9 +292,27 @@ function App() {
   // Izbriši projekt skupaj z njegovimi fotografijami (brez sirot v IndexedDB)
   const handleDeleteProject = useCallback(async (id: string) => {
     try {
+      // Pred brisanjem shranimo projekt in njegove fotografije (za razveljavo).
+      const izbrisanProjekt = projects.find(p => p.id === id);
+      const izbrisaneFotografije = await getPhotosByProject(id);
+
       await deletePhotosByProject(id);
       await deleteProject(id);
       setProjects(prev => prev.filter(p => p.id !== id));
+
+      // FAZA 22: ponudi razveljavo
+      if (izbrisanProjekt) {
+        setUndoAction({
+          message: `Projekt "${izbrisanProjekt.name}" je izbrisan.`,
+          run: () => {
+            void saveProject(izbrisanProjekt).catch(err => console.error('Failed to restore project:', err));
+            for (const photo of izbrisaneFotografije) {
+              void savePhoto({ ...photo, projectId: id }).catch(err => console.error('Failed to restore photo:', err));
+            }
+            setProjects(prev => [...prev, izbrisanProjekt]);
+          },
+        });
+      }
 
       if (currentProjectRef.current?.id === id) {
         currentProjectRef.current = null;
@@ -313,7 +334,7 @@ function App() {
       console.error('Failed to delete project:', err);
       alert('Projekta ni bilo mogoče izbrisati.');
     }
-  }, []);
+  }, [projects]);
 
   /**
    * FAZA 7 (P0): samodejno shrani celotno stanje projekta. Prej so se meritve,
@@ -882,13 +903,25 @@ function App() {
    * da v predračunu ne ostane izbrisana dolžina.
    */
   const handleDeleteMeasurement = useCallback((id: string) => {
+    const izbrisana = measurements.find(m => m.id === id);
+    if (!izbrisana) return;
+    const segment = fenceSegments.find(s => s.id === id);
     const remaining = measurements.filter(m => m.id !== id);
     setMeasurements(remaining);
     setFenceSegments(prev => prev.filter(s => s.id !== id));
     if (fencePlan || boardPlan) {
       calculateFence(remaining);
     }
-  }, [measurements, fencePlan, boardPlan, calculateFence]);
+    // FAZA 22: ponudi razveljavo
+    setUndoAction({
+      message: 'Meritev je izbrisana.',
+      run: () => {
+        setMeasurements(prev => [...prev, izbrisana]);
+        if (segment) setFenceSegments(prev => [...prev, segment]);
+        calculateFence([...remaining, izbrisana]);
+      },
+    });
+  }, [measurements, fenceSegments, fencePlan, boardPlan, calculateFence]);
 
   /**
    * FAZA 17: vklop/izklop meritve v načrtu (dokumentacijska meritev).
@@ -907,17 +940,32 @@ function App() {
    * FAZA 17: brisanje fotografije iz projekta (npr. zamegljena ali nepotrebna).
    */
   const handleDeletePhoto = useCallback(async (photoId: string) => {
+    const izbrisana = photos.find(p => p.id === photoId);
+    if (!izbrisana) return;
     try {
       await deletePhoto(photoId);
       setPhotos(prev => prev.filter(p => p.id !== photoId));
       setSelectedPhoto(prev => (prev?.id === photoId ? null : prev));
       // Meritve s to fotografijo ostanejo (so lahko pomembne), a uporabnik jih
       // lahko izključi iz načrta ali izbriše.
+      // FAZA 22: ponudi razveljavo
+      setUndoAction({
+        message: 'Fotografija je izbrisana.',
+        run: () => {
+          const projectId = currentProjectRef.current?.id;
+          if (projectId) {
+            void savePhoto({ ...izbrisana, projectId }).catch(err =>
+              console.error('Failed to restore photo:', err)
+            );
+          }
+          setPhotos(prev => [...prev, izbrisana]);
+        },
+      });
     } catch (err) {
       console.error('Failed to delete photo:', err);
       setStorageWarning('Fotografije ni bilo mogoče izbrisati.');
     }
-  }, []);
+  }, [photos]);
 
   /**
    * FAZA 19: shrani skico (označbe) na fotografijo — v stanju in v bazi.
@@ -1583,6 +1631,15 @@ function App() {
           <span>Mera3D Pro v4.1 — lokalno delovanje, AI detekcija je izbirna</span>
         </div>
       </footer>
+
+      {/* FAZA 22: razveljitev destruktivne akcije */}
+      {undoAction && (
+        <UndoSnackbar
+          message={undoAction.message}
+          onUndo={() => { undoAction.run(); setUndoAction(null); }}
+          onDismiss={() => setUndoAction(null)}
+        />
+      )}
     </div>
   );
 }
