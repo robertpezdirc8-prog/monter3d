@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Photo, PhotoAnnotation } from '../types';
 import {
   ANNOTATION_COLORS, ANNOTATION_WIDTH, addStroke, drawAnnotation,
-  emptyAnnotation, toNormalizedPoint, undoStroke,
+  emptyAnnotation, setNoteOnLastStroke, toNormalizedPoint, undoStroke,
 } from '../utils/annotation';
 
 interface PhotoAnnotatorProps {
@@ -25,6 +25,8 @@ export function PhotoAnnotator({ photo, onSave, onClose }: PhotoAnnotatorProps) 
   const [annotation, setAnnotation] = useState<PhotoAnnotation>(photo.annotation ?? emptyAnnotation());
   const [color, setColor] = useState(ANNOTATION_COLORS[0].hex);
   const [size, setSize] = useState(1);
+  // FAZA 23: besedilna opomba zadnji skici (npr. »vrtanje tukaj«)
+  const [note, setNote] = useState('');
 
   const render = useCallback(() => {
     const canvas = canvasRef.current;
@@ -72,6 +74,7 @@ export function PhotoAnnotator({ photo, onSave, onClose }: PhotoAnnotatorProps) 
     currentStrokeRef.current = [];
     if (points.length > 0) {
       setAnnotation(prev => addStroke(prev, { points, color, width: ANNOTATION_WIDTH * size }));
+      setNote('');
     } else {
       render();
     }
@@ -148,6 +151,34 @@ export function PhotoAnnotator({ photo, onSave, onClose }: PhotoAnnotatorProps) 
               />
             </label>
 
+            <label className="flex items-center gap-2 text-xs text-slate-300">
+              Opomba
+              <input
+                type="text"
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && note.trim()) {
+                    setAnnotation(prev => setNoteOnLastStroke(prev, note));
+                    setNote('');
+                  }
+                }}
+                placeholder="npr. vrtanje tukaj"
+                aria-label="Opomba ob zadnji skici"
+                className="w-44 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+              />
+            </label>
+            <button
+              onClick={() => {
+                if (!note.trim()) return;
+                setAnnotation(prev => setNoteOnLastStroke(prev, note));
+                setNote('');
+              }}
+              disabled={!note.trim()}
+              className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-xs text-slate-200"
+            >
+              ⌨ Pripni opombo
+            </button>
             <button
               onClick={() => setAnnotation(prev => undoStroke(prev))}
               className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-xs text-slate-200"

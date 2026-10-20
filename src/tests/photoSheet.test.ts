@@ -5,7 +5,10 @@
  * mreža z napisi, glava in noga, izvoz v sliko — vse lokalno v brskalniku.
  */
 import { describe, it, expect } from 'vitest';
-import { buildPhotoSheetLayout, PHOTO_SHEET_PRESETS } from '../utils/photoSheet';
+import {
+  buildPhotoSheetLayout, PHOTO_SHEET_PRESETS,
+  scorePhotoForSheet, selectBestPhotosForSheet,
+} from '../utils/photoSheet';
 import type { Measurement, Photo } from '../types';
 
 function photo(id: string, minute = 0): Photo {
@@ -25,6 +28,14 @@ function measurement(photoIds: string[], value = 4.2): Measurement {
   return {
     id: 'm-1', type: 'length', value, unit: 'm', source: 'manual', scaleSource: 'manual_reference',
     status: 'verified', uncertainty: 3, confidence: 0.9, photoIds, algorithm: 'pixel_distance',
+    createdAt: new Date(2026, 0, 15, 10, 0),
+  };
+}
+
+function measurementFor(photoId: string, value = 4.2): Measurement {
+  return {
+    id: `m-${photoId}`, type: 'length', value, unit: 'm', source: 'manual', scaleSource: 'manual_reference',
+    status: 'verified', uncertainty: 3, confidence: 0.9, photoIds: [photoId], algorithm: 'pixel_distance',
     createdAt: new Date(2026, 0, 15, 10, 0),
   };
 }
@@ -159,3 +170,43 @@ describe('buildPhotoSheetLayout', () => {
     expect(prva.x + prva.width).toBeLessThanOrEqual(druga.x);
   });
 });
+
+describe('ocena fotografij za dokumentacijo', () => {
+  it('kakovosten posnetek z meritvijo in skico je najboljši', () => {
+    const odlicen: Photo = {
+      ...photo('odlicen'),
+      quality: { sharpness: 0.9, brightness: 0.5, contrast: 0.5, blurScore: 0, glareDetected: false, overallScore: 0.95 },
+      annotation: { strokes: [{ points: [{ x: 0.1, y: 0.1 }], color: '#ef4444', width: 0.01, note: 'vrtanje' }] },
+    };
+    const slab: Photo = {
+      ...photo('slab'),
+      status: 'rejected',
+      quality: { sharpness: 0.2, brightness: 0.2, contrast: 0.2, blurScore: 1, glareDetected: false, overallScore: 0.2 },
+    };
+
+    const ocenaOdlicen = scorePhotoForSheet(odlicen, [measurementFor('odlicen')]);
+    const ocenaSlab = scorePhotoForSheet(slab, []);
+
+    expect(ocenaOdlicen.score).toBeGreaterThan(ocenaSlab.score);
+    expect(ocenaOdlicen.reasons).toContain('ima skico');
+    expect(ocenaOdlicen.reasons).toContain('izmerjeno');
+    expect(ocenaSlab.reasons).toContain('zavrnjen posnetek');
+  });
+
+  it('izbere najboljše fotografije, ostale pa izpusti', () => {
+    const dobra: Photo = {
+      ...photo('dobra'),
+      quality: { sharpness: 0.9, brightness: 0.5, contrast: 0.5, blurScore: 0, glareDetected: false, overallScore: 0.9 },
+    };
+    const slaba: Photo = {
+      ...photo('slaba'),
+      quality: { sharpness: 0.2, brightness: 0.2, contrast: 0.2, blurScore: 1, glareDetected: false, overallScore: 0.2 },
+    };
+
+    const izbrane = selectBestPhotosForSheet([slaba, dobra], [], 1);
+    expect(izbrane).toEqual(['dobra']);
+    expect(selectBestPhotosForSheet([slaba, dobra], [], 5)).toHaveLength(2);
+    expect(selectBestPhotosForSheet([dobra], [], 0)).toEqual([]);
+  });
+});
+
