@@ -51,26 +51,26 @@ export function MeasurementOverlay({
   const [segments, setSegments] = useState<MeasurementSegment[]>([]);
   const [displayScale, setDisplayScale] = useState(1);
   
-  // Get actual image dimensions if props are missing or fallback values
-  const [actualDimensions, setActualDimensions] = useState<{ width: number; height: number } | null>(null);
-  
+  // FAZA 16: če so mere v propsih veljavne, jih uporabimo neposredno (brez
+  // setState v efektu); sicer dimenzije preberemo iz slike ob njenem nalaganju.
+  const [loadedDimensions, setLoadedDimensions] = useState<{ width: number; height: number } | null>(null);
+  const actualDimensions = (propWidth > 1 && propHeight > 1)
+    ? { width: propWidth, height: propHeight }
+    : loadedDimensions;
+
   useEffect(() => {
-    // If props have valid dimensions (> 1), use them
-    if (propWidth > 1 && propHeight > 1) {
-      setActualDimensions({ width: propWidth, height: propHeight });
-      return;
-    }
-    
+    if (propWidth > 1 && propHeight > 1) return;
+
     // Otherwise, load image to get actual dimensions
     const img = new Image();
     img.onload = () => {
-      setActualDimensions({ width: img.width, height: img.height });
+      setLoadedDimensions({ width: img.width, height: img.height });
     };
     img.onerror = () => {
-      // Fallback to props or default
-      setActualDimensions({ 
-        width: propWidth > 1 ? propWidth : 800, 
-        height: propHeight > 1 ? propHeight : 600 
+      // Nadomestna vrednost, če slike ni mogoče naložiti
+      setLoadedDimensions({
+        width: propWidth > 1 ? propWidth : 800,
+        height: propHeight > 1 ? propHeight : 600
       });
     };
     img.src = imageUrl;

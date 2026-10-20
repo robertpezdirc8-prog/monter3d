@@ -10,7 +10,7 @@ lokalni (IndexedDB) in ne zapustijo naprave.
 npm ci
 npm run dev            # razvojni strežnik (http://localhost:3000)
 npm run typecheck      # TypeScript (strict) + ESLint (CI kliče ta korak)
-npm run lint           # ESLint (napake = 0, opozorila pri `any`)
+npm run lint           # ESLint 10 (napake = 0, opozoril = 0)
 npm test               # vitest (logika + UI testi z jsdom)
 npm run test:geometry  # dodatni geometrijski testi (node)
 npm run check          # typecheck + lint + geometrijski testi (lokalno, kot v CI)

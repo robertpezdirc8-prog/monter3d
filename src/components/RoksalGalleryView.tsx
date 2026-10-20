@@ -153,6 +153,7 @@ export function RoksalGalleryView({ onClose }: RoksalGalleryViewProps) {
                 >
                   <div className="aspect-video bg-slate-800 relative">
                     <RoksalImageView
+                      key={image.id}
                       image={image}
                       className="w-full h-full object-cover"
                       badge={image.category === 'color-swatch' ? 'Vzorec' : undefined}
@@ -194,6 +195,7 @@ export function RoksalGalleryView({ onClose }: RoksalGalleryViewProps) {
 
               <div className="p-4">
                 <RoksalImageView
+                  key={selectedImage.id}
                   image={selectedImage}
                   className="w-full rounded-lg mb-4"
                 />

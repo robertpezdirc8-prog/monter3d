@@ -7,7 +7,7 @@
  * prikazati. Namesto praznega okvirja se prikaže nadomestek z barvnim vzorcem
  * iz kataloga in sporočilom — uporabnik dobi uporabno informacijo, ne okna.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { RoksalImage } from '../data/roksalGallery';
 import { getColorById } from '../data/roksalCatalog';
 
@@ -23,11 +23,6 @@ type Source = 'local' | 'remote' | 'failed';
 export function RoksalImageView({ image, className = '', badge }: RoksalImageViewProps) {
   const [source, setSource] = useState<Source>('local');
   const color = image.colorId ? getColorById(image.colorId) : undefined;
-
-  // Ko se spremeni slika, poskusi znova z lokalno kopijo.
-  useEffect(() => {
-    setSource('local');
-  }, [image.id, image.localPath]);
 
   if (source === 'failed') {
     return (

@@ -50,6 +50,7 @@ import { validateFencePlanAgainstProfile } from './utils/roksalRules';
 import { buildBoardFencePlan, estimateBoardMaterials } from './utils/boardFence';
 import { getProfileById } from './data/roksalCatalog';
 import { createBackup, restoreBackup, createWorkspaceBackup, restoreWorkspaceBackup, parseBackup, parseWorkspaceBackup } from './utils/backup';
+import { downloadFile } from './utils/download';
 
 const STATUS_TO_STEP: Record<string, WorkflowStep> = {
   capture: 'capture',
@@ -916,16 +917,6 @@ function App() {
       generatePDFReport({ ...currentProject, photos }, measurements, fencePlan, stairsPlan, estimate);
     }
   }, [measurements, currentProject, photos, fencePlan, stairsPlan, estimate]);
-
-  const downloadFile = (content: string, filename: string, type: string) => {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   /**
    * FAZA 7 (P0): varnostna kopija — JSON s projektom, stanjem IN fotografijami.

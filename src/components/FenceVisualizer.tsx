@@ -80,6 +80,53 @@ export function FenceVisualizer({ photo, onClose }: FenceVisualizerProps) {
   }, [photo]);
 
   // Redraw canvas with fence area and visualization
+  // Draw fence visualization
+  const drawFenceVisualization = (
+    ctx: CanvasRenderingContext2D,
+    points: { x: number; y: number }[],
+    config: FenceConfig
+  ) => {
+    // Calculate fence dimensions from polygon
+    const minX = Math.min(...points.map(p => p.x));
+    const maxX = Math.max(...points.map(p => p.x));
+    const minY = Math.min(...points.map(p => p.y));
+    const maxY = Math.max(...points.map(p => p.y));
+
+    const fenceWidth = maxX - minX;
+    const fenceHeight = maxY - minY;
+
+    // Calculate number of boards
+    const boardWidthPx = (config.profile.width / 1000) * (fenceWidth / 2); // Approximate scale
+    const spacingPx = (config.boardSpacing / 1000) * (fenceWidth / 2);
+    const totalBoardWidth = boardWidthPx + spacingPx;
+    const numBoards = Math.floor(fenceWidth / totalBoardWidth);
+
+    // Draw boards
+    ctx.fillStyle = config.color.hex;
+    ctx.globalAlpha = 0.8;
+
+    if (config.orientation === 'vertical') {
+      // Vertical boards
+      for (let i = 0; i < numBoards; i++) {
+        const x = minX + i * totalBoardWidth;
+        ctx.fillRect(x, minY, boardWidthPx, fenceHeight);
+      }
+    } else {
+      // Horizontal boards
+      const boardHeightPx = (config.profile.width / 1000) * (fenceHeight / 2);
+      const spacingHPx = (config.boardSpacing / 1000) * (fenceHeight / 2);
+      const totalBoardHeight = boardHeightPx + spacingHPx;
+      const numHBoards = Math.floor(fenceHeight / totalBoardHeight);
+
+      for (let i = 0; i < numHBoards; i++) {
+        const y = minY + i * totalBoardHeight;
+        ctx.fillRect(minX, y, fenceWidth, boardHeightPx);
+      }
+    }
+
+    ctx.globalAlpha = 1.0;
+  };
+
   const redrawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -127,53 +174,6 @@ export function FenceVisualizer({ photo, onClose }: FenceVisualizerProps) {
   useEffect(() => {
     redrawCanvas();
   }, [redrawCanvas]);
-
-  // Draw fence visualization
-  const drawFenceVisualization = (
-    ctx: CanvasRenderingContext2D,
-    points: { x: number; y: number }[],
-    config: FenceConfig
-  ) => {
-    // Calculate fence dimensions from polygon
-    const minX = Math.min(...points.map(p => p.x));
-    const maxX = Math.max(...points.map(p => p.x));
-    const minY = Math.min(...points.map(p => p.y));
-    const maxY = Math.max(...points.map(p => p.y));
-
-    const fenceWidth = maxX - minX;
-    const fenceHeight = maxY - minY;
-
-    // Calculate number of boards
-    const boardWidthPx = (config.profile.width / 1000) * (fenceWidth / 2); // Approximate scale
-    const spacingPx = (config.boardSpacing / 1000) * (fenceWidth / 2);
-    const totalBoardWidth = boardWidthPx + spacingPx;
-    const numBoards = Math.floor(fenceWidth / totalBoardWidth);
-
-    // Draw boards
-    ctx.fillStyle = config.color.hex;
-    ctx.globalAlpha = 0.8;
-
-    if (config.orientation === 'vertical') {
-      // Vertical boards
-      for (let i = 0; i < numBoards; i++) {
-        const x = minX + i * totalBoardWidth;
-        ctx.fillRect(x, minY, boardWidthPx, fenceHeight);
-      }
-    } else {
-      // Horizontal boards
-      const boardHeightPx = (config.profile.width / 1000) * (fenceHeight / 2);
-      const spacingHPx = (config.boardSpacing / 1000) * (fenceHeight / 2);
-      const totalBoardHeight = boardHeightPx + spacingHPx;
-      const numHBoards = Math.floor(fenceHeight / totalBoardHeight);
-
-      for (let i = 0; i < numHBoards; i++) {
-        const y = minY + i * totalBoardHeight;
-        ctx.fillRect(minX, y, fenceWidth, boardHeightPx);
-      }
-    }
-
-    ctx.globalAlpha = 1.0;
-  };
 
   // Handle canvas click for marking fence area
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
