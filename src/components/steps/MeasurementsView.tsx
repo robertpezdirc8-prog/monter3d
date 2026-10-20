@@ -15,6 +15,12 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
   pixelToMeter: number | null;
   onAnalyze: (p: Photo) => void;
 }) {
+  // FAZA 10 (P2): referenčna (kalibracijska) meritev je merilo fotografije,
+  // ne meritev objekta — zato je v seznamu ne prikazujemo.
+  const objectMeasurements = measurements.filter(
+    m => m.isScaleReference !== true && m.source !== 'reference_scale' && m.algorithm !== 'reference_calibration'
+  );
+
   return (
     <div>
       <h2 className="text-xl font-bold text-emerald-400 mb-4">📐 Meritve</h2>
@@ -39,6 +45,7 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
         <canvas
           ref={canvasRef}
           onClick={onCanvasClick}
+          aria-label="Merilno platno – meritve"
           className={`w-full rounded border-2 max-h-80 object-contain mb-4 ${
             measuringMode ? 'border-emerald-500 cursor-crosshair' : 'border-slate-700'
           }`}
@@ -58,14 +65,14 @@ export function MeasurementsView({ measurements, selectedPhoto, canvasRef, measu
             </tr>
           </thead>
           <tbody>
-            {measurements.length === 0 ? (
+            {objectMeasurements.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
                   Ni meritev. Kliknite na sliko v načinu merjenja.
                 </td>
               </tr>
             ) : (
-              measurements.map(m => (
+              objectMeasurements.map(m => (
                 <tr key={m.id} className="border-t border-slate-700/50">
                   <td className="px-3 py-2">
                     <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${
