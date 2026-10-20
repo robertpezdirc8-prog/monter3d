@@ -32,11 +32,13 @@ import { MaterialView } from './components/steps/MaterialView';
 import { QuantityView } from './components/steps/QuantityView';
 import { EstimateView } from './components/steps/EstimateView';
 import { ExportView } from './components/steps/ExportView';
+import { HistoryView } from './components/steps/HistoryView';
 import { getObjectTypeLabel } from './utils/labels';
 import TradeMenu from './components/TradeMenu';
 import TradeCapture from './components/TradeCapture';
 import type { TradeId } from './utils/cameraSDK';
-import { saveProject, getProject, getAllProjects, savePhoto, updatePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId, deleteProject, deletePhoto, deletePhotosByProject, loadProjectWithPhotos } from './utils/storage';
+import { saveProject, getProject, getAllProjects, savePhoto, updatePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId, deleteProject, deletePhoto, deletePhotosByProject, loadProjectWithPhotos, addActivity, getActivities } from './utils/storage';
+import type { ActivityEntry, ActivityType } from './utils/activityLog';
 import {
   DEFAULT_FENCE_CONFIG,
   DEFAULT_STAIRS_CONFIG,
@@ -134,6 +136,9 @@ function App() {
   const [annotatingPhotoId, setAnnotatingPhotoId] = useState<string | null>(null);
   // FAZA 24: zgodovina razveljivih akcij (več korakov nazaj)
   const [undoStack, setUndoStack] = useState<{ message: string; run: () => void }[]>([]);
+  // FAZA 27: dnevnik opravljenih dejanj
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   const pushUndo = useCallback((message: string, run: () => void) => {
     setUndoStack(prev => [...prev.slice(-9), { message, run }]);
@@ -174,6 +179,37 @@ function App() {
    * FAZA 7 (P0): naloži projekt skupaj s CELOTNIM stanjem (meritve, načrti,
    * predračun, merilo, konfiguracije) — uporabljeno ob zagonu in ob izbiri projekta.
    */
+  /**
+   * FAZA 27: zabeleži dogodek v dnevnik projekta.
+   */
+  const logActivity = useCallback((type: ActivityType, message: string, meta?: Record<string, string | number | boolean>) => {
+    const projectId = currentProjectRef.current?.id;
+    if (!projectId) return;
+    const entry: ActivityEntry = {
+      id: uuidv4(),
+      projectId,
+      type,
+      message,
+      meta,
+      timestamp: new Date(),
+    };
+    setActivity(prev => [entry, ...prev]);
+    void addActivity(entry).catch(err => console.error('Failed to log activity:', err));
+  }, []);
+
+  // Osveži dnevnik ob odprtju projekta
+  const refreshActivity = useCallback(async (projectId: string) => {
+    setActivityLoading(true);
+    try {
+      setActivity(await getActivities(projectId));
+    } catch (err) {
+      console.error('Failed to load activity:', err);
+      setActivity([]);
+    } finally {
+      setActivityLoading(false);
+    }
+  }, []);
+
   const openProject = useCallback(async (project: Project) => {
     // FAZA 7 (P0): fotografije se naložijo iz ločene shrambe, stari podvojeni
     // zapisi se ob tem enkrat preselijo in počistijo.
@@ -212,7 +248,9 @@ function App() {
       setCurrentStep(STATUS_TO_STEP[projectToUse.status] ?? 'capture');
     }
     setCurrentProjectId(projectToUse.id);
-  }, []);
+    // FAZA 27: naloži dnevnik opravljenih dejanj
+    void refreshActivity(projectToUse.id);
+  }, [refreshActivity]);
 
   // Create new project
   const createProject = useCallback((name: string, type: ObjectType) => {
@@ -270,6 +308,17 @@ function App() {
     // Save to IndexedDB
     saveProject(project).catch(err => console.error('Failed to save project:', err));
     setCurrentProjectId(project.id);
+
+    // FAZA 27: zabeleži ustvaritev projekta
+    const entry: ActivityEntry = {
+      id: uuidv4(),
+      projectId: project.id,
+      type: 'project_created',
+      message: 'Projekt »' + project.name + '« je ustvarjen',
+      timestamp: new Date(),
+    };
+    setActivity(prev => [entry, ...prev]);
+    void addActivity(entry).catch(err => console.error('Failed to log activity:', err));
   }, []);
 
   /**
@@ -421,6 +470,8 @@ function App() {
   const persistPhoto = useCallback((photo: Photo) => {
     const projectId = currentProjectRef.current?.id;
     if (!projectId) return;
+    // FAZA 27: zabeleži dodano fotografijo
+    logActivity('photo_added', 'Dodana fotografija (kakovost ' + Math.round(photo.quality.overallScore * 100) + ' %)');
     savePhoto({ ...photo, projectId }).catch(err => {
       console.error('Failed to save photo:', err);
       const quotaExceeded = err && (err.name === 'QuotaExceededError' || err.code === 22);
@@ -428,7 +479,7 @@ function App() {
         ? 'Shramba v napravi je polna — fotografija ni bila shranjena. Izvozi varnostno kopijo ali izbriši star projekt.'
         : 'Fotografija ni bila shranjena. Meritve in načrt so varno shranjeni.');
     });
-  }, []);
+  }, [logActivity]);
 
   // Handle photo capture/upload
   const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -686,11 +737,12 @@ function App() {
           createdAt: new Date()
         };
         setMeasurements(prev => [...prev, measurement]);
+        logActivity('measurement_added', 'Meritev ' + measurement.value.toFixed(2) + ' ' + measurement.unit);
         return [];
       }
       return newPoints;
     });
-  }, [measuringMode, pixelToMeter, selectedPhoto]);
+  }, [measuringMode, pixelToMeter, selectedPhoto, logActivity]);
 
   /**
    * FAZA 10 (P0): klik na platno v koraku »Merilo« NE sme ustvarjati meritve.
@@ -736,7 +788,8 @@ function App() {
       verifiedAt: new Date(),
     };
     setMeasurements(prev => [...prev, measurement]);
-  }, []);
+    logActivity('measurement_added', 'Ročno vnesena dolžina ' + value.toFixed(2) + ' m');
+  }, [logActivity]);
 
   // Set reference scale
   const setScale = useCallback(() => {
@@ -773,6 +826,7 @@ function App() {
       };
       setMeasurements(prev => [...prev, calibMeasurement]);
       setMeasurePoints([]);
+      logActivity('scale_calibrated', 'Merilo kalibrirano: ' + meters.toFixed(2) + ' m');
 
       // FAZA 10 (P2): meritve, narejene PRED kalibracijo, so bile v slikovnih točkah.
       // Zdaj se ob potrditvi merila pretvorijo v metre — uporabnik ne mora
@@ -792,7 +846,7 @@ function App() {
         };
       }));
     }
-  }, [measurePoints, referenceLength, selectedPhoto]);
+  }, [measurePoints, referenceLength, selectedPhoto, logActivity]);
 
   // FAZA 19: fotografija, ki jo trenutno označujemo
   const annotatingPhoto = annotatingPhotoId ? photos.find(p => p.id === annotatingPhotoId) : undefined;
@@ -834,6 +888,11 @@ function App() {
 
     setFencePlan(result.plan);
     setBoardPlan(result.boardPlan);
+    logActivity(
+      'plan_calculated',
+      'Izračunana ograja (' + (result.constructionType === 'board' ? 'deskna' : 'panelna') + '): ' +
+        result.totalLength.toFixed(2) + ' m'
+    );
 
     if (result.errors.length > 0 || result.materials.length === 0) {
       setEstimate(null);
@@ -850,7 +909,7 @@ function App() {
         .filter(m => m.isScaleReference !== true && m.source !== 'reference_scale' && m.algorithm !== 'reference_calibration')
         .map(m => ({ status: m.status, scaleSource: m.scaleSource }))
     ));
-  }, [measurements, fenceConfig, laborHours, laborRate, taxRate, fenceSegments, materialPrices]);
+  }, [measurements, fenceConfig, laborHours, laborRate, taxRate, fenceSegments, materialPrices, logActivity]);
 
   /**
    * FAZA 17: brisanje meritve. Če je bil izračunan načrt, ga takoj preračunamo,
@@ -901,6 +960,7 @@ function App() {
       // Meritve s to fotografijo ostanejo (so lahko pomembne), a uporabnik jih
       // lahko izključi iz načrta ali izbriše.
       // FAZA 22: ponudi razveljavo
+      logActivity('photo_removed', 'Odstranjena fotografija');
       pushUndo('Fotografija je izbrisana.', () => {
         const projectId = currentProjectRef.current?.id;
         if (projectId) {
@@ -914,7 +974,7 @@ function App() {
       console.error('Failed to delete photo:', err);
       setStorageWarning('Fotografije ni bilo mogoče izbrisati.');
     }
-  }, [photos, pushUndo]);
+  }, [photos, pushUndo, logActivity]);
 
   /**
    * FAZA 19: shrani skico (označbe) na fotografijo — v stanju in v bazi.
@@ -990,6 +1050,7 @@ function App() {
       }));
       const csv = exportMeasurementsCSV(data);
       downloadFile(csv, 'mera3d_meritve.csv', 'text/csv');
+      logActivity('export_created', 'Izvoz meritve (CSV)');
     } else if (format === 'json') {
       const exportObj = {
         project: currentProject,
@@ -1006,7 +1067,7 @@ function App() {
       // (število fotografij) podamo iz stanja.
       generatePDFReport({ ...currentProject, photos }, measurements, fencePlan, stairsPlan, estimate);
     }
-  }, [measurements, currentProject, photos, fencePlan, stairsPlan, estimate]);
+  }, [measurements, currentProject, photos, fencePlan, stairsPlan, estimate, logActivity]);
 
   /**
    * FAZA 7 (P0): varnostna kopija — JSON s projektom, stanjem IN fotografijami.
@@ -1021,11 +1082,12 @@ function App() {
       const json = createBackup(currentProject, photos);
       const safeName = currentProject.name.replace(/[^\w-]+/g, '_').slice(0, 40) || 'projekt';
       downloadFile(json, `mera3d_kopija_${safeName}.json`, 'application/json');
+      logActivity('backup_created', 'Izdelana varnostna kopija projekta');
     } catch (err) {
       console.error('Failed to create backup:', err);
       alert('Varnostne kopije ni bilo mogoče ustvariti.');
     }
-  }, [currentProject, photos]);
+  }, [currentProject, photos, logActivity]);
 
   /**
    * FAZA 13: varnostna kopija celotnega delovnega okolja (vsi projekti) —
@@ -1097,6 +1159,7 @@ function App() {
     { key: 'visualization', label: 'Vizualizacija', icon: '🎨' },
     { key: 'quantity_calc', label: 'Količine', icon: '🔢' },
     { key: 'estimate', label: 'Predračun', icon: '💰' },
+    { key: 'history', label: 'Zgodovina', icon: '🕘' },
     { key: 'export', label: 'Izvoz', icon: '📤' },
   ];
 
@@ -1541,6 +1604,11 @@ function App() {
               onTaxRateChange={setTaxRate}
               onRecalculate={calculateFence}
             />
+          )}
+
+          {/* History */}
+          {currentStep === 'history' && (
+            <HistoryView entries={activity} loading={activityLoading} />
           )}
 
           {/* Export */}

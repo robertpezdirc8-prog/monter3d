@@ -53,6 +53,8 @@ Količine → Predračun → Izvoz`
 - **Razveljava**: po brisanju meritve, fotografije ali projekta se na dnu zaslona pokaže
   ponudba »↶ Razveljavi« (samodejno izgine po 10 s). Zaporedne napake se razveljavljajo
   ena za drugo (»+N še razveljivih«).
+- **Zgodovina projekta** (korak 🕘): dnevnik opravljenega dela — kaj je bilo izmerjeno,
+  dodano in izračunano (lokalno, brez strežnika).
 
 ## Geometrija in matematika (FAZA 8 / P1)
 

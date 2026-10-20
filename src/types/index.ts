@@ -413,4 +413,5 @@ export type WorkflowStep =
   | 'visualization'
   | 'quantity_calc'
   | 'estimate'
+  | 'history'
   | 'export';
