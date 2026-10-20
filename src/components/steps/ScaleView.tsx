@@ -55,6 +55,7 @@ export function ScaleView({ selectedPhoto, canvasRef, measuringMode, onToggleMea
           <canvas
             ref={canvasRef}
             onClick={onCanvasClick}
+            aria-label="Merilno platno – merilo"
             className={`w-full rounded border-2 max-h-96 object-contain ${
               measuringMode ? 'border-emerald-500 cursor-crosshair' : 'border-slate-700'
             }`}

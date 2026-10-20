@@ -39,6 +39,8 @@ Količine → Predračun → Izvoz`
 - Pri polni shrambi (kvota) uporabnik dobi opozorilo, ne praznega zaslona.
 - **Voden zajem po obrti** (`#trade`) shranjuje posnetke v izbrani projekt (zaščiteno
   pred izgubo ob zaprtju zaslona); projekt je mogoče preklopiti med zajemom.
+- **Kalibracija merila** (korak Merilo): izberi dve točki na fotografiji in vpiši
+  referenčno dolžino — meritve, narejene pred kalibracijo, se samodejno pretvorijo v metre.
 
 ## Geometrija in matematika (FAZA 8 / P1)
 

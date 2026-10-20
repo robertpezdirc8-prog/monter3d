@@ -615,6 +615,26 @@ function App() {
     });
   }, [measuringMode, pixelToMeter, selectedPhoto]);
 
+  /**
+   * FAZA 10 (P0): klik na platno v koraku »Merilo« NE sme ustvarjati meritve.
+   *
+   * Prej je ScaleView uporabljal isti handler kot korak »Meritve«: ob drugem
+   * kliku je bila ustvarjena meritev in točke so se ponastavile — zato se je
+   * vnos referenčne dolžine prikazal šele nikoli in kalibracija merila v UI-ju
+   * ni bila mogoča (vse meritve so ostale v slikovnih točkah).
+   */
+  const handleReferenceClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!measuringMode) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setMeasurePoints(prev => {
+      const next = [...prev, { x, y }];
+      return next.length > 2 ? next.slice(-2) : next;
+    });
+  }, [measuringMode]);
+
   // Set reference scale
   const setScale = useCallback(() => {
     if (measurePoints.length !== 2 || !referenceLength) return;
@@ -649,6 +669,25 @@ function App() {
         verifiedAt: new Date()
       };
       setMeasurements(prev => [...prev, calibMeasurement]);
+      setMeasurePoints([]);
+
+      // FAZA 10 (P2): meritve, narejene PRED kalibracijo, so bile v slikovnih točkah.
+      // Zdaj se ob potrditvi merila pretvorijo v metre — uporabnik ne mora
+      // znova meriti, kar je bilo prej izguba dela na terenu.
+      const ratio = meters / pixelDist;
+      setMeasurements(prev => prev.map(m => {
+        if (m.unit !== 'px' || !isFinite(m.value)) return m;
+        return {
+          ...m,
+          value: m.value * ratio,
+          unit: 'm',
+          scaleSource: 'manual_reference',
+          status: 'verified',
+          uncertainty: 3,
+          confidence: 0.85,
+          verifiedAt: new Date(),
+        };
+      }));
     }
   }, [measurePoints, referenceLength, selectedPhoto]);
 
@@ -1119,7 +1158,7 @@ function App() {
                 onSetReferenceLength={setReferenceLength}
                 onSetScale={setScale}
                 pixelToMeter={pixelToMeter}
-                onCanvasClick={handleCanvasClick}
+                onCanvasClick={handleReferenceClick}
                 onAnalyze={analyzePhoto}
               />
               
