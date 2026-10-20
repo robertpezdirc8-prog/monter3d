@@ -6,13 +6,14 @@ import { useRef, useState } from 'react';
 import type { Project, ObjectType } from '../../types';
 import { getObjectTypeLabel } from '../../utils/labels';
 import { IconPlus } from '../icons';
-export function NewProjectView({ onCreateProject, projects, currentProjectId, onOpenProject, onDeleteProject, onImportBackup }: {
+export function NewProjectView({ onCreateProject, projects, currentProjectId, onOpenProject, onDeleteProject, onImportBackup, onExportWorkspaceBackup }: {
   onCreateProject: (name: string, type: ObjectType) => void;
   projects: Project[];
   currentProjectId: string | null;
   onOpenProject: (id: string) => void;
   onDeleteProject: (id: string) => void;
   onImportBackup: (file: File) => void;
+  onExportWorkspaceBackup: () => void;
 }) {
   const [name, setName] = useState('');
   const [type, setType] = useState<ObjectType>('fence');
@@ -44,16 +45,26 @@ export function NewProjectView({ onCreateProject, projects, currentProjectId, on
               e.target.value = ''; // omogoči ponoven izbiro iste datoteke
             }}
           />
-          <button
-            type="button"
-            onClick={() => backupInputRef.current?.click()}
-            className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded"
-          >
-            ⬆ Uvozi varnostno kopijo
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onExportWorkspaceBackup}
+              className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded"
+              title="Izvozi vse projekte (z fotografijami) v eno datoteko"
+            >
+              🗄️ Kopija vseh projektov
+            </button>
+            <button
+              type="button"
+              onClick={() => backupInputRef.current?.click()}
+              className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded"
+            >
+              ⬆ Uvozi varnostno kopijo
+            </button>
+          </div>
         </div>
       </div>
-      
+
       <div className="bg-slate-800 rounded-lg p-6 mb-6">
         <label className="block text-sm font-medium text-slate-300 mb-2">Ime projekta</label>
         <input

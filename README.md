@@ -36,6 +36,8 @@ Količine → Predračun → Izvoz`
   količin in statistike predračuna.
 - **Varnostna kopija** (korak Izvoz → 🧰) izvozi JSON s projektom, stanjem in
   **fotografijami**; uvoz (korak Nov projekt → ⬆) obnovi projekt kot nov (izvirnik ostane).
+- **Kopija celotnega delovnega okolja** (Nov projekt → 🗄️) zajame **vse** projekte in
+  fotografije v eno datoteko; isti gumb uvozi obe obliki kopij (projekt ali okolje).
 - Pri polni shrambi (kvota) uporabnik dobi opozorilo, ne praznega zaslona.
 - **Voden zajem po obrti** (`#trade`) shranjuje posnetke v izbrani projekt (zaščiteno
   pred izgubo ob zaprtju zaslona); projekt je mogoče preklopiti med zajemom.
@@ -51,6 +53,8 @@ Količine → Predračun → Izvoz`
 - **Dve konstrukciji ograje**: panelna (paneli + stebri) in deskna (deske iz kataloga
   Roksal) — obe uporabljata ista pravila, cene in predračun (prej je bila deskna
   konstrukcija izolirana v konfiguratorju in ni šla v predračun).
+- **Konfigurator** prenaša izbiro (profil, višina, razmik med deskami) neposredno v
+  projekt, zato ni več ločen izračun, temveč napredno orodje istega toka.
 - **Homografija** sprejme realen šum značilnic (~0,5 px) in model preveri s reprojekcijo;
   **RANSAC** je determinističen (seed), zato so rezultati ponovljivi in testabilni.
 - **Delovanje brez povezave**: service worker (`public/sw.js`) + manifest, namečen ob

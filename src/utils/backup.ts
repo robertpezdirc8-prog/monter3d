@@ -164,3 +164,141 @@ export async function restoreBackup(raw: string): Promise<RestoreResult> {
 
   return { projectId, photoCount };
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Varnostna kopija celotnega delovnega okolja (vsi projekti)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export interface WorkspaceBackup {
+  app: string;
+  version: number;
+  exportedAt: string;
+  projects: WorkspaceProject[];
+}
+
+export interface WorkspaceProject {
+  project: Omit<Project, 'photos'> & { photos: [] };
+  photos: BackupPhoto[];
+}
+
+/**
+ * Ustvari varnostno kopijo vseh projektov (z fotografijami) — za prenos na drugo
+ * napravo ali arhiviranje. En projekt je mogoče izvoziti tudi posamično
+ * (`createBackup`), ta funkcija pa zajame celotno delovno okolje.
+ */
+export function createWorkspaceBackup(
+  projects: Project[],
+  photosByProject: Map<string, Photo[]>
+): string {
+  const backup: WorkspaceBackup = {
+    app: BACKUP_APP_ID,
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    projects: projects.map(project => {
+      const photos = photosByProject.get(project.id) ?? [];
+      return {
+        project: { ...project, photos: [] } as WorkspaceProject['project'],
+        photos: photos.map(p => ({
+          id: p.id,
+          dataUrl: p.dataUrl,
+          timestamp: p.timestamp instanceof Date ? p.timestamp.toISOString() : new Date(p.timestamp).toISOString(),
+          quality: p.quality,
+          status: p.status,
+          rejectionReason: p.rejectionReason,
+          width: p.width,
+          height: p.height,
+          coverage: p.coverage,
+          features: p.features,
+        })),
+      };
+    }),
+  };
+
+  return JSON.stringify(backup, null, 2);
+}
+
+/** Preveri in razčleni varnostno kopijo delovnega okolja. */
+export function parseWorkspaceBackup(raw: string): ParseResult {
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: 'Datoteka ni veljaven JSON.' };
+  }
+
+  if (!data || typeof data !== 'object') {
+    return { ok: false, error: 'Datoteka ne vsebuje projektov.' };
+  }
+
+  const b = data as Partial<WorkspaceBackup>;
+  if (b.app !== BACKUP_APP_ID) {
+    return { ok: false, error: 'Datoteka ni varnostna kopija Mera3D Pro.' };
+  }
+  if (typeof b.version !== 'number' || b.version > BACKUP_VERSION) {
+    return { ok: false, error: `Nepodprta različica kopije (${String(b.version)}).` };
+  }
+  if (!Array.isArray(b.projects)) {
+    return { ok: false, error: 'Varnostna kopija ne vsebuje seznama projektov.' };
+  }
+
+  return { ok: true, backup: b as BackupFile & WorkspaceBackup };
+}
+
+/**
+ * Obnovi vse projekte iz varnostne kopije delovnega okolja.
+ * Vsak projekt dobi NOVO oznako, da obstoječi projekti ostanejo nedotaknjeni.
+ */
+export async function restoreWorkspaceBackup(
+  raw: string
+): Promise<{ projectIds: string[]; photoCount: number }> {
+  const parsed = parseWorkspaceBackup(raw);
+  if (!parsed.ok) throw new Error(parsed.error);
+
+  const data = parsed.backup as unknown as WorkspaceBackup;
+  const projectIds: string[] = [];
+  let photoCount = 0;
+
+  for (const entry of data.projects) {
+    const source = entry.project;
+    const projectId = uuidv4();
+
+    const project: Project = {
+      ...(source as unknown as Project),
+      id: projectId,
+      createdAt: new Date(source.createdAt),
+      updatedAt: new Date(source.updatedAt),
+      photos: [],
+      measurements: source.measurements ?? [],
+      fencePlan: source.fencePlan ?? undefined,
+      boardPlan: source.boardPlan ?? undefined,
+      stairsPlan: source.stairsPlan ?? undefined,
+      estimate: source.estimate ?? undefined,
+      settings: normalizeSettings((source.settings ?? {}) as Partial<ProjectSettings>),
+      status: source.status ?? 'capture',
+    };
+
+    await saveProject(project);
+
+    for (const p of entry.photos ?? []) {
+      if (!p?.dataUrl) continue;
+      const photo: Photo = {
+        id: p.id,
+        dataUrl: p.dataUrl,
+        timestamp: new Date(p.timestamp),
+        quality: p.quality,
+        status: p.status ?? 'analyzed',
+        rejectionReason: p.rejectionReason,
+        width: p.width,
+        height: p.height,
+        coverage: p.coverage ?? 0,
+        features: p.features,
+      };
+      await savePhoto({ ...photo, projectId });
+      photoCount++;
+    }
+
+    projectIds.push(projectId);
+  }
+
+  return { projectIds, photoCount };
+}

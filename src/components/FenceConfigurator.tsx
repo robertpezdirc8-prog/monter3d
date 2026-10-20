@@ -14,9 +14,16 @@ import { calculateFenceConstruction, validateFenceConfiguration } from '../utils
 
 interface FenceConfiguratorProps {
   onClose?: () => void;
+  /** Prenese izbrano konfiguracijo v trenutni projekt (deskna konstrukcija). */
+  onApply?: (result: {
+    profileId: string;
+    fenceHeightM: number;
+    boardSpacingMm: number;
+    orientation: 'vertical' | 'horizontal';
+  }) => void;
 }
 
-export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
+export function FenceConfigurator({ onClose, onApply }: FenceConfiguratorProps) {
   const [naturalLanguageInput, setNaturalLanguageInput] = useState('');
   const [selectedProfile, setSelectedProfile] = useState<RoksalProfile | null>(null);
   const [selectedColor, setSelectedColor] = useState<RoksalColor | null>(null);
@@ -716,6 +723,28 @@ export function FenceConfigurator({ onClose }: FenceConfiguratorProps) {
                 <p className="text-xs text-slate-500 mt-2">
                   Izvozi podroben popis materiala in tehnične podatke
                 </p>
+
+                {/* FAZA 13: konfiguracijo lahko preneseš v trenutni projekt,
+                    kjer se uporabi za izračun predračuna (deskna konstrukcija). */}
+                {onApply && (
+                  <>
+                    <button
+                      onClick={() => onApply({
+                        profileId: selectedProfile.id,
+                        fenceHeightM: fenceHeight / 1000,
+                        boardSpacingMm: boardSpacing,
+                        orientation,
+                      })}
+                      className="mt-3 w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium transition-colors"
+                    >
+                      ✓ Uporabi v projektu
+                    </button>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Prenese profil, višino in razmik med deskami v konfiguracijo ograje
+                      (korak Materiali), kjer se izračuna predračun.
+                    </p>
+                  </>
+                )}
               </div>
             )}
 
