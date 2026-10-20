@@ -31,5 +31,19 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': 'off',
       'no-undef': 'off',
     },
+  },
+  {
+    // Skripte v scripts/ tečejo v Node (fetch, Buffer, process) — poglej globals.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        fetch: 'readonly',
+        AbortSignal: 'readonly',
+        Buffer: 'readonly',
+        URL: 'readonly',
+      },
+    },
   }
 );

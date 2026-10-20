@@ -55,17 +55,24 @@ izgubljeni, projekt pa je ostal brez fotografij.
   posnetek shrani v shrambo (`savePhoto`), brisanje posnetka izbriše tudi shranjeno
   fotografijo, uporabnik vidi, kam se shranjuje.
 
-## 3. Galerija: popravljen filter po barvi + offline prikaz
+## 3. Galerija: popravljen filter po barvi, lokalne slike, offline prikaz
 
 Odkrita napaka: galerija je uporabljala ID-je barv (`amazon`, `ash`, `golden`, `burma`),
 katalog pa `amazon-wood`, `ash-wood`, `golden-teak`, `burma-teak` → **filter po barvi je
 vedno vrnil 0 slik**, v modalu pa je bila barva vedno »Neznano«.
 
 - ID-ji so normalizirani, `getColorById()` razume tudi krajšne zapise;
-- nov `src/components/RoksalImageView.tsx`: `loading="lazy"`, `decoding="async"`,
-  `referrerPolicy="no-referrer"` in **nadomestek ob napaki** (barvni vzorec iz kataloga
-  + »Slika ni dosegljiva (offline)«);
-- v galeriji je obvestilo, da so slike zunanji vir, katalog pa deluje brez povezave.
+- **lokalne slike**: nov skript `scripts/fetch-roksal-images.mjs` (`npm run fetch:images`)
+  prenese 18 slik z roksal.com v `public/roksal/images/{vertical,horizontal,stairs,profiles,swatches}/`
+  (preveri magic bytes, je idempotentna, obstoječe preskoči);
+  `roksalGallery.ts` ima zdaj `localPath` ob vsaki sliki;
+- `RoksalImageView` naloži **lokalno kopijo → nato izvirnik → nato nadomestek**
+  (barvni vzorec iz kataloga + »Slika ni dosegljiva (offline)«), z `loading="lazy"`,
+  `decoding="async"` in `referrerPolicy="no-referrer"`;
+- v galeriji je obvestilo, da so slike lokalne in kaj je vir;
+- **test preveri, da lokalna datoteka res obstaja** — manjkajoča slika takoj pokaže napako
+  v CI, ne pa tiho praznega okvirja;
+- avtorstvo: slike so last Roksala, pogoji uporabe so zapisani v `public/roksal/README.md`.
 
 ## 4. Drobno
 - Platni v `ScaleView` in `MeasurementsView` sta dobila oznako (`aria-label`) — boljša
@@ -80,5 +87,5 @@ vedno vrnil 0 slik**, v modalu pa je bila barva vedno »Neznano«.
 1. **Skupni model ograje** — `geometry.ts` (panelna) in `fenceConstruction.ts` (deskna) sta
    še različna modela; povezani sta prek `roksalRules.ts`.
 2. **UI testi** — PDF poročilo, uvoz varnostne kopije, merjenje v koraku »Kakovost«.
-3. **Galerija** — za popolnoma offline delovanje bi bile potrebne lokalne slike
-   (licenca: slike so last Roksala, zato jih ne shranjujemo v repozitorij brez dovoljenja).
+3. **Galerija** — lokalne slike so naložene in galerija deluje brez povezave; ostane še
+   preverjanje pogojev uporabe pri Roksalu za komercialno uporabo.

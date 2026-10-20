@@ -74,6 +74,11 @@ public/sw.js           # service worker (offline)
 
 Poročila o fazah dela so v `docs/porocila/`, dodatna dokumentacija v `docs/`.
 
+### Galerija slik
+Slike so shranjene **lokalno** v `public/roksal/images/` (galerija deluje brez povezave),
+osveži pa jih z `npm run fetch:images`. Vir slik je roksal.com — pogoje uporabe preveri v
+`public/roksal/README.md`.
+
 ### Opomba o AI detekciji
 AI detekcija objektov (RF-DETR Nano, Apache 2.0) je **izbirna** — model se prenese šele,
 ko uporabnik vklopi preklop v kameri, in se izvaja lokalno v brskalniku. Brez tega

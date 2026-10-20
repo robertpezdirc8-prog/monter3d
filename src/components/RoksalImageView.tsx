@@ -7,7 +7,7 @@
  * prikazati. Namesto praznega okvirja se prikaže nadomestek z barvnim vzorcem
  * iz kataloga in sporočilom — uporabnik dobi uporabno informacijo, ne okna.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { RoksalImage } from '../data/roksalGallery';
 import { getColorById } from '../data/roksalCatalog';
 
@@ -18,11 +18,18 @@ interface RoksalImageViewProps {
   badge?: string;
 }
 
+type Source = 'local' | 'remote' | 'failed';
+
 export function RoksalImageView({ image, className = '', badge }: RoksalImageViewProps) {
-  const [failed, setFailed] = useState(false);
+  const [source, setSource] = useState<Source>('local');
   const color = image.colorId ? getColorById(image.colorId) : undefined;
 
-  if (failed) {
+  // Ko se spremeni slika, poskusi znova z lokalno kopijo.
+  useEffect(() => {
+    setSource('local');
+  }, [image.id, image.localPath]);
+
+  if (source === 'failed') {
     return (
       <div
         className={`flex flex-col items-center justify-center gap-1 bg-slate-800 p-2 text-center ${className}`}
@@ -43,16 +50,25 @@ export function RoksalImageView({ image, className = '', badge }: RoksalImageVie
     );
   }
 
+  const src = source === 'local' && image.localPath ? image.localPath : image.url;
+
   return (
     <>
       <img
-        src={image.url}
+        src={src}
         alt={image.title}
         className={className}
         loading="lazy"
         decoding="async"
         referrerPolicy="no-referrer"
-        onError={() => setFailed(true)}
+        onError={() => {
+          // Najprej poskusiš lokalno kopijo, nato izvirnik, nazadnje nadomestek.
+          if (source === 'local' && image.localPath && image.url !== image.localPath) {
+            setSource('remote');
+          } else {
+            setSource('failed');
+          }
+        }}
       />
       {badge && (
         <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded">

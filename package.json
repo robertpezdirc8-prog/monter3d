@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:geometry": "node test-runner.mjs && node test-homography.js"
+    "test:geometry": "node test-runner.mjs && node test-homography.js",
+    "fetch:images": "node scripts/fetch-roksal-images.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.1",
