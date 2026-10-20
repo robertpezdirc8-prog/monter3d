@@ -392,7 +392,13 @@ export function getHorizontalProfiles(): RoksalProfile[] {
 }
 
 export function getColorById(id: string): RoksalColor | undefined {
-  return Object.values(ROKSAL_COLORS).find(c => c.id === id);
+  const direct = Object.values(ROKSAL_COLORS).find(c => c.id === id);
+  if (direct) return direct;
+  // Odporen na krajšne zapise ('amazon' -> 'amazon-wood'), da starejši zapisi
+  // galerije ne izgubijo povezave s katalogom.
+  return Object.values(ROKSAL_COLORS).find(
+    c => c.id.startsWith(`${id}-`) || c.id.replace(/-(wood|teak)$/, '') === id
+  );
 }
 
 // Catalog metadata

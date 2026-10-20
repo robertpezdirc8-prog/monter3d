@@ -6,7 +6,8 @@
 
 import { useState } from 'react';
 import { ROKSAL_GALLERY, getImagesByProfile, getImagesByColor, getImagesByCategory, getImagesByOrientation } from '../data/roksalGallery';
-import { ROKSAL_PROFILES, ROKSAL_COLORS } from '../data/roksalCatalog';
+import { ROKSAL_PROFILES, ROKSAL_COLORS, getColorById } from '../data/roksalCatalog';
+import { RoksalImageView } from './RoksalImageView';
 import type { RoksalImage } from '../data/roksalGallery';
 
 interface RoksalGalleryViewProps {
@@ -59,6 +60,11 @@ export function RoksalGalleryView({ onClose }: RoksalGalleryViewProps) {
 
         {/* Filters */}
         <div className="p-4 border-b border-slate-700 bg-slate-900/50">
+          {/* FAZA 10 (P2): slike so zunanji vir — brez povezave se prikaže nadomestek. */}
+          <p className="mb-3 rounded border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs text-slate-400">
+            Slike se nalagajo z roksal.com — brez povezave so prikazani nadomestki z barvnim
+            vzorcem. Barve in tehnične podatke preveri v <b>Katalogu</b> (deluje brez povezave).
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Profil</label>
@@ -145,17 +151,11 @@ export function RoksalGalleryView({ onClose }: RoksalGalleryViewProps) {
                   className="bg-slate-900 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-emerald-500 transition-all"
                 >
                   <div className="aspect-video bg-slate-800 relative">
-                    <img
-                      src={image.url}
-                      alt={image.title}
+                    <RoksalImageView
+                      image={image}
                       className="w-full h-full object-cover"
-                      loading="lazy"
+                      badge={image.category === 'color-swatch' ? 'Vzorec' : undefined}
                     />
-                    {image.category === 'color-swatch' && (
-                      <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded">
-                        Vzorec
-                      </div>
-                    )}
                   </div>
                   <div className="p-3">
                     <h3 className="text-sm font-medium text-white mb-1 line-clamp-2">
@@ -192,9 +192,8 @@ export function RoksalGalleryView({ onClose }: RoksalGalleryViewProps) {
               </div>
 
               <div className="p-4">
-                <img
-                  src={selectedImage.url}
-                  alt={selectedImage.title}
+                <RoksalImageView
+                  image={selectedImage}
                   className="w-full rounded-lg mb-4"
                 />
 
@@ -219,10 +218,10 @@ export function RoksalGalleryView({ onClose }: RoksalGalleryViewProps) {
                       <div className="flex items-center gap-2">
                         <div
                           className="w-6 h-6 rounded border-2 border-slate-600"
-                          style={{ backgroundColor: ROKSAL_COLORS[selectedImage.colorId]?.hex }}
+                          style={{ backgroundColor: getColorById(selectedImage.colorId)?.hex }}
                         />
                         <span className="text-sm text-emerald-400">
-                          {ROKSAL_COLORS[selectedImage.colorId]?.name || 'Neznano'}
+                          {getColorById(selectedImage.colorId)?.name || 'Neznano'}
                         </span>
                       </div>
                     </div>

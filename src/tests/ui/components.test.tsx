@@ -7,6 +7,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FenceSegmentEditor } from '../../components/FenceSegmentEditor';
 import { MaterialView } from '../../components/steps/MaterialView';
+import { RoksalImageView } from '../../components/RoksalImageView';
 import type { FenceSegmentInput, MaterialPrices, Measurement, FenceConfig, StairsConfig } from '../../types';
 
 function meritev(id: string, value: number): Measurement {
@@ -93,6 +94,29 @@ describe('FenceSegmentEditor (UI)', () => {
       />
     );
     expect(screen.getByText(/ni dolžinskih meritev/i)).toBeInTheDocument();
+  });
+});
+
+describe('RoksalImageView (UI)', () => {
+  it('ob napaki pri nalaganju prikaže nadomestek (offline) z barvnim vzorcem', () => {
+    const image = {
+      id: 'test-1',
+      url: 'https://example.invalid/slika.jpg',
+      title: 'Testna slika',
+      description: 'Opis',
+      colorId: 'amazon-wood',
+      category: 'installation' as const,
+      verified: true,
+      source: 'https://roksal.com/',
+    };
+
+    render(<RoksalImageView image={image} />);
+
+    const img = screen.getByAltText('Testna slika');
+    fireEvent.error(img);
+
+    expect(screen.getByText(/ni dosegljiva/i)).toBeInTheDocument();
+    expect(screen.getByText('Testna slika')).toBeInTheDocument();
   });
 });
 
