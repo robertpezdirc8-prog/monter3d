@@ -1,144 +1,116 @@
 # Mera3D Pro (monter3d)
 
 Aplikacija za monterje: zajem fotografij, merjenje, izračun konstrukcije ograje/stopnic,
-materiali in predračun. Deluje brez strežnika (React + TypeScript + Vite), vsi podatki so
-lokalni (IndexedDB) in ne zapustijo naprave.
+materiali in predračun — **brez strežnika** (React + TypeScript + Vite). Vsi podatki so
+lokalni (IndexedDB) in ne zapustijo naprave; deluje tudi brez omrežja.
+
+---
 
 ## Zagon
 
 ```bash
 npm ci
 npm run dev            # razvojni strežnik (http://localhost:3000)
-npm run typecheck      # TypeScript (strict) + ESLint (CI kliče ta korak)
-npm run lint           # ESLint 10 (napake = 0, opozoril = 0)
-npm test               # vitest (logika + UI testi z jsdom)
+npm run typecheck      # TypeScript (strict) + ESLint 10  ← CI kliče ta korak
+npm run lint           # ESLint (0 napak, 0 opozoril)
+npm test               # vitest: logika + UI testi (jsdom)
 npm run test:geometry  # dodatni geometrijski testi (node)
 npm run check          # typecheck + lint + geometrijski testi (lokalno, kot v CI)
 npm run build          # produkcijski build
+npm run fetch:images   # osveži lokalne slike galerije (roksal.com)
 ```
 
-CI (`.github/workflows/test.yml`) preverja typecheck, ESLint, vitest, `test-runner.mjs`,
-`test-homography.js`, `npm audit` in build.
+CI (`.github/workflows/test.yml`) preverja typecheck (vključno z ESLint), vitest,
+`test-runner.mjs`, `test-homography.js`, `npm audit` in build — na Node 20 in 22.
+
+---
 
 ## Delovni tok
 
 `Nov projekt → Zajem → Kakovost → Merilo → Meritve → Materiali → Vizualizacija →
-Količine → Predračun → Izvoz`
+Količine → Predračun → Zgodovina → Izvoz`
 
-## Podatki in shranjevanje (FAZA 7 / P0)
+### Zajem in merjenje
+- **Voden zajem po obrtih** (`#trade`): navodila korak po korak (ograje, keramika, fasade,
+  krovstvo), kamera z ločljivostjo, bliskavico, osredotočenjem in oceno kadra; posnetki se
+  shranijo v izbrani projekt.
+- **Merjenje na fotografiji**: klik na dve točki + kalibracija z referenčno dolžino.
+  Meritve, narejene pred kalibracijo, se ob potrditvi merila samodejno pretvorijo v metre.
+- **Ročni vnos dolžin**: kadar dolžine ni mogoče izmeriti po fotografiji (merilni trak).
+- **Enote** m / cm / mm — računanje je vedno v metrih, vnos in prikaz v izbrani enoti.
+- **Označbe (skice)** čez posnetek z opombo (»vrtanje tukaj«) — vektor, zato ostane ostra
+  pri vsaki velikosti in se prikaže v listi, PDF poročilu in deljenem dokumentu.
+- **Vloga posnetka**: `pred` / `po` / `detajl` — osnova za primerjavo pred/po.
 
-- **Projekt** (`projects`) vsebuje stanje: meritve, načrt ograje/stopnic, predračun in
-  nastavitve (`settings`). Stanje se samodejno shrani ob vsaki spremembi, zato osvežitev
-  strani ne izgubi podatkov.
-- **Fotografije** (`photos`) so v ločeni shrambi in se **ne podvajajo** v zapisu projekta.
-  Stari zapisi (fotografije v projektu) se ob odpiranju samodejno preselijo in počistijo.
-- Projekte je mogoče **odpreti, preklopiti in izbrisati** (brisanje pobriše tudi fotografije).
-- Meritev z oznako `isScaleReference` (kalibracija merila) je izključena iz dolžine ograje,
-  količin in statistike predračuna.
-- **Varnostna kopija** (korak Izvoz → 🧰) izvozi JSON s projektom, stanjem in
-  **fotografijami**; uvoz (korak Nov projekt → ⬆) obnovi projekt kot nov (izvirnik ostane).
-- **Kopija celotnega delovnega okolja** (Nov projekt → 🗄️) zajame **vse** projekte in
-  fotografije v eno datoteko; isti gumb uvozi obe obliki kopij (projekt ali okolje).
-- **Deljenje dokumentacije brez strežnika** (Izvoz → 📨): aplikacija izdela **samostojen
-  HTML dokument** (projekt, meritve, fotografije, predračun) — pisarna ga odpre v
+### Izračun in predračun
+- **Dve konstrukciji ograje** — panelna (paneli + stebri) in deskna (deske iz kataloga
+  Roksal) — obe skozi **enoten izračun**: geometrija → tehnična pravila → materiali →
+  predračun. Kršitev pravil (npr. razmak stebrov) pomeni, da predračuna ni.
+- **Koti in dvigi**: vsak segment ima smer in dvig, zato so mogoče L-oblike in terenski
+  dvigi; sklenjena ograja se opozori.
+- **Tehnična pravila kataloga**: profil, dovoljeni razmiki stebrov in nosilcev, ALU cev.
+- **Cene so urejene** in del nastavitev projekta (ne trdo zapisane v kodi).
+
+### Dokumentacija za stranko in pisarno
+- **Dokumentacijska lista** (Izvoz → 📸): mreža / trak / primerjava pred-po, napis
+  (meritev + čas), glava, noga; izbira posnetkov in samodejna izbira najboljših;
+  izvoz v **PNG** in **PDF** (za tisk).
+- **PDF predračun** vsebuje galerijo fotografij s skicami, meritve, materiale, predračun in
+  **potek dela**.
+- **Deljenje brez strežnika** (Izvoz → 📨): **samostojen HTML dokument** s projektom,
+  meritvami, fotografijami, predračunom in potekom dela — pisarna ga odpre v
   kateremkoli brskalniku, brez aplikacije.
-- Pri polni shrambi (kvota) uporabnik dobi opozorilo, ne praznega zaslona.
-- **Voden zajem po obrti** (`#trade`) shranjuje posnetke v izbrani projekt (zaščiteno
-  pred izgubo ob zaprtju zaslona); projekt je mogoče preklopiti med zajemom.
-- **Kalibracija merila** (korak Merilo): izberi dve točki na fotografiji in vpiši
-  referenčno dolžino — meritve, narejene pred kalibracijo, se samodejno pretvorijo v metre.
-- **Ročni vnos dolžin** (korak Meritve): če dolžine ni mogoče izmeriti po fotografiji
-  (npr. po meritvi z metrom), jo vpiši ročno — gre v načrt in predračun enako kot
-  meritev na sliki.
-- **Enote dolžin** (m / cm / mm): preklop v koraku Meritve; računanje je vedno v metrih,
-  vpis in prikaz pa v izbrani enoti (npr. »650.0 cm ±2.0 %«).
-- **Popravki uporabnika**: meritev lahko izbrišeš 🗑 ali jo izključiš iz načrta
-  (»izključena«), fotografijo pa izbrišeš v koraku Zajem. Izbrisana meritev se
-  preračuna iz predračuna, izključena pa se ohrani kot dokumentacija.
-- **Razveljava**: po brisanju meritve, fotografije ali projekta se na dnu zaslona pokaže
-  ponudba »↶ Razveljavi« (samodejno izgine po 10 s). Zaporedne napake se razveljavljajo
-  ena za drugo (»+N še razveljivih«).
-- **Zgodovina projekta** (korak 🕘): dnevnik opravljenega dela — kaj je bilo izmerjeno,
-  dodano in izračunano (lokalno, brez strežnika). Dnevnik je tudi del **PDF poročila**
-  (»Potek dela«), ki gre stranki.
+- **Zgodovina projekta** (korak 🕘): dnevnik opravljenega dela (lokalno).
 
-## Geometrija in matematika (FAZA 8 / P1)
+### Podatki in varnost
+- Stanje projekta (meritve, načrti, predračun, nastavitve) se **samodejno shranjuje** —
+  osvežitev strani ne izgubi podatkov.
+- Fotografije so v ločeni shrambi in se ne podvajajo; stari zapisi se ob odpiranju
+  preselijo in počistijo.
+- Projekte je mogoče odpreti, preklopiti in izbrisati (brisanje pobriše tudi fotografije).
+- **Varnostne kopije**: posamezni projekt ali celotno delovno okolje (JSON) — obnovljivo.
+- **Razveljava**: po brisanju meritve, fotografije ali projekta; zaporedne napake se
+  razveljavljajo ena za drugo.
+- Pri polni shrambi uporabnik dobi opozorilo, ne praznega zaslona.
+- **AI detekcija** (RF-DETR Nano, Apache 2.0) je izbirna: model se prenese šele ob
+  vklopu v kameri in se izvaja lokalno.
 
-- **Segmenti ograje** (korak Materiali): vsaka dolžinska meritev dobi **azimut** in
-  **dvig**, zato so mogoči koti (L-oblike) in terenski dvigi — prej je bila mogoča samo
-  ravna ograja.
-- **Cene materialov** so del nastavitev projekta (prej trdo zapisane v kodi).
-- **Dve konstrukciji ograje**: panelna (paneli + stebri) in deskna (deske iz kataloga
-  Roksal) — obe gredo skozi **enoten izračun** (geometrija → tehnična pravila →
-  materiali → predračun), zato sta napaki in opozorila pri obeh enaka.
-- **Konfigurator** prenaša izbiro (profil, višina, razmik med deskami) neposredno v
-  projekt, zato ni več ločen izračun, temveč napredno orodje istega toka.
-- **Homografija** sprejme realen šum značilnic (~0,5 px) in model preveri s reprojekcijo;
-  **RANSAC** je determinističen (seed), zato so rezultati ponovljivi in testabilni.
-- **Delovanje brez povezave**: service worker (`public/sw.js`) + manifest, namečen ob
-  glavi »Offline ✓«.
+---
 
 ## Struktura
 
 ```
-src/App.tsx            # orkestrator: stanje, tok, navigacija, shranjevanje
-src/components/        # komponente (kamera, merjenje, vizualizacije, urejevalnik segmentov)
-src/components/steps/  # komponente po korakih delovnega toka
-src/utils/geometry.ts  # izračuni (ograja, stopnice, predračun)
+src/App.tsx              # orkestrator: stanje, tok, navigacija, shranjevanje
+src/components/          # kamera, merjenje, vizualizacije, urejevalnik segmentov
+src/components/steps/    # komponente po korakih delovnega toka
+src/components/overlay/  # sklopi prekrivanja (merilno platno)
+src/components/configurator/ # konfigurator ograje (vnosi, načrt, povzetek)
+src/utils/geometry.ts    # izračuni (ograja, stopnice, predračun)
 src/utils/fenceGeometry.ts # segmenti ograje (azimut, dvig, koti)
-src/utils/roksalRules.ts   # tehnična pravila kataloga proti načrtu
-src/utils/cv.ts        # računalniška vizija (Harris, deskriptorji, homografija, RANSAC)
+src/utils/fenceCalculation.ts # enoten izračun (panelna + deskna)
+src/utils/roksalRules.ts # tehnična pravila kataloga proti načrtu
+src/utils/boardFence.ts  # deskna konstrukcija (deske, stebri, nosilci)
+src/utils/cv.ts          # računalniška vizija (Harris, deskriptorji, homografija, RANSAC)
 src/utils/projectState.ts # shranjevanje/nalaganje stanja projekta
-src/utils/backup.ts    # varnostna kopija in obnova
-src/utils/storage.ts   # IndexedDB (projekti, fotografije)
-src/data/              # katalog Roksal, galerija
-src/tests/             # vitest testi (logika)
-src/tests/ui/          # UI testi (jsdom + Testing Library)
-public/sw.js           # service worker (offline)
+src/utils/activityLog.ts  # dnevnik opravljenih dejanj
+src/utils/backup.ts      # varnostna kopija in obnova
+src/utils/shareExport.ts  # samostojen HTML dokument za deljenje
+src/utils/units.ts        # enote dolžin (m / cm / mm)
+src/utils/storage.ts      # IndexedDB (projekti, fotografije, dnevnik)
+src/data/                # katalog Roksal, galerija, navodila za zajem
+src/tests/               # vitest (logika) + src/tests/ui (UI testi)
+public/sw.js             # service worker (offline)
+public/roksal/           # lokalne slike galerije
 ```
 
-Poročila o fazah dela so v `docs/porocila/`, dodatna dokumentacija v `docs/`.
+Dokumentacija: `docs/porocila/` (poročila po fazah, indeks v
+`docs/porocila/INDEKS.md`), `docs/legacy-testpages/` (arhivirani stari testni prikazi).
 
-### Namestitev in delovanje brez povezave
-Aplikacija je namestljiva (PWA): manifest + service worker omogočata delovanje brez
-omrežja, v glavi pa se pokaže gumb »⬇ Namesti« in opozorilo, ko naprava ni povezana.
+---
 
-### Dokumentacijska lista (fotomontaža)
-Korak **Izvoz → 📸 Dokumentacijska lista** združi zajete fotografije v mrežo z napisi
-(meritev + čas), glavo (ime projekta, datum) in nogo (dolžina, količine) ter jo izvozi
-v **PNG** — vse lokalno v brskalniku, brez nalaganja fotografij na internet (vzorec iz
-spletnih orodij za fotomontažo, Abox Image Layout in PixGrid, ter dokumentacijski tok
-CompanyCam).
+## Znane omejitve
 
-### Dokumentacijska lista — izbira, postavitve, iskanje
-- **Izbira fotografij**: gumb »🖼 N/M fotografij« odpre miniaturne, s klikom dodaja/odstrani
-  fotografijo iz liste.
-- **Postavitve**: mreža, **trak (vrstica)** in **primerjava pred/po**.
-- **Iskanje v katalogu** (korak Materiali in konfigurator): iskalno polje najde profil po
-  imenu, ID-ju, dimenziji ali dovoljenem razmiku (npr. »1500«).
-
-### Predračun s fotografijami in primerjava pred/po
-- **PDF predračun** (korak Izvoz → 📄 PDF) vsebuje tudi **galerijo fotografij z napisi**
-  in narisane skice (SVG) — stranka vidi del, ne le številke.
-- **Vloga posnetka** (korak Zajem → spustni meni na miniaturi): `pred` / `po` / `detajl`;
-  dokumentacijska lista ima postavitev **»Primerjava pred / po«**.
-
-### Označbe (skice) na fotografijah
-V koraku **Zajem** lahko čez posnetek narišeš označbe (✎) — označiš detajl, poškodbo ali
-mesto vrtanja. Vsaki skici lahko pripišeš **opombo** (»vrtanje tukaj«). Skica je vektor,
-zato ostane ostra pri vsaki velikosti in se prikaže v dokumentacijski listi (PNG in PDF za
-tisk) ter v PDF predračunu.
-
-### Samodejna izbira najboljših fotografij
-Gumb **»🪄 Najboljše«** v dokumentacijski listi sam izbere najboljše posnetke (po kakovosti,
-skici in meritvi), nato jih lahko prilagodiš.
-
-### Galerija slik
-Slike so shranjene **lokalno** v `public/roksal/images/` (galerija deluje brez povezave),
-osveži pa jih z `npm run fetch:images`. Vir slik je roksal.com — pogoje uporabe preveri v
-`public/roksal/README.md`.
-
-### Opomba o AI detekciji
-AI detekcija objektov (RF-DETR Nano, Apache 2.0) je **izbirna** — model se prenese šele,
-ko uporabnik vklopi preklop v kameri, in se izvaja lokalno v brskalniku. Brez tega
-aplikacija ne potrebuje omrežja.
+- **Ni sinhronizacije med napravami** (ni strežnika): prenos poteka prek samostojnega
+  HTML dokumenta ali varnostne kopije.
+- Galerija uporablja slike Roksala — pogoje uporabe preveri v `public/roksal/README.md`.
+- Razvojni prikazi (`#tests`) so izključeni iz začetnega paketa (lazy nalaganje).
