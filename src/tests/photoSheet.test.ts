@@ -106,4 +106,38 @@ describe('buildPhotoSheetLayout', () => {
     expect(layout.cells.length).toBe(0);
     expect(layout.columns).toBe(1);
   });
+
+  it('postavitev pred/po poveže posnetke v pare', () => {
+    const pred: Photo = { ...photo('before-1'), role: 'before' };
+    const po: Photo = { ...photo('after-1'), role: 'after' };
+    const drugo: Photo = { ...photo('other-1'), role: 'detail' };
+
+    const layout = buildPhotoSheetLayout({
+      photos: [pred, po, drugo],
+      measurements: [],
+      projectName: 'X',
+      layoutKind: 'compare',
+    });
+
+    // Le par pred/po — posnetek z vlogo 'detajl' ni v primerjavi.
+    expect(layout.cells.length).toBe(2);
+    expect(layout.cells[0].photoId).toBe('before-1');
+    expect(layout.cells[1].photoId).toBe('after-1');
+    expect(layout.cells[0].caption).toMatch(/^pred · /);
+    expect(layout.cells[1].caption).toMatch(/^po · /);
+    // V isti vrstici, ena druga ob drugi.
+    expect(layout.cells[0].y).toBe(layout.cells[1].y);
+    expect(layout.cells[0].x).toBeLessThan(layout.cells[1].x);
+  });
+
+  it('brez označenih parov pred/po pade nazaj na mrežo', () => {
+    const layout = buildPhotoSheetLayout({
+      photos: [photo('a'), photo('b')],
+      measurements: [],
+      projectName: 'X',
+      layoutKind: 'compare',
+    });
+    expect(layout.cells.length).toBe(2);
+    expect(layout.columns).toBe(2);
+  });
 });

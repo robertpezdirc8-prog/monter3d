@@ -147,6 +147,10 @@ export interface Photo {
   height?: number;
   /** FAZA 19: skica/označbe, ki jih uporabnik nariše čez fotografijo. */
   annotation?: PhotoAnnotation;
+  /**
+   * FAZA 20: vloga posnetka — omogoča primerjavo »pred/po« (vzorec iz PixGrid).
+   */
+  role?: 'before' | 'after' | 'detail' | 'other';
 }
 
 /**

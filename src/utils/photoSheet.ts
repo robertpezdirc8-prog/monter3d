@@ -60,6 +60,8 @@ export interface PhotoSheetLayout {
   background: string;
 }
 
+export type PhotoSheetLayoutKind = 'grid' | 'strip' | 'compare';
+
 export interface PhotoSheetInput {
   photos: Photo[];
   measurements: Measurement[];
@@ -73,6 +75,10 @@ export interface PhotoSheetInput {
   background?: string;
   /** Format datuma za napise. */
   dateLabel?: string;
+  /** Vrsta postavitve: mreža, traka ali primerjava pred/po. */
+  layoutKind?: PhotoSheetLayoutKind;
+  /** Ali vključi pred/po primerjavo (zahteva oznake vlog). */
+  includeCompare?: boolean;
 }
 
 const DEFAULT_COLUMNS = 3;
@@ -103,42 +109,96 @@ function measurementForPhoto(photo: Photo, measurements: Measurement[]): Measure
 export function buildPhotoSheetLayout(input: PhotoSheetInput): PhotoSheetLayout {
   const preset = PHOTO_SHEET_PRESETS.find(p => p.id === input.presetId) ?? PHOTO_SHEET_PRESETS[0];
   const photos = input.photos.slice(0, 24);
-  const columns = Math.max(1, Math.min(input.columns ?? DEFAULT_COLUMNS, photos.length || 1));
   const gap = input.gap ?? DEFAULT_GAP;
   const padding = input.padding ?? DEFAULT_PADDING;
   const background = input.background ?? DEFAULT_BACKGROUND;
+  const layoutKind = input.layoutKind ?? 'grid';
 
   const contentWidth = preset.width - padding * 2;
   const contentHeight = preset.height - padding * 2 - HEADER_HEIGHT - FOOTER_HEIGHT;
-  const rows = Math.max(1, Math.ceil(photos.length / columns));
-  const cellWidth = Math.floor((contentWidth - gap * (columns - 1)) / columns);
-  const cellHeight = Math.floor((contentHeight - gap * (rows - 1)) / rows);
-  const photoHeight = Math.max(40, cellHeight - CAPTION_HEIGHT);
 
-  const cells: PhotoSheetCell[] = photos.map((photo, i) => {
-    const col = i % columns;
-    const row = Math.floor(i / columns);
-    const x = padding + col * (cellWidth + gap);
-    const y = padding + HEADER_HEIGHT + row * (cellHeight + gap);
-
+  const captionFor = (photo: Photo): string => {
     const measurement = measurementForPhoto(photo, input.measurements);
     const parts: string[] = [];
-    if (measurement) {
-      parts.push(`${measurement.value.toFixed(2)} ${measurement.unit}`);
-    }
+    if (measurement) parts.push(`${measurement.value.toFixed(2)} ${measurement.unit}`);
     const time = formatTime(photo);
     if (time) parts.push(time);
-    if (parts.length === 0) parts.push('—');
+    return parts.length > 0 ? parts.join(' · ') : '—';
+  };
 
-    return {
-      photoId: photo.id,
-      x,
-      y,
-      width: cellWidth,
-      height: photoHeight,
-      caption: parts.join(' · '),
-    };
-  });
+  let cells: PhotoSheetCell[] = [];
+  let columns = 1;
+
+  if (layoutKind === 'compare') {
+    // Pred/po: vsak par zasede eno vrstico (levo 'pred', desno 'po').
+    const befores = photos.filter(p => p.role === 'before');
+    const afters = photos.filter(p => p.role === 'after');
+    const pairCount = Math.min(befores.length, afters.length);
+
+    if (pairCount > 0) {
+      const pairHeight = Math.floor((contentHeight - gap * (pairCount - 1)) / pairCount);
+      const cellWidth = Math.floor((contentWidth - gap) / 2);
+      const photoHeight = Math.max(40, pairHeight - CAPTION_HEIGHT);
+
+      for (let i = 0; i < pairCount; i++) {
+        const y = padding + HEADER_HEIGHT + i * (pairHeight + gap);
+        cells.push({
+          photoId: befores[i].id,
+          x: padding, y, width: cellWidth, height: photoHeight,
+          caption: `pred · ${captionFor(befores[i])}`,
+        });
+        cells.push({
+          photoId: afters[i].id,
+          x: padding + cellWidth + gap, y, width: cellWidth, height: photoHeight,
+          caption: `po · ${captionFor(afters[i])}`,
+        });
+      }
+      columns = 2;
+    }
+  }
+
+  if (cells.length === 0 && layoutKind !== 'compare') {
+    // Mreža
+    columns = Math.max(1, Math.min(input.columns ?? DEFAULT_COLUMNS, photos.length || 1));
+    const rows = Math.max(1, Math.ceil(photos.length / columns));
+    const cellWidth = Math.floor((contentWidth - gap * (columns - 1)) / columns);
+    const cellHeight = Math.floor((contentHeight - gap * (rows - 1)) / rows);
+    const photoHeight = Math.max(40, cellHeight - CAPTION_HEIGHT);
+
+    cells = photos.map((photo, i) => {
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      return {
+        photoId: photo.id,
+        x: padding + col * (cellWidth + gap),
+        y: padding + HEADER_HEIGHT + row * (cellHeight + gap),
+        width: cellWidth,
+        height: photoHeight,
+        caption: captionFor(photo),
+      };
+    });
+  }
+
+  if (cells.length === 0 && layoutKind === 'compare') {
+    // Ni označenih parov pred/po — pade nazaj na mrežo.
+    columns = Math.max(1, Math.min(input.columns ?? DEFAULT_COLUMNS, photos.length || 1));
+    const rows = Math.max(1, Math.ceil(photos.length / columns));
+    const cellWidth = Math.floor((contentWidth - gap * (columns - 1)) / columns);
+    const cellHeight = Math.floor((contentHeight - gap * (rows - 1)) / rows);
+    const photoHeight = Math.max(40, cellHeight - CAPTION_HEIGHT);
+    cells = photos.map((photo, i) => {
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      return {
+        photoId: photo.id,
+        x: padding + col * (cellWidth + gap),
+        y: padding + HEADER_HEIGHT + row * (cellHeight + gap),
+        width: cellWidth,
+        height: photoHeight,
+        caption: captionFor(photo),
+      };
+    });
+  }
 
   const dateLabel = input.dateLabel ?? new Date().toLocaleDateString('sl-SI');
   const subtitle = `${dateLabel} · ${photos.length} ${photos.length === 1 ? 'fotografija' : 'fotografij'}`;
