@@ -8,8 +8,9 @@
  * fotografij na internet, deluje brez povezave.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Measurement, Photo } from '../types';
+import type { Measurement, Photo, Project } from '../types';
 import { buildPhotoSheetLayout, renderPhotoSheet, PHOTO_SHEET_PRESETS } from '../utils/photoSheet';
+import { generatePhotoSheetPDF } from '../utils/pdfExport';
 
 interface PhotoSheetViewProps {
   photos: Photo[];
@@ -17,10 +18,12 @@ interface PhotoSheetViewProps {
   projectName: string;
   /** Ključni podatki v nogi. */
   summary?: string;
+  /** Za PDF izvoz (tisk) potrebujemo tudi projekt. */
+  project?: Project;
   onClose: () => void;
 }
 
-export function PhotoSheetView({ photos, measurements, projectName, summary, onClose }: PhotoSheetViewProps) {
+export function PhotoSheetView({ photos, measurements, projectName, summary, project, onClose }: PhotoSheetViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [presetId, setPresetId] = useState(PHOTO_SHEET_PRESETS[0].id);
   const [columns, setColumns] = useState(3);
@@ -122,6 +125,15 @@ export function PhotoSheetView({ photos, measurements, projectName, summary, onC
                 >
                   ⬇ Izvozi PNG
                 </button>
+                {project && (
+                  <button
+                    onClick={() => generatePhotoSheetPDF(project, photos, measurements, summary)}
+                    className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded text-sm font-medium"
+                    title="Odpre tiskalni pogovor — shrani kot PDF (A4 ležeče)"
+                  >
+                    🖨 PDF za tisk
+                  </button>
+                )}
                 {status && <span className="text-xs text-slate-300">{status}</span>}
               </div>
 

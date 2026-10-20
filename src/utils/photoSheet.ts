@@ -15,6 +15,7 @@
  */
 
 import type { Measurement, Photo } from '../types';
+import { drawAnnotation } from './annotation';
 
 export interface PhotoSheetPreset {
   id: string;
@@ -193,13 +194,24 @@ export async function renderPhotoSheet(
     ctx.fillText(layout.footer, layout.padding, layout.height - layout.padding - 26);
   }
 
-  // Fotografije
+  // Fotografije (z označbami, če so shranjene)
   const byId = new Map(photos.map(p => [p.id, p]));
   for (const cell of layout.cells) {
     const photo = byId.get(cell.photoId);
     if (photo) {
       const img = await loadImage(photo.dataUrl);
       drawCover(ctx, img, cell.x, cell.y, cell.width, cell.height);
+      // FAZA 19: skica je v normaliziranih koordinatah -> pripiše se v celico
+      if (photo.annotation?.strokes?.length) {
+        ctx.save();
+        // Skica je v normaliziranih koordinatah -> izriše se glede na celico
+        ctx.beginPath();
+        ctx.rect(cell.x, cell.y, cell.width, cell.height);
+        ctx.clip();
+        ctx.translate(cell.x, cell.y);
+        drawAnnotation(ctx, photo.annotation, cell.width, cell.height);
+        ctx.restore();
+      }
     } else {
       ctx.fillStyle = '#1e293b';
       ctx.fillRect(cell.x, cell.y, cell.width, cell.height);

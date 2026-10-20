@@ -3,10 +3,10 @@
  * UI test: korak »Kakovost« — pregled posnetkov in njihovih ocen.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../App';
-import { saveProject, savePhoto, getAllProjects, deleteProject } from '../../utils/storage';
+import { saveProject, savePhoto, getAllProjects, deleteProject, getPhotosByProject } from '../../utils/storage';
 import type { Project, Photo } from '../../types';
 
 function mkProject(id: string): Project {
@@ -177,6 +177,70 @@ describe('Dokumentacijska lista (UI)', () => {
     await user.click(screen.getByRole('button', { name: /izvozi png/i }));
 
     await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
+  });
+});
+
+describe('Označbe na fotografiji (UI)', () => {
+  beforeEach(async () => {
+    cleanup();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    localStorage.clear();
+    for (const p of await getAllProjects()) {
+      await deleteProject(p.id);
+    }
+  });
+
+  it('odpre risanje in shrani skico v projekt', async () => {
+    const user = userEvent.setup();
+    const project = mkProject('proj-skica');
+    await saveProject(project);
+    await savePhoto(mkPhoto('ph-1', project.id, 'analyzed', 0.8));
+    localStorage.setItem('currentProjectId', project.id);
+
+    const ctxStub = {
+      clearRect: vi.fn(), beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(),
+      stroke: vi.fn(), rect: vi.fn(), clip: vi.fn(), save: vi.fn(), restore: vi.fn(),
+      translate: vi.fn(),
+      set strokeStyle(_v: string) { /* noop */ },
+      set lineWidth(_v: number) { /* noop */ },
+      set lineCap(_v: string) { /* noop */ },
+      set lineJoin(_v: string) { /* noop */ },
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      () => ctxStub as unknown as CanvasRenderingContext2D
+    );
+    class FakeImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      width = 800;
+      height = 600;
+      clientWidth = 800;
+      clientHeight = 600;
+      naturalWidth = 800;
+      naturalHeight = 600;
+      set src(_value: string) { setTimeout(() => this.onload?.(), 0); }
+    }
+    vi.stubGlobal('Image', FakeImage);
+
+    render(<App />);
+    await screen.findByText(/Zajem fotografij/i);
+
+    // Odpri risanje čez posnetek.
+    await user.click(screen.getByRole('button', { name: /označi fotografijo/i }));
+    expect((await screen.findAllByText(/Označbe na fotografiji/)).length).toBeGreaterThan(0);
+
+    const canvas = screen.getByLabelText(/platno za risanje označb/i);
+    fireEvent.pointerDown(canvas, { clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 200, clientY: 150, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 200, clientY: 150, pointerId: 1 });
+
+    await user.click(screen.getByRole('button', { name: /shrani skico/i }));
+
+    // Skica je shranjena skupaj s fotografijo v bazi.
+    await waitFor(async () => {
+      const shranjene = await getPhotosByProject(project.id);
+      expect(shranjene[0].annotation?.strokes.length).toBe(1);
+    });
   });
 });
 

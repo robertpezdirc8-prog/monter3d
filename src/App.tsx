@@ -2,7 +2,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import type {
   Project, Photo, Measurement, WorkflowStep, ObjectType,
   FencePlan, StairsPlan, CostEstimate, ImageQuality, FeaturePoint,
-  FenceConfig, StairsConfig, ProjectSettings, FenceSegmentInput, MaterialPrices, BoardFencePlan
+  FenceConfig, StairsConfig, ProjectSettings, FenceSegmentInput, MaterialPrices, BoardFencePlan,
+  PhotoAnnotation
 } from './types';
 import { assessImageQuality, harrisCornerDetection, toGrayscale, houghLineDetection } from './utils/cv';
 import { calculateFencePlan, calculateStairsPlan, estimateFenceMaterials, buildCostEstimate, exportMeasurementsCSV, selectFenceLengthMeasurements } from './utils/geometry';
@@ -17,6 +18,7 @@ import { MeasurementAccuracyTests } from './components/MeasurementAccuracyTests'
 import { PhotoMatchingView, type PhotoPairMatching } from './components/PhotoMatchingView';
 import { InstallPrompt } from './components/InstallPrompt';
 import { PhotoSheetView } from './components/PhotoSheetView';
+import { PhotoAnnotator } from './components/PhotoAnnotator';
 import { FenceVisualizer } from './components/FenceVisualizer';
 import { RoksalGalleryView } from './components/RoksalGalleryView';
 import { FenceConfigurator } from './components/FenceConfigurator';
@@ -33,7 +35,7 @@ import { getObjectTypeLabel } from './utils/labels';
 import TradeMenu from './components/TradeMenu';
 import TradeCapture from './components/TradeCapture';
 import type { TradeId } from './utils/cameraSDK';
-import { saveProject, getProject, getAllProjects, savePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId, deleteProject, deletePhoto, deletePhotosByProject, loadProjectWithPhotos } from './utils/storage';
+import { saveProject, getProject, getAllProjects, savePhoto, updatePhoto, getPhotosByProject, setCurrentProjectId, getCurrentProjectId, deleteProject, deletePhoto, deletePhotosByProject, loadProjectWithPhotos } from './utils/storage';
 import {
   DEFAULT_FENCE_CONFIG,
   DEFAULT_STAIRS_CONFIG,
@@ -129,6 +131,8 @@ function App() {
   const [showFenceConfigurator, setShowFenceConfigurator] = useState(false);
   // FAZA 18: dokumentacijska lista (kontaktna lista fotografij) za stranko
   const [showPhotoSheet, setShowPhotoSheet] = useState(false);
+  // FAZA 19: risanje označb (skic) čez fotografijo
+  const [annotatingPhotoId, setAnnotatingPhotoId] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -756,6 +760,9 @@ function App() {
     }
   }, [measurePoints, referenceLength, selectedPhoto]);
 
+  // FAZA 19: fotografija, ki jo trenutno označujemo
+  const annotatingPhoto = annotatingPhotoId ? photos.find(p => p.id === annotatingPhotoId) : undefined;
+
   // Calculate fence plan
   // FAZA 17: measurementsOverride omogoča preračun po brisanju meritve, še
   // preden se novo stanje renderira.
@@ -911,6 +918,26 @@ function App() {
       setStorageWarning('Fotografije ni bilo mogoče izbrisati.');
     }
   }, []);
+
+  /**
+   * FAZA 19: shrani skico (označbe) na fotografijo — v stanju in v bazi.
+   */
+  const handleSaveAnnotation = useCallback(async (photoId: string, annotation: PhotoAnnotation) => {
+    const photo = photos.find(p => p.id === photoId);
+    if (!photo) return;
+    const updated: Photo = { ...photo, annotation };
+    setPhotos(prev => prev.map(p => (p.id === photoId ? updated : p)));
+    setAnnotatingPhotoId(null);
+    try {
+      const projectId = currentProjectRef.current?.id;
+      if (projectId) {
+        await updatePhoto({ ...updated, projectId });
+      }
+    } catch (err) {
+      console.error('Failed to save annotation:', err);
+      setStorageWarning('Skice ni bilo mogoče shraniti v shrambo.');
+    }
+  }, [photos]);
 
   // Calculate stairs
   const calculateStairs = useCallback(() => {
@@ -1106,10 +1133,19 @@ function App() {
         />
       )}
 
+      {annotatingPhoto && (
+        <PhotoAnnotator
+          photo={annotatingPhoto}
+          onSave={annotation => void handleSaveAnnotation(annotatingPhoto.id, annotation)}
+          onClose={() => setAnnotatingPhotoId(null)}
+        />
+      )}
+
       {showPhotoSheet && (
         <PhotoSheetView
           photos={photos}
           measurements={measurements}
+          project={currentProject ?? undefined}
           projectName={currentProject?.name ?? 'Mera3D Pro'}
           summary={fencePlan
             ? `Dolžina ograje ${fencePlan.totalLength.toFixed(2)} m · ${fencePlan.totalPanels} paneli · ${fencePlan.totalPosts} stebrov`
@@ -1298,6 +1334,7 @@ function App() {
               onSelectPhoto={setSelectedPhoto}
               onAnalyze={analyzePhoto}
               onDeletePhoto={handleDeletePhoto}
+              onAnnotate={setAnnotatingPhotoId}
               canvasRef={canvasRef}
               showInstructions={showInstructions}
               onToggleInstructions={() => setShowInstructions(!showInstructions)}
