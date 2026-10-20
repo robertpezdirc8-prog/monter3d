@@ -351,6 +351,34 @@ describe('Konfigurator ograje (UI)', () => {
 });
 
 
+describe('Zgodovina projekta (UI)', () => {
+  beforeEach(async () => {
+    cleanup();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    localStorage.clear();
+    for (const p of await getAllProjects()) {
+      await deleteProject(p.id);
+    }
+  });
+
+  it('dnevnik prikaže opravljena dejanja', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText('npr. Ograja - Družina Novak');
+    await user.clear(input);
+    await user.type(input, 'Zgodovina projekt');
+    await user.click(screen.getByRole('button', { name: /ustvari projekt/i }));
+
+    await user.click(screen.getByRole('button', { name: /zgodovina/i }));
+
+    expect(await screen.findByText(/Zgodovina projekta/)).toBeInTheDocument();
+    // Dogodek o ustvaritvi projekta je zabeležen.
+    expect(await screen.findByText(/Projekt »Zgodovina projekt« je ustvarjen/)).toBeInTheDocument();
+  });
+});
+
+
 describe('Korak Kakovost (UI)', () => {
   beforeEach(beforeEachClean);
 

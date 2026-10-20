@@ -6,11 +6,14 @@
  */
 
 import type { Project, Photo } from '../types';
+import type { ActivityEntry, StoredActivityEntry } from './activityLog';
+import { toStoredActivity, fromStoredActivity } from './activityLog';
 
 const DB_NAME = 'Mera3DProDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const PROJECTS_STORE = 'projects';
 const PHOTOS_STORE = 'photos';
+const ACTIVITY_STORE = 'activity';
 
 // Initialize IndexedDB
 export function initDB(): Promise<IDBDatabase> {
@@ -32,6 +35,12 @@ export function initDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(PHOTOS_STORE)) {
         const photoStore = db.createObjectStore(PHOTOS_STORE, { keyPath: 'id' });
         photoStore.createIndex('projectId', 'projectId', { unique: false });
+      }
+
+      // FAZA 27: dnevnik opravljenih dejanj
+      if (!db.objectStoreNames.contains(ACTIVITY_STORE)) {
+        const activityStore = db.createObjectStore(ACTIVITY_STORE, { keyPath: 'id' });
+        activityStore.createIndex('projectId', 'projectId', { unique: false });
       }
     };
   });
@@ -246,4 +255,58 @@ export function setCurrentProjectId(id: string | null): void {
 // Get current project ID from localStorage
 export function getCurrentProjectId(): string | null {
   return localStorage.getItem('currentProjectId');
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Dnevnik opravljenih dejanj (FAZA 27)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Shrani dogodek v dnevnik projekta. */
+export async function addActivity(entry: ActivityEntry): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([ACTIVITY_STORE], 'readwrite');
+    const store = transaction.objectStore(ACTIVITY_STORE);
+    const request = store.put(toStoredActivity(entry));
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/** Vrne dogodke projekta, od najnovejšega. */
+export async function getActivities(projectId: string, limit = 200): Promise<ActivityEntry[]> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([ACTIVITY_STORE], 'readonly');
+    const store = transaction.objectStore(ACTIVITY_STORE);
+    const index = store.index('projectId');
+    const request = index.getAll(IDBKeyRange.only(projectId));
+    request.onsuccess = () => {
+      const entries = (request.result as StoredActivityEntry[]).map(fromStoredActivity);
+      entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      resolve(entries.slice(0, limit));
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/** Počisti dnevnik projekta. */
+export async function clearActivities(projectId: string): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([ACTIVITY_STORE], 'readwrite');
+    const store = transaction.objectStore(ACTIVITY_STORE);
+    const index = store.index('projectId');
+    const request = index.openKeyCursor(IDBKeyRange.only(projectId));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor) {
+        store.delete(cursor.primaryKey);
+        cursor.continue();
+      }
+    };
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
 }
