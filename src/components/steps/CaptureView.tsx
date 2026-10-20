@@ -7,7 +7,7 @@ import { IconCamera } from '../icons';
 import { GuidedCapture } from '../GuidedCapture';
 import { CoverageMapView, CameraGuide } from '../CoverageMap';
 import { QualityBadge } from './QualityCheckView';
-export function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPhoto, onAnalyze, onDeletePhoto, canvasRef, showInstructions, onToggleInstructions, onOpenCamera, objectType, capturedSteps, onCaptureStep }: {
+export function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onSelectPhoto, onAnalyze, onDeletePhoto, onAnnotate, canvasRef, showInstructions, onToggleInstructions, onOpenCamera, objectType, capturedSteps, onCaptureStep }: {
   photos: Photo[];
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   fileInputRef: React.RefObject<HTMLInputElement>;
@@ -15,6 +15,8 @@ export function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onS
   onSelectPhoto: (p: Photo) => void;
   /** FAZA 17: brisanje fotografije iz projekta. */
   onDeletePhoto: (photoId: string) => void;
+  /** FAZA 19: risanje označb (skic) čez fotografijo. */
+  onAnnotate: (photoId: string) => void;
   onAnalyze: (p: Photo) => void;
   canvasRef: React.RefObject<HTMLCanvasElement>;
   showInstructions: boolean;
@@ -176,6 +178,17 @@ export function CaptureView({ photos, onUpload, fileInputRef, selectedPhoto, onS
                 <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 pointer-events-none">
                   <span className="text-[10px] text-white">{(photo.quality.overallScore * 100).toFixed(0)}%</span>
                 </div>
+                {/* FAZA 19: risanje označb */}
+                <button
+                  type="button"
+                  onClick={() => onAnnotate(photo.id)}
+                  className="absolute top-1 left-7 text-[10px] bg-blue-900/80 hover:bg-blue-700 text-white rounded px-1 leading-tight"
+                  aria-label={`Označi fotografijo ${photo.id}`}
+                  title="Nariši označbe na fotografiji"
+                >
+                  ✎
+                </button>
+
                 {/* FAZA 17: brisanje fotografije */}
                 <button
                   type="button"

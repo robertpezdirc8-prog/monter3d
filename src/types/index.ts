@@ -145,6 +145,24 @@ export interface Photo {
   rejectionReason?: string;
   width?: number;
   height?: number;
+  /** FAZA 19: skica/označbe, ki jih uporabnik nariše čez fotografijo. */
+  annotation?: PhotoAnnotation;
+}
+
+/**
+ * FAZA 19: skica/označba na fotografiji (vektor, ne slika) — koordinate so
+ * normalizirane (0..1), zato se skica pravilno izriše pri vsaki velikosti
+ * (tudi v dokumentacijski listi in pri izvozu v PNG).
+ */
+export interface AnnotationStroke {
+  points: { x: number; y: number }[];
+  color: string;
+  /** Debelina črte glede na širino fotografije (0..1). */
+  width: number;
+}
+
+export interface PhotoAnnotation {
+  strokes: AnnotationStroke[];
 }
 
 export interface CameraPosition {

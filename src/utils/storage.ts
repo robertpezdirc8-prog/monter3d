@@ -137,6 +137,18 @@ export async function savePhoto(photo: Photo & { projectId: string }): Promise<v
   });
 }
 
+/** Posodobi obstoječo fotografijo (npr. po dodajanju skice). */
+export async function updatePhoto(photo: Photo & { projectId: string }): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([PHOTOS_STORE], 'readwrite');
+    const store = transaction.objectStore(PHOTOS_STORE);
+    const request = store.put(photo);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
 // Get photos for project
 export async function getPhotosByProject(projectId: string): Promise<Photo[]> {
   const db = await initDB();

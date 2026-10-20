@@ -1,4 +1,4 @@
-import type { Project, Measurement, FencePlan, StairsPlan, CostEstimate } from '../types';
+import type { Project, Photo, Measurement, FencePlan, StairsPlan, CostEstimate } from '../types';
 
 export function generatePDFReport(
   project: Project,
@@ -405,4 +405,82 @@ function getObjectTypeLabel(type: string): string {
     combined: 'Kombinirano'
   };
   return labels[type] || type;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Dokumentacijska lista v PDF (za tisk) — FAZA 19
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Odpre tiskalni pogovor z dokumentacijsko listo (A4 ležeče): fotografije z
+ * napisi, glava z imenom projekta in noga s ključnimi podatki.
+ *
+ * Vse poteka lokalno v brskalniku (kot pri ostalih izvozih) — fotografije se
+ * vgradijo kot podatkovni nizi in nikamor se ne pošiljajo.
+ */
+export function generatePhotoSheetPDF(
+  project: Project,
+  photos: Photo[],
+  measurements: Measurement[],
+  summary?: string
+): void {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Prosimo, dovolite popup okna za izvoz dokumentacijske liste.');
+    return;
+  }
+
+  const date = new Date().toLocaleDateString('sl-SI');
+  const cell = (photo: Photo): string => {
+    const measurement = measurements.find(m => m.photoIds?.includes(photo.id) && m.status === 'verified');
+    const time = photo.timestamp instanceof Date
+      ? photo.timestamp.toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' })
+      : '';
+    const caption = [measurement ? `${measurement.value.toFixed(2)} ${measurement.unit}` : '', time]
+      .filter(Boolean)
+      .join(' · ');
+
+    return `<figure>
+      <img src="${photo.dataUrl}" alt="" />
+      <figcaption>${caption || '—'}</figcaption>
+    </figure>`;
+  };
+
+  const html = `<!DOCTYPE html>
+<html lang="sl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dokumentacija - ${project.name}</title>
+  <style>
+    @page { size: A4 landscape; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 10pt; color: #111; margin: 0; }
+    header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6mm; }
+    h1 { font-size: 18pt; margin: 0; }
+    .meta { font-size: 9pt; color: #555; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+    figure { margin: 0; break-inside: avoid; }
+    figure img { width: 100%; height: 52mm; object-fit: cover; border: 0.3mm solid #bbb; }
+    figcaption { font-size: 8pt; color: #333; margin-top: 1mm; }
+    footer { margin-top: 6mm; font-size: 8.5pt; color: #444; border-top: 0.3mm solid #ccc; padding-top: 2mm; }
+    .no-print { text-align: center; margin-bottom: 8mm; }
+    .no-print button { padding: 8px 24px; font-size: 11pt; background: #10b981; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="no-print"><button onclick="window.print()">🖨 Natisni / shrani kot PDF</button></div>
+  <header>
+    <h1>${project.name}</h1>
+    <div class="meta">${date} · ${photos.length} ${photos.length === 1 ? 'fotografija' : 'fotografij'}</div>
+  </header>
+  <div class="grid">${photos.slice(0, 24).map(cell).join('')}</div>
+  ${summary ? `<footer>${summary}</footer>` : ''}
+</body>
+</html>`;
+
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 300);
 }
